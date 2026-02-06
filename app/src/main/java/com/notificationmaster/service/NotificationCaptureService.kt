@@ -88,7 +88,7 @@ class NotificationCaptureService : NotificationListenerService() {
                 Log.i(TAG, "Processing ${activeNotifications.size} existing notifications")
 
                 activeNotifications.forEach { sbn ->
-                    processNotification(sbn, EventType.INITIAL, rankingMap)
+                    processNotification(sbn, EventType.INITIAL, getCurrentRanking())
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing existing notifications", e)
@@ -103,7 +103,7 @@ class NotificationCaptureService : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        onNotificationPosted(sbn, rankingMap)
+        onNotificationPosted(sbn, getCurrentRanking())
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) {
@@ -128,7 +128,7 @@ class NotificationCaptureService : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        onNotificationRemoved(sbn, rankingMap, REASON_CANCEL)
+        onNotificationRemoved(sbn, getCurrentRanking(), REASON_CANCEL)
     }
 
     override fun onNotificationRemoved(

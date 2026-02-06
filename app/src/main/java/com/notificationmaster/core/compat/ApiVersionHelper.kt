@@ -100,7 +100,6 @@ object ApiVersionHelper {
             NotificationListenerService.REASON_LISTENER_CANCEL -> "LISTENER_OR_SWIPE"
             NotificationListenerService.REASON_TIMEOUT -> "TIMEOUT"
             NotificationListenerService.REASON_CHANNEL_BANNED -> "CHANNEL_BANNED"
-            NotificationListenerService.REASON_UNINSTALLED -> "UNINSTALLED"
             else -> "OTHER"
         }
     }
@@ -119,7 +118,6 @@ object ApiVersionHelper {
             NotificationListenerService.REASON_LISTENER_CANCEL -> "監聽器取消/滑動"
             NotificationListenerService.REASON_TIMEOUT -> "超時"
             NotificationListenerService.REASON_CHANNEL_BANNED -> "Channel 被禁用"
-            NotificationListenerService.REASON_UNINSTALLED -> "App 已解除安裝"
             NotificationListenerService.REASON_ERROR -> "錯誤"
             NotificationListenerService.REASON_GROUP_OPTIMIZATION -> "群組最佳化"
             NotificationListenerService.REASON_GROUP_SUMMARY_CANCELED -> "群組摘要取消"

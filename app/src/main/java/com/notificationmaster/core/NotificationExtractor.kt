@@ -61,6 +61,9 @@ class NotificationExtractor(private val context: Context) {
             bigText
         )
 
+        @Suppress("DEPRECATION")
+        val notificationPriority = notification.priority
+
         return NotificationEntity(
             notificationKey = ApiVersionHelper.getNotificationKey(sbn),
             packageName = sbn.packageName,
@@ -97,8 +100,7 @@ class NotificationExtractor(private val context: Context) {
             isGroupSummary = ApiVersionHelper.isGroupSummary(flags),
 
             // 優先級/重要性
-            @Suppress("DEPRECATION")
-            priority = notification.priority,
+            priority = notificationPriority,
             importance = channelImportance,
             likelyHeadsup = ApiVersionHelper.isLikelyHeadsUp(notification, channelImportance.takeIf { it >= 0 }),
 
