@@ -1,0 +1,24 @@
+# Gradle
+.gradle/
+build/
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# Build outputs
+*.apk
+*.aab
+*.aar
+*.dex
+*.class
+
+# Kotlin
+.kotlin/
+
+# Secrets
+*.jks
+*.keystore
+secrets.properties
+google-services.json

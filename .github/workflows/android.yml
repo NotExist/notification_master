@@ -1,0 +1,124 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:  # 允許手動觸發
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    # Gradle 官方 Action - 自動處理 wrapper 和快取
+    # https://github.com/gradle/actions
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+
+    # 若專案沒有 gradlew，先產生 wrapper
+    - name: Generate Gradle Wrapper if missing
+      run: |
+        if [ ! -f "./gradlew" ]; then
+          gradle wrapper --gradle-version=8.5
+        fi
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x ./gradlew
+
+    - name: Run lint check
+      run: ./gradlew lintDebug
+
+    - name: Run unit tests
+      run: ./gradlew testDebugUnitTest
+
+    - name: Build debug APK
+      run: ./gradlew assembleDebug
+
+    - name: Upload debug APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 14
+
+    - name: Upload lint results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: lint-results
+        path: app/build/reports/lint-results-debug.html
+        retention-days: 7
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: app/build/reports/tests/testDebugUnitTest/
+        retention-days: 7
+
+  # Release APK (僅在建立 v* tag 時觸發)
+  release:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    permissions:
+      contents: write  # 需要寫入權限來建立 release
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+
+    - name: Generate Gradle Wrapper if missing
+      run: |
+        if [ ! -f "./gradlew" ]; then
+          gradle wrapper --gradle-version=8.5
+        fi
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x ./gradlew
+
+    - name: Build release APK
+      run: ./gradlew assembleRelease
+
+    - name: Get version from tag
+      id: version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Rename APK with version
+      run: |
+        mv app/build/outputs/apk/release/app-release-unsigned.apk \
+           app/build/outputs/apk/release/NotificationMaster-${{ steps.version.outputs.VERSION }}-unsigned.apk
+
+    # 使用 GitHub CLI (gh) 建立 Release - GitHub 官方工具
+    # https://cli.github.com/
+    - name: Create GitHub Release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release create "${{ steps.version.outputs.VERSION }}" \
+          --title "Release ${{ steps.version.outputs.VERSION }}" \
+          --generate-notes \
+          "app/build/outputs/apk/release/NotificationMaster-${{ steps.version.outputs.VERSION }}-unsigned.apk"

@@ -1,0 +1,141 @@
+package com.notificationmaster.ui.archive
+
+import android.os.Build
+import android.os.Bundle
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.tabs.TabLayout
+import com.notificationmaster.NotificationMasterApp
+import com.notificationmaster.R
+import com.notificationmaster.core.compat.ApiVersionHelper
+import com.notificationmaster.databinding.FragmentArchiveBinding
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+
+/**
+ * 歸檔頁面 Fragment
+ * 按 App 或 Channel 分類顯示通知
+ */
+class ArchiveFragment : Fragment() {
+
+    private var _binding: FragmentArchiveBinding? = null
+    private val binding get() = _binding!!
+
+    private lateinit var appSourceAdapter: AppSourceAdapter
+    private lateinit var channelAdapter: ChannelAdapter
+    private var currentTab = Tab.BY_APP
+
+    /** Channel 功能是否可用 (API 26+) */
+    private val isChannelSupported: Boolean
+        get() = ApiVersionHelper.supportsNotificationChannel()
+
+    enum class Tab { BY_APP, BY_CHANNEL }
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View {
+        _binding = FragmentArchiveBinding.inflate(inflater, container, false)
+        return binding.root
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        setupRecyclerView()
+        setupTabs()
+        loadData()
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
+
+    private fun setupRecyclerView() {
+        appSourceAdapter = AppSourceAdapter { appSource ->
+            // TODO: 導航到 App 通知列表
+        }
+
+        channelAdapter = ChannelAdapter { channel ->
+            // TODO: 導航到 Channel 通知列表
+        }
+
+        binding.recyclerView.apply {
+            layoutManager = LinearLayoutManager(requireContext())
+            adapter = appSourceAdapter
+        }
+    }
+
+    private fun setupTabs() {
+        // 如果不支援 Channel，隱藏或停用 Channel tab
+        if (!isChannelSupported) {
+            val channelTab = binding.tabLayout.getTabAt(1)
+            channelTab?.view?.isEnabled = false
+            channelTab?.view?.alpha = 0.5f
+        }
+
+        binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab?) {
+                val selectedTab = when (tab?.position) {
+                    0 -> Tab.BY_APP
+                    1 -> Tab.BY_CHANNEL
+                    else -> Tab.BY_APP
+                }
+
+                // 如果選擇了 Channel tab 但不支援，顯示提示並切回 App tab
+                if (selectedTab == Tab.BY_CHANNEL && !isChannelSupported) {
+                    showChannelNotSupportedMessage()
+                    binding.tabLayout.selectTab(binding.tabLayout.getTabAt(0))
+                    return
+                }
+
+                currentTab = selectedTab
+                loadData()
+            }
+
+            override fun onTabUnselected(tab: TabLayout.Tab?) {}
+            override fun onTabReselected(tab: TabLayout.Tab?) {}
+        })
+    }
+
+    private fun showChannelNotSupportedMessage() {
+        binding.textEmpty.text = getString(R.string.channel_not_supported)
+        binding.textEmpty.visibility = View.VISIBLE
+    }
+
+    private fun loadData() {
+        val database = NotificationMasterApp.getInstance().database
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            when (currentTab) {
+                Tab.BY_APP -> {
+                    binding.recyclerView.adapter = appSourceAdapter
+                    database.appSourceDao().getAllAppSources().collectLatest { apps ->
+                        appSourceAdapter.submitList(apps)
+                        binding.textEmpty.text = getString(R.string.timeline_empty)
+                        binding.textEmpty.visibility = if (apps.isEmpty()) View.VISIBLE else View.GONE
+                    }
+                }
+                Tab.BY_CHANNEL -> {
+                    if (!isChannelSupported) {
+                        showChannelNotSupportedMessage()
+                        return@launch
+                    }
+
+                    binding.recyclerView.adapter = channelAdapter
+                    database.channelDao().getAllChannels().collectLatest { channels ->
+                        channelAdapter.submitList(channels)
+                        binding.textEmpty.text = getString(R.string.timeline_empty)
+                        binding.textEmpty.visibility = if (channels.isEmpty()) View.VISIBLE else View.GONE
+                    }
+                }
+            }
+        }
+    }
+}

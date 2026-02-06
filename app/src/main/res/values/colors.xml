@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary colors -->
+    <color name="primary">#1976D2</color>
+    <color name="primary_dark">#1565C0</color>
+    <color name="primary_light">#42A5F5</color>
+
+    <!-- Secondary colors -->
+    <color name="secondary">#FF9800</color>
+    <color name="secondary_dark">#F57C00</color>
+    <color name="secondary_light">#FFB74D</color>
+
+    <!-- Basic colors -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+
+    <!-- Event type colors -->
+    <color name="event_initial">#9E9E9E</color>
+    <color name="event_posted">#4CAF50</color>
+    <color name="event_updated">#2196F3</color>
+    <color name="event_removed">#F44336</color>
+    <color name="event_ranking">#9C27B0</color>
+
+    <!-- Status colors -->
+    <color name="status_enabled">#4CAF50</color>
+    <color name="status_disabled">#F44336</color>
+    <color name="status_warning">#FF9800</color>
+
+    <!-- Background colors -->
+    <color name="background_card">#FAFAFA</color>
+    <color name="background_dark">#212121</color>
+
+    <!-- Text colors -->
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#757575</color>
+    <color name="text_hint">#9E9E9E</color>
+</resources>

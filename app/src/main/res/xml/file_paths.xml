@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- App 內部檔案目錄 -->
+    <files-path
+        name="internal_files"
+        path="." />
+
+    <!-- App 外部檔案目錄 -->
+    <external-files-path
+        name="external_files"
+        path="." />
+
+    <!-- 媒體檔案目錄 -->
+    <files-path
+        name="media"
+        path="media/" />
+
+    <!-- 匯出檔案目錄 -->
+    <external-files-path
+        name="exports"
+        path="exports/" />
+
+    <!-- Debug dump 目錄 -->
+    <external-files-path
+        name="debug"
+        path="debug/" />
+
+    <!-- 快取目錄 -->
+    <cache-path
+        name="cache"
+        path="." />
+</paths>

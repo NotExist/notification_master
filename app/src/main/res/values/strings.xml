@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Notification Master</string>
+
+    <!-- 主畫面 -->
+    <string name="environment_info">環境資訊</string>
+    <string name="supported_features">支援功能</string>
+    <string name="statistics">統計</string>
+    <string name="today_notifications">今日通知</string>
+    <string name="total_notifications">總計</string>
+
+    <!-- 權限相關 -->
+    <string name="permission_status">權限狀態</string>
+    <string name="notification_listener_enabled">通知監聽服務已啟用</string>
+    <string name="notification_listener_disabled">通知監聽服務未啟用</string>
+    <string name="enable_notification_listener">啟用通知監聽</string>
+    <string name="permission_required_title">需要權限</string>
+    <string name="permission_required_message">Notification Master 需要「通知存取權」才能擷取通知。請在設定中啟用此權限。</string>
+    <string name="go_to_settings">前往設定</string>
+    <string name="cancel">取消</string>
+
+    <!-- 功能狀態 -->
+    <string name="feature_notification_channel">通知 Channel (API 26+)</string>
+    <string name="feature_direct_reply">直接回覆 (API 24+)</string>
+    <string name="feature_messaging_style">MessagingStyle (API 24+)</string>
+    <string name="feature_bubbles">Bubbles (API 29+)</string>
+    <string name="feature_available">可用</string>
+    <string name="feature_unavailable">不可用</string>
+
+    <!-- 導航 -->
+    <string name="nav_timeline">時間軸</string>
+    <string name="nav_archive">歸檔</string>
+    <string name="nav_search">搜尋</string>
+    <string name="nav_settings">設定</string>
+
+    <!-- 設定 -->
+    <string name="settings_title">設定</string>
+    <string name="settings_environment_summary">檢視裝置資訊、權限狀態和支援功能</string>
+    <string name="settings_debug_mode">Debug 模式</string>
+    <string name="settings_debug_mode_summary">將原始通知資料 dump 到外部儲存</string>
+    <string name="settings_debug_clear">清除 Debug 資料</string>
+    <string name="settings_debug_path">Debug 路徑</string>
+    <string name="settings_export">匯出</string>
+    <string name="settings_export_ical">匯出到日曆</string>
+    <string name="settings_export_json">匯出為 JSON 封存</string>
+    <string name="settings_import">匯入</string>
+    <string name="settings_import_json">匯入 JSON 封存</string>
+    <string name="settings_storage">儲存空間</string>
+    <string name="settings_data">資料管理</string>
+    <string name="settings_retention">保留期限</string>
+    <string name="settings_permission_info">權限說明</string>
+    <string name="settings_clear_data">清除所有資料</string>
+
+    <!-- 時間軸 -->
+    <string name="timeline_title">時間軸</string>
+    <string name="timeline_empty">尚無通知記錄</string>
+    <string name="timeline_empty_hint">啟用通知監聽服務後，所有通知都會顯示在這裡</string>
+    <string name="timeline_show_all">顯示全部</string>
+    <string name="timeline_show_deduplicated">去重顯示</string>
+    <string name="timeline_count_format">%d 筆</string>
+    <string name="timeline_similar_count">+%d 筆相似</string>
+    <string name="timeline_today">今天</string>
+    <string name="timeline_yesterday">昨天</string>
+
+    <!-- 通知詳情 -->
+    <string name="detail_title">通知詳情</string>
+    <string name="detail_history">更新歷程</string>
+    <string name="detail_events">生命週期事件</string>
+    <string name="detail_actions">動作按鈕</string>
+    <string name="detail_media">媒體附件</string>
+
+    <!-- 事件類型 -->
+    <string name="event_initial">初始</string>
+    <string name="event_posted">發布</string>
+    <string name="event_updated">更新</string>
+    <string name="event_removed">移除</string>
+    <string name="event_ranking">排序變更</string>
+
+    <!-- 移除原因 -->
+    <string name="removal_user_click">使用者點擊</string>
+    <string name="removal_user_snooze">使用者暫停</string>
+    <string name="removal_app_cancel">App 取消</string>
+    <string name="removal_listener_cancel">監聽器取消/滑動</string>
+    <string name="removal_timeout">超時</string>
+    <string name="removal_channel_banned">Channel 被禁用</string>
+    <string name="removal_uninstalled">App 已解除安裝</string>
+    <string name="removal_other">其他</string>
+
+    <!-- 搜尋 -->
+    <string name="search_title">搜尋</string>
+    <string name="search_hint">搜尋通知內容…</string>
+    <string name="search_no_results">無搜尋結果</string>
+
+    <!-- 歸檔 -->
+    <string name="archive_title">來源歸檔</string>
+    <string name="archive_by_app">依 App</string>
+    <string name="archive_by_channel">依 Channel</string>
+    <string name="channel_not_supported">Channel 功能需要 Android 8.0 (API 26) 以上</string>
+
+    <!-- 權限狀態 -->
+    <string name="permission_status_granted">已授權</string>
+    <string name="permission_status_not_granted">未授權</string>
+    <string name="permission_status_tap_to_grant">點擊授權 →</string>
+
+    <!-- 通用 -->
+    <string name="ok">確定</string>
+    <string name="loading">載入中…</string>
+    <string name="error">錯誤</string>
+    <string name="unknown_app">未知 App</string>
+    <string name="no_title">無標題</string>
+    <string name="no_content">無內容</string>
+</resources>
