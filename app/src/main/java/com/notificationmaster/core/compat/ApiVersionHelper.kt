@@ -130,6 +130,7 @@ object ApiVersionHelper {
     /**
      * 推斷通知是否可能以 Heads-up 方式顯示
      */
+    @Suppress("DEPRECATION")
     fun isLikelyHeadsUp(notification: Notification, channelImportance: Int?): Boolean {
         return if (Build.VERSION.SDK_INT >= API_NOTIFICATION_CHANNEL && channelImportance != null) {
             // API 26+: Channel importance 為 HIGH 或 MAX
@@ -150,6 +151,7 @@ object ApiVersionHelper {
     fun isForegroundService(flags: Int): Boolean = (flags and Notification.FLAG_FOREGROUND_SERVICE) != 0
     fun isAutoCancel(flags: Int): Boolean = (flags and Notification.FLAG_AUTO_CANCEL) != 0
     fun isNoClear(flags: Int): Boolean = (flags and Notification.FLAG_NO_CLEAR) != 0
+    @Suppress("DEPRECATION")
     fun isHighPriority(flags: Int): Boolean = (flags and Notification.FLAG_HIGH_PRIORITY) != 0
     fun isLocalOnly(flags: Int): Boolean = (flags and Notification.FLAG_LOCAL_ONLY) != 0
     fun isGroupSummary(flags: Int): Boolean = (flags and Notification.FLAG_GROUP_SUMMARY) != 0

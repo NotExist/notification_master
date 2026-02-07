@@ -36,6 +36,7 @@ class MediaExtractor(private val context: Context) {
      * @param captureTime 擷取時間
      * @return 媒體附件清單
      */
+    @Suppress("DEPRECATION")
     fun extractMedia(
         notification: Notification,
         notificationId: Long,
