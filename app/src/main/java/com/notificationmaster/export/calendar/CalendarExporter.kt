@@ -155,7 +155,7 @@ class CalendarExporter(private val context: Context) {
         return context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
     }
 
-    private fun buildEventTitle(notification: NotificationEntity, detailLevel: Int): String {
+    private fun buildEventTitle(notification: NotificationEntity, @Suppress("UNUSED_PARAMETER") detailLevel: Int): String {
         val appName = notification.packageName.substringAfterLast('.')
         val title = notification.title ?: "通知"
         return "[$appName] $title"

@@ -1,6 +1,5 @@
 package com.notificationmaster.ui.archive
 
-import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -58,11 +57,11 @@ class ArchiveFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        appSourceAdapter = AppSourceAdapter { appSource ->
+        appSourceAdapter = AppSourceAdapter { _ ->
             // TODO: 導航到 App 通知列表
         }
 
-        channelAdapter = ChannelAdapter { channel ->
+        channelAdapter = ChannelAdapter { _ ->
             // TODO: 導航到 Channel 通知列表
         }
 

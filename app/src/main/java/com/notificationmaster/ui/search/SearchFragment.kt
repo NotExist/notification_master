@@ -49,7 +49,7 @@ class SearchFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        notificationAdapter = NotificationAdapter { notification ->
+        notificationAdapter = NotificationAdapter { _ ->
             // TODO: 導航到通知詳情
         }
 
