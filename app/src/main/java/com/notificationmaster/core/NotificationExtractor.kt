@@ -26,6 +26,7 @@ class NotificationExtractor(private val context: Context) {
     /**
      * 從 StatusBarNotification 提取完整資訊
      */
+    @Suppress("DEPRECATION")
     fun extractNotification(
         sbn: StatusBarNotification,
         rankingMap: RankingMap?,
@@ -183,8 +184,8 @@ class NotificationExtractor(private val context: Context) {
             } else 0,
 
             // Ranking 資訊
-            rankingRank = ranking?.rank ?: -1,
-            isAmbient = if (Build.VERSION.SDK_INT >= 21) ranking?.isAmbient ?: false else false,
+            rankingRank = if (Build.VERSION.SDK_INT >= 24) ranking?.rank ?: -1 else -1,
+            isAmbient = if (Build.VERSION.SDK_INT >= 24) ranking?.isAmbient ?: false else false,
             isSuspended = if (Build.VERSION.SDK_INT >= 28) ranking?.isSuspended ?: false else false,
             suppressedVisualEffects = if (Build.VERSION.SDK_INT >= 24) {
                 ranking?.suppressedVisualEffects ?: 0
@@ -195,6 +196,7 @@ class NotificationExtractor(private val context: Context) {
     /**
      * 提取 Action 按鈕資訊
      */
+    @Suppress("DEPRECATION")
     fun extractActions(
         notification: Notification,
         notificationId: Long,
@@ -299,6 +301,7 @@ class NotificationExtractor(private val context: Context) {
     /**
      * Bundle 轉 JSON
      */
+    @Suppress("DEPRECATION")
     private fun bundleToJson(bundle: Bundle): String {
         val json = JSONObject()
         for (key in bundle.keySet()) {

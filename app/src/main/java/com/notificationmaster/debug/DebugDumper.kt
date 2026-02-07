@@ -154,10 +154,10 @@ class DebugDumper(private val context: Context) {
                     if (rankingMap.getRanking(key, ranking)) {
                         rankingsArray.put(JSONObject().apply {
                             put("key", key)
-                            put("rank", ranking.rank)
-                            put("importance", ranking.importance)
-                            put("isAmbient", ranking.isAmbient)
                             if (Build.VERSION.SDK_INT >= 24) {
+                                put("rank", ranking.rank)
+                                put("importance", ranking.importance)
+                                put("isAmbient", ranking.isAmbient)
                                 put("suppressedVisualEffects", ranking.suppressedVisualEffects)
                             }
                             if (Build.VERSION.SDK_INT >= 26) {
@@ -188,6 +188,7 @@ class DebugDumper(private val context: Context) {
     /**
      * 建構完整的通知 JSON
      */
+    @Suppress("DEPRECATION")
     private fun buildNotificationJson(sbn: StatusBarNotification, eventType: String): JSONObject {
         val notification = sbn.notification
         val extras = notification.extras ?: Bundle()
@@ -288,6 +289,7 @@ class DebugDumper(private val context: Context) {
     /**
      * 解碼 Flags
      */
+    @Suppress("DEPRECATION")
     private fun decodeFlagsToJson(flags: Int): JSONObject {
         return JSONObject().apply {
             put("FLAG_SHOW_LIGHTS", (flags and Notification.FLAG_SHOW_LIGHTS) != 0)
@@ -306,6 +308,7 @@ class DebugDumper(private val context: Context) {
     /**
      * Dump Extras Bundle
      */
+    @Suppress("DEPRECATION")
     private fun dumpExtras(extras: Bundle): JSONObject {
         val json = JSONObject()
 
@@ -321,7 +324,7 @@ class DebugDumper(private val context: Context) {
                         put("type", "Bitmap")
                         put("width", value.width)
                         put("height", value.height)
-                        put("config", value.config?.toString())
+                        put("config", value.config.toString())
                         put("byteCount", value.byteCount)
                     }
                     is android.graphics.drawable.Icon -> JSONObject().apply {
@@ -362,6 +365,7 @@ class DebugDumper(private val context: Context) {
     /**
      * Dump Actions
      */
+    @Suppress("DEPRECATION")
     private fun dumpActions(notification: Notification): JSONArray {
         val actions = notification.actions ?: return JSONArray()
         val array = JSONArray()

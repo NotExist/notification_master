@@ -243,7 +243,7 @@ class NotificationCaptureService : NotificationListenerService() {
     private suspend fun processRemoval(
         sbn: StatusBarNotification,
         reason: Int,
-        rankingMap: RankingMap?
+        @Suppress("UNUSED_PARAMETER") rankingMap: RankingMap?
     ) {
         val captureTime = System.currentTimeMillis()
         val key = ApiVersionHelper.getNotificationKey(sbn)
@@ -279,6 +279,9 @@ class NotificationCaptureService : NotificationListenerService() {
      * 處理 Ranking 更新
      */
     private suspend fun processRankingUpdate(rankingMap: RankingMap) {
+        // Ranking 詳細資訊（rank, importance, isAmbient）需要 API 24+
+        if (Build.VERSION.SDK_INT < 24) return
+
         val captureTime = System.currentTimeMillis()
 
         // 對每個在 ranking 中的通知記錄 RANKING 事件
