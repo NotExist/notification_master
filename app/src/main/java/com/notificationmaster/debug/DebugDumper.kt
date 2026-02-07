@@ -327,14 +327,6 @@ class DebugDumper(private val context: Context) {
                         put("config", value.config.toString())
                         put("byteCount", value.byteCount)
                     }
-                    is android.graphics.drawable.Icon -> JSONObject().apply {
-                        put("type", "Icon")
-                        if (Build.VERSION.SDK_INT >= 23) {
-                            put("iconType", value.type)
-                            put("resPackage", value.resPackage)
-                            put("resId", value.resId)
-                        }
-                    }
                     is Bundle -> JSONObject().apply {
                         put("type", "Bundle")
                         put("keys", JSONArray(value.keySet().toList()))
@@ -346,9 +338,20 @@ class DebugDumper(private val context: Context) {
                     is DoubleArray -> JSONArray(value.toList())
                     is BooleanArray -> JSONArray(value.toList())
                     is ArrayList<*> -> JSONArray(value.map { it?.toString() })
-                    else -> JSONObject().apply {
-                        put("type", value.javaClass.name)
-                        put("toString", value.toString())
+                    else -> if (Build.VERSION.SDK_INT >= 23 && value is android.graphics.drawable.Icon) {
+                        JSONObject().apply {
+                            put("type", "Icon")
+                            if (Build.VERSION.SDK_INT >= 28) {
+                                put("iconType", value.type)
+                                put("resPackage", value.resPackage)
+                                put("resId", value.resId)
+                            }
+                        }
+                    } else {
+                        JSONObject().apply {
+                            put("type", value.javaClass.name)
+                            put("toString", value.toString())
+                        }
                     }
                 }
                 json.put(key, valueJson)

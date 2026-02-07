@@ -56,7 +56,7 @@
                     android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:src="@drawable/ic_chevron_right"
-                    android:tint="?android:attr/textColorSecondary"
+                    app:tint="?android:attr/textColorSecondary"
                     android:contentDescription="Navigate" />
 
             </LinearLayout>

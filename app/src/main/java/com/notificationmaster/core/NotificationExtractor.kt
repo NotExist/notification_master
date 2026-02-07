@@ -313,10 +313,13 @@ class NotificationExtractor(private val context: Context) {
                     is Number -> json.put(key, value)
                     is Boolean -> json.put(key, value)
                     is Bitmap -> json.put(key, "[Bitmap ${value.width}x${value.height}]")
-                    is android.graphics.drawable.Icon -> json.put(key, "[Icon]")
                     is Bundle -> json.put(key, "[Bundle]")
                     is Array<*> -> json.put(key, JSONArray(value.map { it?.toString() }))
-                    else -> json.put(key, value.javaClass.simpleName)
+                    else -> if (Build.VERSION.SDK_INT >= 23 && value is android.graphics.drawable.Icon) {
+                        json.put(key, "[Icon]")
+                    } else {
+                        json.put(key, value.javaClass.simpleName)
+                    }
                 }
             } catch (e: Exception) {
                 json.put(key, "[Error: ${e.message}]")

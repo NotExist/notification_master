@@ -83,22 +83,19 @@ class MediaExtractor(private val context: Context) {
         return try {
             when (val value = extras.get(key)) {
                 is Bitmap -> value
-                is Icon -> {
-                    if (Build.VERSION.SDK_INT >= 23) {
-                        value.loadDrawable(context)?.let { drawable ->
-                            val bitmap = Bitmap.createBitmap(
-                                drawable.intrinsicWidth.coerceAtLeast(1),
-                                drawable.intrinsicHeight.coerceAtLeast(1),
-                                Bitmap.Config.ARGB_8888
-                            )
-                            val canvas = android.graphics.Canvas(bitmap)
-                            drawable.setBounds(0, 0, canvas.width, canvas.height)
-                            drawable.draw(canvas)
-                            bitmap
-                        }
-                    } else null
-                }
-                else -> null
+                else -> if (Build.VERSION.SDK_INT >= 23 && value is Icon) {
+                    value.loadDrawable(context)?.let { drawable ->
+                        val bitmap = Bitmap.createBitmap(
+                            drawable.intrinsicWidth.coerceAtLeast(1),
+                            drawable.intrinsicHeight.coerceAtLeast(1),
+                            Bitmap.Config.ARGB_8888
+                        )
+                        val canvas = android.graphics.Canvas(bitmap)
+                        drawable.setBounds(0, 0, canvas.width, canvas.height)
+                        drawable.draw(canvas)
+                        bitmap
+                    }
+                } else null
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to extract bitmap for key: $key", e)
