@@ -47,6 +47,10 @@ android {
         viewBinding = true
         buildConfig = true
     }
+
+    lint {
+        textReport = true
+    }
 }
 
 dependencies {
