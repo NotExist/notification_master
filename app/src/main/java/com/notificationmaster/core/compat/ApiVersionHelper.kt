@@ -56,6 +56,13 @@ object ApiVersionHelper {
     /** NetworkCapabilities 引入 (替代已棄用的 getActiveNetworkInfo) */
     const val API_NETWORK_CAPABILITIES = 29
 
+    /**
+     * REASON_UNINSTALLED 的 int 值
+     * 此常數未包含在公開 SDK 中，但系統可能傳入此值
+     * 對應 AOSP NotificationListenerService 內部定義
+     */
+    const val REASON_UNINSTALLED_INT = 15
+
     // === 功能檢查 ===
 
     fun supportsNotificationKey(): Boolean = true  // minSdk 21 >= API_NOTIFICATION_KEY (21)
@@ -94,6 +101,7 @@ object ApiVersionHelper {
             NotificationListenerService.REASON_LISTENER_CANCEL -> "LISTENER_OR_SWIPE"
             NotificationListenerService.REASON_TIMEOUT -> "TIMEOUT"
             NotificationListenerService.REASON_CHANNEL_BANNED -> "CHANNEL_BANNED"
+            REASON_UNINSTALLED_INT -> "UNINSTALLED"  // 非公開 API 常數
             else -> "OTHER"
         }
     }
@@ -115,6 +123,7 @@ object ApiVersionHelper {
             NotificationListenerService.REASON_ERROR -> "錯誤"
             NotificationListenerService.REASON_GROUP_OPTIMIZATION -> "群組最佳化"
             NotificationListenerService.REASON_GROUP_SUMMARY_CANCELED -> "群組摘要取消"
+            REASON_UNINSTALLED_INT -> "App 已解除安裝"  // 非公開 API 常數
             else -> "未知 ($reason)"
         }
     }

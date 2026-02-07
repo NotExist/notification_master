@@ -7,7 +7,9 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import android.service.notification.NotificationListenerService
 import com.notificationmaster.R
+import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.databinding.ItemNotificationEventBinding
@@ -71,14 +73,24 @@ class NotificationEventAdapter : ListAdapter<NotificationEventEntity, Notificati
 
         private fun getRemovalReasonText(context: android.content.Context, reason: Int): String {
             return when (reason) {
-                1 -> context.getString(R.string.removal_user_click)
-                2 -> context.getString(R.string.removal_app_cancel)
-                3 -> context.getString(R.string.removal_app_cancel)
-                8 -> context.getString(R.string.removal_listener_cancel)
-                9 -> context.getString(R.string.removal_timeout)
-                10 -> context.getString(R.string.removal_channel_banned)
-                12 -> context.getString(R.string.removal_user_snooze)
-                15 -> context.getString(R.string.removal_uninstalled)
+                NotificationListenerService.REASON_CLICK ->
+                    context.getString(R.string.removal_user_click)
+                NotificationListenerService.REASON_CANCEL,
+                NotificationListenerService.REASON_APP_CANCEL ->
+                    context.getString(R.string.removal_app_cancel)
+                NotificationListenerService.REASON_CANCEL_ALL,
+                NotificationListenerService.REASON_APP_CANCEL_ALL ->
+                    context.getString(R.string.removal_app_cancel)
+                NotificationListenerService.REASON_LISTENER_CANCEL ->
+                    context.getString(R.string.removal_listener_cancel)
+                NotificationListenerService.REASON_SNOOZED ->
+                    context.getString(R.string.removal_user_snooze)
+                NotificationListenerService.REASON_TIMEOUT ->
+                    context.getString(R.string.removal_timeout)
+                NotificationListenerService.REASON_CHANNEL_BANNED ->
+                    context.getString(R.string.removal_channel_banned)
+                ApiVersionHelper.REASON_UNINSTALLED_INT ->
+                    context.getString(R.string.removal_uninstalled)
                 else -> context.getString(R.string.removal_other)
             }
         }
