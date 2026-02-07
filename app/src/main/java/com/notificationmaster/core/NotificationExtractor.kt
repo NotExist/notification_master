@@ -162,9 +162,7 @@ class NotificationExtractor(private val context: Context) {
             // 自訂 View
             hasCustomContentView = notification.contentView != null,
             hasCustomBigContentView = notification.bigContentView != null,
-            hasCustomHeadsUpContentView = if (Build.VERSION.SDK_INT >= 21) {
-                notification.headsUpContentView != null
-            } else false,
+            hasCustomHeadsUpContentView = notification.headsUpContentView != null,
 
             // 完整 Extras
             extrasJson = bundleToJson(extras),
@@ -179,9 +177,7 @@ class NotificationExtractor(private val context: Context) {
             actionCount = notification.actions?.size ?: 0,
 
             // User ID
-            userId = if (Build.VERSION.SDK_INT >= 21) {
-                sbn.user.hashCode()
-            } else 0,
+            userId = sbn.user.hashCode(),
 
             // Ranking 資訊
             rankingRank = if (Build.VERSION.SDK_INT >= 24) ranking?.rank ?: -1 else -1,
@@ -205,40 +201,24 @@ class NotificationExtractor(private val context: Context) {
         val actions = notification.actions ?: return emptyList()
 
         return actions.mapIndexed { index, action ->
-            val remoteInputs = if (Build.VERSION.SDK_INT >= 20) {
-                action.remoteInputs
-            } else null
+            val remoteInputs = action.remoteInputs
 
-            val replyInput = remoteInputs?.firstOrNull { input ->
-                if (Build.VERSION.SDK_INT >= 20) {
-                    input.allowFreeFormInput
-                } else false
-            }
+            val replyInput = remoteInputs?.firstOrNull { it.allowFreeFormInput }
 
             ActionEntity(
                 notificationId = notificationId,
                 actionIndex = index,
                 title = action.title?.toString(),
                 iconResId = action.icon,
-                creatorPackage = if (Build.VERSION.SDK_INT >= 17) {
-                    action.actionIntent?.creatorPackage
-                } else null,
+                creatorPackage = action.actionIntent?.creatorPackage,
                 semanticAction = if (Build.VERSION.SDK_INT >= 28) {
                     action.semanticAction
                 } else 0,
                 isReplyAction = replyInput != null,
-                replyLabel = if (Build.VERSION.SDK_INT >= 20) {
-                    replyInput?.label?.toString()
-                } else null,
-                replyChoices = if (Build.VERSION.SDK_INT >= 20) {
-                    replyInput?.choices?.map { it.toString() }?.let { JSONArray(it).toString() }
-                } else null,
-                remoteInputKey = if (Build.VERSION.SDK_INT >= 20) {
-                    replyInput?.resultKey
-                } else null,
-                allowsFreeFormInput = if (Build.VERSION.SDK_INT >= 20) {
-                    replyInput?.allowFreeFormInput ?: false
-                } else false,
+                replyLabel = replyInput?.label?.toString(),
+                replyChoices = replyInput?.choices?.map { it.toString() }?.let { JSONArray(it).toString() },
+                remoteInputKey = replyInput?.resultKey,
+                allowsFreeFormInput = replyInput?.allowFreeFormInput ?: false,
                 isContextual = if (Build.VERSION.SDK_INT >= 29) {
                     action.isContextual
                 } else false,

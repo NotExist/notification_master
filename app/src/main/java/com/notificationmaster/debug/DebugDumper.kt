@@ -208,10 +208,8 @@ class DebugDumper(private val context: Context) {
                 put("postTime", sbn.postTime)
                 put("isOngoing", sbn.isOngoing)
                 put("isClearable", sbn.isClearable)
-                if (Build.VERSION.SDK_INT >= 21) {
-                    put("groupKey", sbn.groupKey)
-                    put("user", sbn.user?.toString())
-                }
+                put("groupKey", sbn.groupKey)
+                put("user", sbn.user?.toString())
                 if (Build.VERSION.SDK_INT >= 24) {
                     put("overrideGroupKey", sbn.overrideGroupKey)
                 }
@@ -241,10 +239,7 @@ class DebugDumper(private val context: Context) {
                 put("ledOffMS", notification.ledOffMS)
                 put("defaults", notification.defaults)
 
-                // API 21+
-                if (Build.VERSION.SDK_INT >= 21) {
-                    put("publicVersion", notification.publicVersion != null)
-                }
+                put("publicVersion", notification.publicVersion != null)
 
                 // API 26+
                 if (Build.VERSION.SDK_INT >= 26) {
@@ -266,9 +261,7 @@ class DebugDumper(private val context: Context) {
                 // RemoteViews
                 put("contentView", notification.contentView != null)
                 put("bigContentView", notification.bigContentView != null)
-                if (Build.VERSION.SDK_INT >= 21) {
-                    put("headsUpContentView", notification.headsUpContentView != null)
-                }
+                put("headsUpContentView", notification.headsUpContentView != null)
             })
 
             // Extras (完整 dump)
@@ -379,10 +372,8 @@ class DebugDumper(private val context: Context) {
                 put("title", action.title?.toString())
                 put("icon", action.icon)
 
-                if (Build.VERSION.SDK_INT >= 17) {
-                    put("creatorPackage", action.actionIntent?.creatorPackage)
-                    put("creatorUid", action.actionIntent?.creatorUid)
-                }
+                put("creatorPackage", action.actionIntent?.creatorPackage)
+                put("creatorUid", action.actionIntent?.creatorUid)
 
                 if (Build.VERSION.SDK_INT >= 28) {
                     put("semanticAction", action.semanticAction)
@@ -397,23 +388,21 @@ class DebugDumper(private val context: Context) {
                 }
 
                 // RemoteInputs
-                if (Build.VERSION.SDK_INT >= 20) {
-                    val remoteInputs = action.remoteInputs
-                    if (remoteInputs != null && remoteInputs.isNotEmpty()) {
-                        put("remoteInputs", JSONArray().apply {
-                            for (input in remoteInputs) {
-                                put(JSONObject().apply {
-                                    put("resultKey", input.resultKey)
-                                    put("label", input.label?.toString())
-                                    put("allowFreeFormInput", input.allowFreeFormInput)
-                                    put("choices", input.choices?.map { it.toString() }?.let { JSONArray(it) })
-                                    if (Build.VERSION.SDK_INT >= 29) {
-                                        put("editChoicesBeforeSending", input.editChoicesBeforeSending)
-                                    }
-                                })
-                            }
-                        })
-                    }
+                val remoteInputs = action.remoteInputs
+                if (remoteInputs != null && remoteInputs.isNotEmpty()) {
+                    put("remoteInputs", JSONArray().apply {
+                        for (input in remoteInputs) {
+                            put(JSONObject().apply {
+                                put("resultKey", input.resultKey)
+                                put("label", input.label?.toString())
+                                put("allowFreeFormInput", input.allowFreeFormInput)
+                                put("choices", input.choices?.map { it.toString() }?.let { JSONArray(it) })
+                                if (Build.VERSION.SDK_INT >= 29) {
+                                    put("editChoicesBeforeSending", input.editChoicesBeforeSending)
+                                }
+                            })
+                        }
+                    })
                 }
             })
         }

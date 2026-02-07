@@ -58,8 +58,8 @@ object ApiVersionHelper {
 
     // === 功能檢查 ===
 
-    fun supportsNotificationKey(): Boolean = Build.VERSION.SDK_INT >= API_NOTIFICATION_KEY
-    fun supportsHeadsUp(): Boolean = Build.VERSION.SDK_INT >= API_HEADS_UP
+    fun supportsNotificationKey(): Boolean = true  // minSdk 21 >= API_NOTIFICATION_KEY (21)
+    fun supportsHeadsUp(): Boolean = true  // minSdk 21 >= API_HEADS_UP (21)
     fun supportsIconClass(): Boolean = Build.VERSION.SDK_INT >= API_ICON_CLASS
     fun supportsDirectReply(): Boolean = Build.VERSION.SDK_INT >= API_DIRECT_REPLY
     fun supportsMessagingStyle(): Boolean = Build.VERSION.SDK_INT >= API_MESSAGING_STYLE
@@ -76,13 +76,7 @@ object ApiVersionHelper {
      * API 21+ 使用 sbn.key
      * API 18-20 手動組裝
      */
-    fun getNotificationKey(sbn: StatusBarNotification): String {
-        return if (Build.VERSION.SDK_INT >= API_NOTIFICATION_KEY) {
-            sbn.key
-        } else {
-            "${sbn.packageName}|${sbn.id}|${sbn.tag ?: ""}"
-        }
-    }
+    fun getNotificationKey(sbn: StatusBarNotification): String = sbn.key  // minSdk 21 >= API 21
 
     // === 移除原因分類 ===
 
