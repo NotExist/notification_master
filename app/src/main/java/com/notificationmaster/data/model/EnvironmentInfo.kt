@@ -76,10 +76,10 @@ data class SupportedFeatures(
     val messagingStyle: Boolean,
     /** Icon 類別 (API 23+) */
     val iconClass: Boolean,
+    /** Ranking 詳細資訊 (API 24+) */
+    val rankingDetails: Boolean,
     /** Bubbles (API 29+) */
     val bubbles: Boolean,
-    /** 移除原因 (API 21+) */
-    val removalReason: Boolean,
     /** POST_NOTIFICATIONS 權限 (API 33+) */
     val postNotificationsPermission: Boolean,
     /** 語意動作 (API 28+) */
@@ -91,13 +91,13 @@ data class SupportedFeatures(
         fun detect(): SupportedFeatures {
             val sdk = Build.VERSION.SDK_INT
             return SupportedFeatures(
-                notificationKey = sdk >= 21,
+                notificationKey = true,  // minSdk 21 >= 21
                 notificationChannel = sdk >= 26,
                 directReply = sdk >= 24,
                 messagingStyle = sdk >= 24,
                 iconClass = sdk >= 23,
+                rankingDetails = sdk >= 24,
                 bubbles = sdk >= 29,
-                removalReason = sdk >= 21,
                 postNotificationsPermission = sdk >= 33,
                 semanticAction = sdk >= 28,
                 authenticationRequired = sdk >= 31
@@ -113,8 +113,11 @@ data class SupportedFeatures(
                 26 -> "8.0 Oreo"
                 28 -> "9.0 Pie"
                 29 -> "10"
+                30 -> "11"
                 31 -> "12"
+                32 -> "12L"
                 33 -> "13"
+                34 -> "14"
                 else -> requiredApi.toString()
             }
             return "需要 Android $androidVersion (API $requiredApi)，目前為 API $currentApi"
@@ -125,14 +128,13 @@ data class SupportedFeatures(
      * 取得功能清單 (用於 UI 顯示) - 簡化版
      */
     fun toDisplayList(): List<Pair<String, Boolean>> = listOf(
-        "通知 Key (API 21+)" to notificationKey,
-        "通知 Channel (API 26+)" to notificationChannel,
+        "Icon 類別 (API 23+)" to iconClass,
         "直接回覆 (API 24+)" to directReply,
         "MessagingStyle (API 24+)" to messagingStyle,
-        "Icon 類別 (API 23+)" to iconClass,
-        "Bubbles (API 29+)" to bubbles,
-        "移除原因 (API 21+)" to removalReason,
-        "語意動作 (API 28+)" to semanticAction
+        "Ranking 詳細資訊 (API 24+)" to rankingDetails,
+        "通知 Channel (API 26+)" to notificationChannel,
+        "語意動作 (API 28+)" to semanticAction,
+        "Bubbles (API 29+)" to bubbles
     )
 
     /**
@@ -140,18 +142,11 @@ data class SupportedFeatures(
      */
     fun toDetailedList(): List<FeatureInfo> = listOf(
         FeatureInfo(
-            name = "通知 Key",
-            description = "使用系統提供的唯一識別碼追蹤通知",
-            requiredApi = 21,
-            supported = notificationKey,
-            unsupportedReason = if (!notificationKey) Companion.getUnsupportedReason(21) else ""
-        ),
-        FeatureInfo(
-            name = "通知 Channel",
-            description = "按 Channel 分類歸檔通知",
-            requiredApi = 26,
-            supported = notificationChannel,
-            unsupportedReason = if (!notificationChannel) Companion.getUnsupportedReason(26) else ""
+            name = "Icon 類別",
+            description = "提取高品質通知圖示",
+            requiredApi = 23,
+            supported = iconClass,
+            unsupportedReason = if (!iconClass) Companion.getUnsupportedReason(23) else ""
         ),
         FeatureInfo(
             name = "直接回覆",
@@ -168,25 +163,18 @@ data class SupportedFeatures(
             unsupportedReason = if (!messagingStyle) Companion.getUnsupportedReason(24) else ""
         ),
         FeatureInfo(
-            name = "Icon 類別",
-            description = "提取高品質通知圖示",
-            requiredApi = 23,
-            supported = iconClass,
-            unsupportedReason = if (!iconClass) Companion.getUnsupportedReason(23) else ""
+            name = "Ranking 詳細資訊",
+            description = "記錄通知排序、重要性和環境模式變更",
+            requiredApi = 24,
+            supported = rankingDetails,
+            unsupportedReason = if (!rankingDetails) Companion.getUnsupportedReason(24) else ""
         ),
         FeatureInfo(
-            name = "Bubbles",
-            description = "記錄氣泡通知資訊",
-            requiredApi = 29,
-            supported = bubbles,
-            unsupportedReason = if (!bubbles) Companion.getUnsupportedReason(29) else ""
-        ),
-        FeatureInfo(
-            name = "移除原因",
-            description = "區分使用者操作與 App 取消",
-            requiredApi = 21,
-            supported = removalReason,
-            unsupportedReason = if (!removalReason) Companion.getUnsupportedReason(21) else ""
+            name = "通知 Channel",
+            description = "按 Channel 分類歸檔通知",
+            requiredApi = 26,
+            supported = notificationChannel,
+            unsupportedReason = if (!notificationChannel) Companion.getUnsupportedReason(26) else ""
         ),
         FeatureInfo(
             name = "語意動作",
@@ -194,6 +182,13 @@ data class SupportedFeatures(
             requiredApi = 28,
             supported = semanticAction,
             unsupportedReason = if (!semanticAction) Companion.getUnsupportedReason(28) else ""
+        ),
+        FeatureInfo(
+            name = "Bubbles",
+            description = "記錄氣泡通知資訊",
+            requiredApi = 29,
+            supported = bubbles,
+            unsupportedReason = if (!bubbles) Companion.getUnsupportedReason(29) else ""
         )
     )
 }

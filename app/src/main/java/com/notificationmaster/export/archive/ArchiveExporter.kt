@@ -133,6 +133,7 @@ class ArchiveExporter(
                     put("bubbles", features.bubbles)
                     put("directReply", features.directReply)
                     put("semanticAction", features.semanticAction)
+                    put("rankingDetails", features.rankingDetails)
                 })
             })
 
