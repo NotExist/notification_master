@@ -75,7 +75,87 @@ class MediaExtractor(private val context: Context) {
             }
         }
 
+        // 5. MessagingStyle 對話頭像 (API 28+)
+        if (Build.VERSION.SDK_INT >= 28) {
+            extractMessagingAvatars(extras, notificationId, captureTime, attachments)
+        }
+
         return attachments
+    }
+
+    /**
+     * 提取 MessagingStyle 對話中的頭像 (API 28+)
+     * 包含各 sender 的 Person.getIcon() 以及 EXTRA_MESSAGING_PERSON（發送者自己）
+     */
+    @Suppress("DEPRECATION")
+    private fun extractMessagingAvatars(
+        extras: Bundle,
+        notificationId: Long,
+        captureTime: Long,
+        attachments: MutableList<MediaAttachmentEntity>
+    ) {
+        if (Build.VERSION.SDK_INT < 28) return
+
+        val processedHashes = mutableSetOf<String>()
+        // 收集已有附件的 hash，避免與其他類型圖片重複
+        attachments.mapTo(processedHashes) { it.contentHash }
+
+        try {
+            // EXTRA_MESSAGING_PERSON：發送者自己的頭像
+            val messagingPerson = extras.getParcelable<android.app.Person>(
+                Notification.EXTRA_MESSAGING_PERSON
+            )
+            messagingPerson?.icon?.let { icon ->
+                saveIconDedup(icon, notificationId, captureTime, processedHashes, attachments)
+            }
+
+            // EXTRA_MESSAGES：每條訊息的 sender_person 頭像
+            val messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+            messages?.forEach { msg ->
+                val bundle = msg as? Bundle ?: return@forEach
+                val senderPerson = bundle.getParcelable<android.app.Person>("sender_person")
+                senderPerson?.icon?.let { icon ->
+                    saveIconDedup(icon, notificationId, captureTime, processedHashes, attachments)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to extract messaging avatars", e)
+        }
+    }
+
+    /**
+     * 儲存 Icon 並透過 hash 去重
+     */
+    private fun saveIconDedup(
+        icon: Icon,
+        notificationId: Long,
+        captureTime: Long,
+        processedHashes: MutableSet<String>,
+        attachments: MutableList<MediaAttachmentEntity>
+    ) {
+        if (Build.VERSION.SDK_INT < 23) return
+
+        try {
+            val drawable = icon.loadDrawable(context) ?: return
+            val bitmap = Bitmap.createBitmap(
+                drawable.intrinsicWidth.coerceAtLeast(1),
+                drawable.intrinsicHeight.coerceAtLeast(1),
+                Bitmap.Config.ARGB_8888
+            )
+            val canvas = android.graphics.Canvas(bitmap)
+            drawable.setBounds(0, 0, canvas.width, canvas.height)
+            drawable.draw(canvas)
+
+            val hash = bitmapHash(bitmap)
+            if (hash in processedHashes) return
+            processedHashes.add(hash)
+
+            saveBitmap(bitmap, notificationId, MediaType.MESSAGING_AVATAR, captureTime)?.let {
+                attachments.add(it)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to save messaging avatar icon", e)
+        }
     }
 
     @Suppress("DEPRECATION")

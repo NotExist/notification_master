@@ -1,9 +1,12 @@
 package com.notificationmaster.ui.detail
 
+import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
@@ -17,6 +20,7 @@ import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.data.db.entity.EventType
+import com.notificationmaster.data.db.entity.MediaAttachmentEntity
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.databinding.FragmentNotificationDetailBinding
@@ -24,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -79,6 +84,7 @@ class NotificationDetailFragment : Fragment() {
         val database = NotificationMasterApp.getInstance().database
         val notificationDao = database.notificationDao()
         val eventDao = database.notificationEventDao()
+        val mediaDao = database.mediaAttachmentDao()
 
         viewLifecycleOwner.lifecycleScope.launch {
             val notification = withContext(Dispatchers.IO) {
@@ -93,6 +99,12 @@ class NotificationDetailFragment : Fragment() {
                     eventDao.getEventsByNotificationKey(notification.notificationKey)
                 }
                 eventAdapter.submitList(events)
+
+                // 載入媒體附件
+                val attachments = withContext(Dispatchers.IO) {
+                    mediaDao.getAttachmentsByNotificationIdSync(args.notificationId)
+                }
+                displayMediaAttachments(attachments)
             }
         }
     }
@@ -219,6 +231,96 @@ class NotificationDetailFragment : Fragment() {
 
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("${event.eventType.name} 事件詳情")
+            .setView(scrollView)
+            .setPositiveButton(R.string.ok, null)
+            .show()
+    }
+
+    private fun displayMediaAttachments(attachments: List<MediaAttachmentEntity>) {
+        if (attachments.isEmpty()) {
+            binding.cardMedia.visibility = View.GONE
+            return
+        }
+
+        binding.cardMedia.visibility = View.VISIBLE
+        val container = binding.layoutMediaContainer
+        container.removeAllViews()
+
+        val ctx = requireContext()
+        val sizePx = (80 * resources.displayMetrics.density).toInt()
+        val marginPx = (8 * resources.displayMetrics.density).toInt()
+
+        for (attachment in attachments) {
+            val file = File(ctx.filesDir, attachment.filePath)
+            if (!file.exists()) continue
+
+            // 每張圖的容器：圖片 + 類型標籤
+            val itemLayout = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    marginEnd = marginPx
+                }
+            }
+
+            val imageView = ImageView(ctx).apply {
+                layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                contentDescription = attachment.mediaType.name
+                // 載入縮圖（限制取樣大小以節省記憶體）
+                val options = BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                }
+                BitmapFactory.decodeFile(file.absolutePath, options)
+                val sampleSize = maxOf(
+                    options.outWidth / sizePx,
+                    options.outHeight / sizePx,
+                    1
+                )
+                val decodeOptions = BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                }
+                val bitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
+                if (bitmap != null) {
+                    setImageBitmap(bitmap)
+                }
+                setOnClickListener {
+                    showMediaPreviewDialog(file.absolutePath, attachment.mediaType.name)
+                }
+            }
+
+            val label = TextView(ctx).apply {
+                text = attachment.mediaType.name
+                textSize = 10f
+                gravity = android.view.Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(sizePx, LinearLayout.LayoutParams.WRAP_CONTENT)
+            }
+
+            itemLayout.addView(imageView)
+            itemLayout.addView(label)
+            container.addView(itemLayout)
+        }
+    }
+
+    private fun showMediaPreviewDialog(filePath: String, typeName: String) {
+        val bitmap = BitmapFactory.decodeFile(filePath) ?: return
+
+        val imageView = ImageView(requireContext()).apply {
+            setImageBitmap(bitmap)
+            adjustViewBounds = true
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val scrollView = ScrollView(requireContext()).apply {
+            addView(imageView)
+        }
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(typeName)
             .setView(scrollView)
             .setPositiveButton(R.string.ok, null)
             .show()

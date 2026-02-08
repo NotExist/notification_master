@@ -193,6 +193,47 @@
 
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- 媒體附件 Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_media"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            tools:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/detail_media"
+                    android:textAppearance="?attr/textAppearanceTitleSmall"
+                    android:textStyle="bold" />
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:id="@+id/layout_media_container"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal" />
+
+                </HorizontalScrollView>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- 動作按鈕 Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/card_actions"
