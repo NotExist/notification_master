@@ -10,6 +10,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.chip.Chip
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.data.db.entity.NotificationEntity
@@ -114,25 +115,25 @@ class NotificationDetailFragment : Fragment() {
         binding.chipGroupFlags.removeAllViews()
 
         if (notification.isOngoing) {
-            addChip("Ongoing", R.color.event_initial)
+            addChip("Ongoing", R.color.event_initial, R.string.tag_ongoing_desc)
         }
         if (notification.isForegroundService) {
-            addChip("Foreground Service", R.color.event_ranking)
+            addChip("Foreground Service", R.color.event_ranking, R.string.tag_fg_service_desc)
         }
         if (notification.likelyHeadsup) {
-            addChip("Heads-up", R.color.status_warning)
+            addChip("Heads-up", R.color.status_warning, R.string.tag_headsup_desc)
         }
         if (notification.isAutoCancel) {
-            addChip("AutoCancel", R.color.event_updated)
+            addChip("AutoCancel", R.color.event_updated, R.string.tag_auto_cancel_desc)
         }
         if (notification.isGroupSummary) {
-            addChip("Group Summary", R.color.event_posted)
+            addChip("Group Summary", R.color.event_posted, R.string.tag_summary_desc)
         }
         if (notification.hasBubbleMetadata) {
-            addChip("Bubble", R.color.status_enabled)
+            addChip("Bubble", R.color.status_enabled, R.string.tag_bubble_desc)
         }
         if (notification.hasCustomContentView || notification.hasCustomBigContentView || notification.hasCustomHeadsUpContentView) {
-            addChip("Custom View", R.color.text_secondary)
+            addChip("Custom View", R.color.text_secondary, R.string.tag_custom_view_desc)
         }
 
         // Channel（API 26+）
@@ -156,12 +157,20 @@ class NotificationDetailFragment : Fragment() {
         binding.textHash.text = notification.contentHash.take(16) + "..."
     }
 
-    private fun addChip(text: String, colorRes: Int) {
-        val chip = Chip(requireContext()).apply {
+    private fun addChip(text: String, colorRes: Int, descriptionRes: Int) {
+        val ctx = requireContext()
+        val chip = Chip(ctx).apply {
             this.text = text
-            isClickable = false
-            chipBackgroundColor = ContextCompat.getColorStateList(requireContext(), colorRes)
-            setTextColor(ContextCompat.getColor(requireContext(), R.color.white))
+            isClickable = true
+            chipBackgroundColor = ContextCompat.getColorStateList(ctx, colorRes)
+            setTextColor(ContextCompat.getColor(ctx, R.color.white))
+            setOnClickListener {
+                MaterialAlertDialogBuilder(ctx)
+                    .setTitle(text)
+                    .setMessage(descriptionRes)
+                    .setPositiveButton(R.string.ok, null)
+                    .show()
+            }
         }
         binding.chipGroupFlags.addView(chip)
     }

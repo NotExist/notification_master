@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notificationmaster.R
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.databinding.ItemTimelineDateHeaderBinding
@@ -144,19 +145,19 @@ class TimelineAdapter(
             binding.tagsContainer.removeAllViews()
 
             if (notification.isOngoing) {
-                addTag(binding.tagsContainer, "Ongoing", R.color.event_initial)
+                addTag(binding.tagsContainer, "Ongoing", R.color.event_initial, R.string.tag_ongoing_desc)
             }
 
             if (notification.isForegroundService) {
-                addTag(binding.tagsContainer, "FG Service", R.color.event_ranking)
+                addTag(binding.tagsContainer, "FG Service", R.color.event_ranking, R.string.tag_fg_service_desc)
             }
 
             if (notification.likelyHeadsup) {
-                addTag(binding.tagsContainer, "Heads-up", R.color.status_warning)
+                addTag(binding.tagsContainer, "Heads-up", R.color.status_warning, R.string.tag_headsup_desc)
             }
 
             if (notification.isGroupSummary) {
-                addTag(binding.tagsContainer, "Summary", R.color.event_updated)
+                addTag(binding.tagsContainer, "Summary", R.color.event_updated, R.string.tag_summary_desc)
             }
 
             // 相似通知數量
@@ -171,7 +172,7 @@ class TimelineAdapter(
             }
         }
 
-        private fun addTag(container: ViewGroup, text: String, colorRes: Int) {
+        private fun addTag(container: ViewGroup, text: String, colorRes: Int, descriptionRes: Int) {
             val context = container.context
             val tag = TextView(context).apply {
                 this.text = text
@@ -184,6 +185,13 @@ class TimelineAdapter(
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
                     marginEnd = 4
+                }
+                setOnClickListener {
+                    MaterialAlertDialogBuilder(context)
+                        .setTitle(text)
+                        .setMessage(descriptionRes)
+                        .setPositiveButton(R.string.ok, null)
+                        .show()
                 }
             }
             container.addView(tag)

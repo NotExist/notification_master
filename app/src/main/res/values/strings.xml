@@ -102,6 +102,15 @@
     <string name="permission_status_not_granted">未授權</string>
     <string name="permission_status_tap_to_grant">點擊授權 →</string>
 
+    <!-- 通知標籤說明 -->
+    <string name="tag_ongoing_desc">持續通知，不可被使用者滑動移除。\n固定在通知欄上方的「進行中」區塊。\n\n常見於：音樂播放、導航、通話計時</string>
+    <string name="tag_fg_service_desc">前景服務通知，App 正在執行前景服務時系統強制要求顯示。\n服務結束前不會消失。\n\n常見於：音樂播放中、VPN 連線、即時定位</string>
+    <string name="tag_headsup_desc">推斷此通知可能以螢幕頂部浮動方式顯示（約 4–5 秒後自動收回至通知欄）。\n\n判斷依據：\n• API 26+：Channel 重要性為 HIGH 以上\n• API 21–25：優先級為 HIGH 以上且設有音效或震動\n\n此為推斷值，實際顯示受勿擾模式等因素影響。</string>
+    <string name="tag_summary_desc">群組摘要通知，代表一組相關通知的折疊總覽。\n系統以此通知作為群組折疊時的顯示內容。\n\n例如：「你有 5 則訊息」、「3 封新郵件」</string>
+    <string name="tag_auto_cancel_desc">使用者點擊此通知後會自動從通知欄移除。\n大多數一般通知都設有此標記。</string>
+    <string name="tag_bubble_desc">氣泡通知 (API 29+)，可浮動在其他 App 之上的圓形圖示。\n由來源 App 設定 BubbleMetadata 觸發，使用者可在系統設定中停用。</string>
+    <string name="tag_custom_view_desc">此通知使用自訂 RemoteViews 呈現內容。\n部分視覺資訊可能無法完整擷取至文字欄位。\n完整的原始資料仍保留在 extras 中。</string>
+
     <!-- 通用 -->
     <string name="ok">確定</string>
     <string name="loading">載入中…</string>
