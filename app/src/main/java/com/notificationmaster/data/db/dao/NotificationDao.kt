@@ -64,18 +64,20 @@ interface NotificationDao {
     // === 查詢 - 去重顯示 ===
 
     /**
-     * 去重查詢 - 每個 content_hash 只取最新一筆
+     * 去重查詢 - 每個 content_hash 只取最新插入的一筆
      * 注意：這是檢視層的去重，不是儲存層
+     *
+     * 使用 MAX(id) 而非 MAX(post_time) 來保證每個 hash 只回傳一行，
+     * 因為同一通知的 POSTED/UPDATED 事件共用相同 post_time 但有不同 id。
      */
     @Query("""
-        SELECT n.* FROM notifications n
-        INNER JOIN (
-            SELECT content_hash, MAX(post_time) as max_time
-            FROM notifications
+        SELECT * FROM notifications
+        WHERE id IN (
+            SELECT MAX(id) FROM notifications
             WHERE post_time BETWEEN :startTime AND :endTime
             GROUP BY content_hash
-        ) latest ON n.content_hash = latest.content_hash AND n.post_time = latest.max_time
-        ORDER BY n.post_time DESC
+        )
+        ORDER BY post_time DESC
     """)
     fun getDeduplicatedNotifications(startTime: Long, endTime: Long): Flow<List<NotificationEntity>>
 

@@ -41,6 +41,13 @@ class SearchFragment : Fragment() {
 
         setupRecyclerView()
         setupSearchInput()
+
+        // 接收從時間軸過濾帶過來的查詢文字
+        val externalQuery = arguments?.getString("query")
+        if (!externalQuery.isNullOrBlank()) {
+            binding.editSearch.setText(externalQuery)
+            performSearch(externalQuery)
+        }
     }
 
     override fun onDestroyView() {

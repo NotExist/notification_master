@@ -20,7 +20,9 @@ import java.util.Locale
 /**
  * 通知事件列表 Adapter
  */
-class NotificationEventAdapter : ListAdapter<NotificationEventEntity, NotificationEventAdapter.ViewHolder>(DiffCallback()) {
+class NotificationEventAdapter(
+    private val onItemClick: (NotificationEventEntity) -> Unit
+) : ListAdapter<NotificationEventEntity, NotificationEventAdapter.ViewHolder>(DiffCallback()) {
 
     private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
 
@@ -40,6 +42,15 @@ class NotificationEventAdapter : ListAdapter<NotificationEventEntity, Notificati
     inner class ViewHolder(
         private val binding: ItemNotificationEventBinding
     ) : RecyclerView.ViewHolder(binding.root) {
+
+        init {
+            binding.root.setOnClickListener {
+                val position = bindingAdapterPosition
+                if (position != RecyclerView.NO_POSITION) {
+                    onItemClick(getItem(position))
+                }
+            }
+        }
 
         fun bind(event: NotificationEventEntity) {
             val context = binding.root.context

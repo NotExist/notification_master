@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ScrollView
+import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -13,12 +15,15 @@ import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.notificationmaster.core.compat.ApiVersionHelper
+import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.databinding.FragmentNotificationDetailBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -61,7 +66,9 @@ class NotificationDetailFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        eventAdapter = NotificationEventAdapter()
+        eventAdapter = NotificationEventAdapter { event ->
+            showEventDetail(event)
+        }
         binding.recyclerEvents.apply {
             adapter = eventAdapter
             layoutManager = LinearLayoutManager(requireContext())
@@ -155,6 +162,66 @@ class NotificationDetailFragment : Fragment() {
         // Key 和 Hash
         binding.textKey.text = notification.notificationKey
         binding.textHash.text = notification.contentHash.take(16) + "..."
+    }
+
+    private fun showEventDetail(event: NotificationEventEntity) {
+        val sb = StringBuilder()
+
+        // 基本資訊
+        sb.appendLine("notification_key: ${event.notificationKey}")
+        sb.appendLine("event_type: ${event.eventType.name}")
+        sb.appendLine("event_time: ${preciseTimeFormat.format(Date(event.eventTime))}")
+        sb.appendLine("event_time_raw: ${event.eventTime}")
+
+        // REMOVED 事件：移除原因
+        if (event.eventType == EventType.REMOVED && event.removalReason != null) {
+            sb.appendLine()
+            sb.appendLine("── 移除資訊 ──")
+            sb.appendLine("removal_reason: ${event.removalReason}")
+            sb.appendLine("removal_reason_category: ${event.removalReasonCategory}")
+            sb.appendLine("removal_reason_desc: ${ApiVersionHelper.getRemovalReasonDescription(event.removalReason)}")
+        }
+
+        // RANKING 事件：排序資訊
+        if (event.rankingRank != null || event.rankingImportance != null) {
+            sb.appendLine()
+            sb.appendLine("── Ranking 資訊 ──")
+            event.rankingRank?.let { sb.appendLine("rank: $it") }
+            event.rankingImportance?.let { sb.appendLine("importance: $it") }
+            event.isAmbient?.let { sb.appendLine("is_ambient: $it") }
+            event.isSuspended?.let { sb.appendLine("is_suspended: $it") }
+            event.suppressedVisualEffects?.let { sb.appendLine("suppressed_visual_effects: $it") }
+        }
+
+        // 內容快照
+        if (!event.contentSnapshot.isNullOrEmpty()) {
+            sb.appendLine()
+            sb.appendLine("── 內容快照 ──")
+            try {
+                val json = JSONObject(event.contentSnapshot)
+                sb.appendLine(json.toString(2))
+            } catch (_: Exception) {
+                sb.appendLine(event.contentSnapshot)
+            }
+        }
+
+        // 用等寬字體的 TextView 顯示
+        val textView = TextView(requireContext()).apply {
+            text = sb.toString()
+            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = 12f
+            setPadding(48, 24, 48, 24)
+            setTextIsSelectable(true)
+        }
+        val scrollView = ScrollView(requireContext()).apply {
+            addView(textView)
+        }
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("${event.eventType.name} 事件詳情")
+            .setView(scrollView)
+            .setPositiveButton(R.string.ok, null)
+            .show()
     }
 
     private fun addChip(text: String, colorRes: Int, descriptionRes: Int) {
