@@ -29,6 +29,22 @@ interface ChannelDao {
     """)
     suspend fun incrementNotificationCount(packageName: String, channelId: String, updateTime: Long)
 
+    @Query("""
+        UPDATE channels
+        SET channel_name = :channelName, description = :description, importance = :importance,
+            group_id = :groupId, show_badge = :showBadge, can_bubble = :canBubble,
+            sound_uri = :soundUri, vibrate_pattern = :vibratePattern, light_color = :lightColor,
+            lock_screen_visibility = :lockScreenVisibility, is_blocked = :isBlocked,
+            notification_count = notification_count + 1, last_updated = :updateTime
+        WHERE package_name = :packageName AND channel_id = :channelId
+    """)
+    suspend fun updateChannelInfoAndIncrement(
+        packageName: String, channelId: String,
+        channelName: String?, description: String?, importance: Int, groupId: String?,
+        showBadge: Boolean, canBubble: Boolean, soundUri: String?, vibratePattern: String?,
+        lightColor: Int, lockScreenVisibility: Int, isBlocked: Boolean, updateTime: Long
+    )
+
     // === 查詢 ===
 
     @Query("SELECT * FROM channels ORDER BY notification_count DESC")

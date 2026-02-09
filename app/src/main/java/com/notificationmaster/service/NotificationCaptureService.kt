@@ -231,7 +231,16 @@ class NotificationCaptureService : NotificationListenerService() {
 
         // 6. 更新 Channel (API 26+)
         if (Build.VERSION.SDK_INT >= 26 && entity.channelId != null) {
-            updateChannel(sbn.packageName, entity.channelId, captureTime)
+            // API 28+: 從 Ranking 取得完整 NotificationChannel（正確途徑）
+            val notificationChannel: android.app.NotificationChannel? =
+                if (Build.VERSION.SDK_INT >= 28) {
+                    val ranking = Ranking()
+                    val key = ApiVersionHelper.getNotificationKey(sbn)
+                    if (rankingMap?.getRanking(key, ranking) == true) {
+                        ranking.channel
+                    } else null
+                } else null
+            updateChannel(sbn.packageName, entity.channelId, captureTime, notificationChannel)
         }
 
         Log.d(TAG, "Saved notification: $notificationId, event: $eventType")
@@ -370,43 +379,70 @@ class NotificationCaptureService : NotificationListenerService() {
 
     /**
      * 更新 Channel 記錄 (API 26+)
+     *
+     * @param notificationChannel 從 Ranking.getChannel() 取得的 NotificationChannel（API 28+），
+     *                            API 26-27 為 null，僅能儲存 channelId 和 importance。
      */
-    private suspend fun updateChannel(packageName: String, channelId: String, captureTime: Long) {
+    private suspend fun updateChannel(
+        packageName: String,
+        channelId: String,
+        captureTime: Long,
+        notificationChannel: android.app.NotificationChannel? = null
+    ) {
         if (Build.VERSION.SDK_INT < 26) return
 
         val existing = database.channelDao().getByPackageAndChannelId(packageName, channelId)
 
         if (existing != null) {
-            // 增加計數
-            database.channelDao().incrementNotificationCount(packageName, channelId, captureTime)
+            if (notificationChannel != null) {
+                // API 28+: 有完整 channel 資訊，同時更新 metadata 和計數
+                database.channelDao().updateChannelInfoAndIncrement(
+                    packageName = packageName,
+                    channelId = channelId,
+                    channelName = notificationChannel.name?.toString(),
+                    description = notificationChannel.description,
+                    importance = notificationChannel.importance,
+                    groupId = notificationChannel.group,
+                    showBadge = notificationChannel.canShowBadge(),
+                    canBubble = if (Build.VERSION.SDK_INT >= 29) notificationChannel.canBubble() else false,
+                    soundUri = notificationChannel.sound?.toString(),
+                    vibratePattern = notificationChannel.vibrationPattern?.let {
+                        org.json.JSONArray(it.toList()).toString()
+                    },
+                    lightColor = notificationChannel.lightColor,
+                    lockScreenVisibility = notificationChannel.lockscreenVisibility,
+                    isBlocked = notificationChannel.importance == android.app.NotificationManager.IMPORTANCE_NONE,
+                    updateTime = captureTime
+                )
+            } else {
+                // API 26-27: 僅遞增計數
+                database.channelDao().incrementNotificationCount(packageName, channelId, captureTime)
+            }
         } else {
-            // 取得 Channel 資訊
-            val nm = getSystemService(android.app.NotificationManager::class.java)
-            val channels = nm?.getNotificationChannels() ?: emptyList()
-            val channel = channels.find { it.id == channelId }
-
-            // 取得或建立 AppSource
-            val appSource = database.appSourceDao().getByPackageName(packageName)
-                ?: return
+            // 新增 Channel 記錄
+            val appSource = database.appSourceDao().getByPackageName(packageName) ?: return
 
             val channelEntity = ChannelEntity(
                 appSourceId = appSource.id,
                 packageName = packageName,
                 channelId = channelId,
-                channelName = channel?.name?.toString(),
-                description = channel?.description,
-                importance = channel?.importance ?: android.app.NotificationManager.IMPORTANCE_DEFAULT,
-                groupId = channel?.group,
-                showBadge = channel?.canShowBadge() ?: true,
-                canBubble = if (Build.VERSION.SDK_INT >= 29) channel?.canBubble() ?: false else false,
-                soundUri = channel?.sound?.toString(),
-                vibratePattern = channel?.vibrationPattern?.let {
+                channelName = notificationChannel?.name?.toString(),
+                description = notificationChannel?.description,
+                importance = notificationChannel?.importance
+                    ?: android.app.NotificationManager.IMPORTANCE_DEFAULT,
+                groupId = notificationChannel?.group,
+                showBadge = notificationChannel?.canShowBadge() ?: true,
+                canBubble = if (Build.VERSION.SDK_INT >= 29) {
+                    notificationChannel?.canBubble() ?: false
+                } else false,
+                soundUri = notificationChannel?.sound?.toString(),
+                vibratePattern = notificationChannel?.vibrationPattern?.let {
                     org.json.JSONArray(it.toList()).toString()
                 },
-                lightColor = channel?.lightColor ?: 0,
-                lockScreenVisibility = channel?.lockscreenVisibility
+                lightColor = notificationChannel?.lightColor ?: 0,
+                lockScreenVisibility = notificationChannel?.lockscreenVisibility
                     ?: android.app.Notification.VISIBILITY_PRIVATE,
-                isBlocked = channel?.importance == android.app.NotificationManager.IMPORTANCE_NONE,
+                isBlocked = notificationChannel?.importance == android.app.NotificationManager.IMPORTANCE_NONE,
                 firstSeen = captureTime,
                 lastUpdated = captureTime,
                 notificationCount = 1

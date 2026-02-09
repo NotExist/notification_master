@@ -1,7 +1,9 @@
 package com.notificationmaster.ui.detail
 
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -9,7 +11,9 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.navArgs
@@ -287,7 +291,7 @@ class NotificationDetailFragment : Fragment() {
                     setImageBitmap(bitmap)
                 }
                 setOnClickListener {
-                    showMediaPreviewDialog(file.absolutePath, attachment.mediaType.name)
+                    openMediaFile(file, attachment.mimeType)
                 }
             }
 
@@ -304,26 +308,26 @@ class NotificationDetailFragment : Fragment() {
         }
     }
 
-    private fun showMediaPreviewDialog(filePath: String, typeName: String) {
-        val bitmap = BitmapFactory.decodeFile(filePath) ?: return
-
-        val imageView = ImageView(requireContext()).apply {
-            setImageBitmap(bitmap)
-            adjustViewBounds = true
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+    /**
+     * 使用系統檔案檢視器開啟媒體檔案
+     */
+    private fun openMediaFile(file: File, mimeType: String) {
+        val ctx = requireContext()
+        try {
+            val uri = FileProvider.getUriForFile(
+                ctx,
+                "${ctx.packageName}.fileprovider",
+                file
             )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.w("NotificationDetail", "Failed to open media file", e)
+            Toast.makeText(ctx, R.string.error_no_viewer, Toast.LENGTH_SHORT).show()
         }
-        val scrollView = ScrollView(requireContext()).apply {
-            addView(imageView)
-        }
-
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle(typeName)
-            .setView(scrollView)
-            .setPositiveButton(R.string.ok, null)
-            .show()
     }
 
     private fun addChip(text: String, colorRes: Int, descriptionRes: Int) {

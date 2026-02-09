@@ -322,17 +322,62 @@ class NotificationExtractor(private val context: Context) {
 
     /**
      * 產生內容快照（用於事件記錄）
+     * 涵蓋所有可能在通知更新時變動的欄位，以便完整追蹤差異
      */
+    @Suppress("DEPRECATION")
     fun generateContentSnapshot(notification: Notification): String {
         val extras = notification.extras ?: Bundle()
         val json = JSONObject()
 
+        // 基本內容
         json.put("title", extras.getCharSequence(Notification.EXTRA_TITLE)?.toString())
         json.put("text", extras.getCharSequence(Notification.EXTRA_TEXT)?.toString())
         json.put("bigText", extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString())
+        json.put("bigTitle", extras.getCharSequence(Notification.EXTRA_TITLE_BIG)?.toString())
         json.put("subText", extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString())
+        json.put("infoText", extras.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString())
+        json.put("summaryText", extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString())
+        json.put("tickerText", notification.tickerText?.toString())
+
+        // 進度
         json.put("progress", extras.getInt(Notification.EXTRA_PROGRESS, 0))
         json.put("progressMax", extras.getInt(Notification.EXTRA_PROGRESS_MAX, 0))
+        json.put("progressIndeterminate", extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE, false))
+
+        // MessagingStyle (API 24+)
+        if (Build.VERSION.SDK_INT >= 24) {
+            json.put("conversationTitle",
+                extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE)?.toString())
+        }
+        if (Build.VERSION.SDK_INT >= 28) {
+            json.put("isGroupConversation",
+                extras.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION, false))
+        }
+
+        // 樣式模板
+        json.put("template", extras.getString(Notification.EXTRA_TEMPLATE))
+
+        // 通知屬性
+        json.put("flags", notification.flags)
+        json.put("priority", notification.priority)
+        json.put("visibility", notification.visibility)
+        json.put("category", notification.category)
+        json.put("color", notification.color)
+        json.put("group", notification.group)
+        json.put("sortKey", notification.sortKey)
+        json.put("when", notification.`when`)
+
+        // Channel (API 26+)
+        if (Build.VERSION.SDK_INT >= 26) {
+            json.put("channelId", notification.channelId)
+        }
+
+        // 動作數量
+        json.put("actionCount", notification.actions?.size ?: 0)
+
+        // 自訂 View 狀態
+        json.put("hasCustomContentView", notification.contentView != null)
+        json.put("hasCustomBigContentView", notification.bigContentView != null)
 
         return json.toString()
     }
