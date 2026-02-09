@@ -55,6 +55,8 @@
     <string name="timeline_title">時間軸</string>
     <string name="timeline_empty">尚無通知記錄</string>
     <string name="timeline_empty_hint">啟用通知監聽服務後，所有通知都會顯示在這裡</string>
+    <string name="timeline_permission_not_granted">通知監聽權限尚未啟用</string>
+    <string name="timeline_permission_hint">需要授權「通知存取權」才能開始擷取通知。\n授權後所有通知都會自動記錄在這裡。</string>
     <string name="timeline_show_all">顯示全部</string>
     <string name="timeline_show_deduplicated">去重顯示</string>
     <string name="timeline_count_format">%d 筆</string>

@@ -1,7 +1,10 @@
 package com.notificationmaster.ui.timeline
 
+import android.content.ComponentName
+import android.content.Intent
 import android.os.Bundle
 import android.os.Parcelable
+import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
@@ -16,6 +19,7 @@ import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.databinding.FragmentTimelineBinding
+import com.notificationmaster.service.NotificationCaptureService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
@@ -45,6 +49,7 @@ class TimelineFragment : Fragment() {
     private val appLabelCache = mutableMapOf<String, String>()
     private val dateFormat = SimpleDateFormat("yyyy年M月d日 EEEE", Locale.getDefault())
     private var bubbleHideRunnable: Runnable? = null
+    private var wasPermissionGranted = false
 
     // 查詢時間範圍（預設過去 7 天）
     private val endTime: Long
@@ -72,7 +77,24 @@ class TimelineFragment : Fragment() {
         setupFilterInput()
         setupFilterChips()
         setupSwipeRefresh()
+        setupPermissionButton()
+        wasPermissionGranted = isNotificationListenerEnabled()
+        updateEmptyStateForPermission()
         loadNotifications()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val isGranted = isNotificationListenerEnabled()
+        if (isGranted && !wasPermissionGranted) {
+            // 權限剛授予，重新載入資料
+            wasPermissionGranted = true
+            updateEmptyStateForPermission()
+            loadNotifications()
+        } else if (!isGranted && wasPermissionGranted) {
+            wasPermissionGranted = false
+            updateEmptyStateForPermission()
+        }
     }
 
     override fun onDestroyView() {
@@ -174,6 +196,7 @@ class TimelineFragment : Fragment() {
             binding.emptyState.visibility = View.VISIBLE
             binding.recyclerView.visibility = View.GONE
             binding.textCount.text = getString(R.string.timeline_count_format, 0)
+            updateEmptyStateForPermission()
         } else {
             binding.emptyState.visibility = View.GONE
             binding.recyclerView.visibility = View.VISIBLE
@@ -320,6 +343,36 @@ class TimelineFragment : Fragment() {
         val runnable = Runnable { _binding?.timeBubble?.visibility = View.GONE }
         bubbleHideRunnable = runnable
         binding.timeBubble.postDelayed(runnable, 1500L)
+    }
+
+    private fun isNotificationListenerEnabled(): Boolean {
+        val ctx = context ?: return false
+        val componentName = ComponentName(ctx, NotificationCaptureService::class.java)
+        val flat = Settings.Secure.getString(
+            ctx.contentResolver,
+            "enabled_notification_listeners"
+        )
+        return flat?.contains(componentName.flattenToString()) == true
+    }
+
+    private fun setupPermissionButton() {
+        binding.btnGrantPermission.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }
+    }
+
+    /**
+     * 根據權限狀態更新空白提示的文字和按鈕
+     */
+    private fun updateEmptyStateForPermission() {
+        val binding = _binding ?: return
+        if (!wasPermissionGranted) {
+            binding.textEmptyHint.setText(R.string.timeline_permission_hint)
+            binding.btnGrantPermission.visibility = View.VISIBLE
+        } else {
+            binding.textEmptyHint.setText(R.string.timeline_empty_hint)
+            binding.btnGrantPermission.visibility = View.GONE
+        }
     }
 
     private fun navigateToDetail(notification: NotificationEntity) {

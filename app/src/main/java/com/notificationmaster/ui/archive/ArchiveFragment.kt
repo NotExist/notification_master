@@ -49,7 +49,15 @@ class ArchiveFragment : Fragment() {
 
         setupRecyclerView()
         setupTabs()
-        loadData()
+
+        // 恢復 tab 選中狀態（view 重建後 TabLayout 預設選 tab 0）
+        val tabIndex = if (currentTab == Tab.BY_CHANNEL) 1 else 0
+        if (binding.tabLayout.selectedTabPosition != tabIndex) {
+            binding.tabLayout.selectTab(binding.tabLayout.getTabAt(tabIndex))
+            // listener 會觸發 loadData()
+        } else {
+            loadData()
+        }
     }
 
     override fun onDestroyView() {
