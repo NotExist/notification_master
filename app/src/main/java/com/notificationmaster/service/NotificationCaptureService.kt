@@ -119,12 +119,7 @@ class NotificationCaptureService : NotificationListenerService() {
         isConnected = false
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification) {
-        onNotificationPosted(sbn, getCurrentRanking())
-    }
-
     override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) {
-        super.onNotificationPosted(sbn, rankingMap)
         Log.d(TAG, "Notification posted: ${sbn.packageName} - ${ApiVersionHelper.getNotificationKey(sbn)}")
 
         serviceScope.launch {
@@ -144,16 +139,11 @@ class NotificationCaptureService : NotificationListenerService() {
         }
     }
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        onNotificationRemoved(sbn, getCurrentRanking(), REASON_CANCEL)
-    }
-
     override fun onNotificationRemoved(
         sbn: StatusBarNotification,
         rankingMap: RankingMap?,
         reason: Int
     ) {
-        super.onNotificationRemoved(sbn, rankingMap, reason)
         Log.d(TAG, "Notification removed: ${sbn.packageName} - reason: $reason (${ApiVersionHelper.categorizeRemovalReason(reason)})")
 
         serviceScope.launch {
@@ -169,7 +159,6 @@ class NotificationCaptureService : NotificationListenerService() {
     }
 
     override fun onNotificationRankingUpdate(rankingMap: RankingMap) {
-        super.onNotificationRankingUpdate(rankingMap)
         Log.d(TAG, "Ranking update received")
 
         serviceScope.launch {
