@@ -83,16 +83,33 @@ class NotificationCaptureService : NotificationListenerService() {
 
         // 擷取所有現有通知（標記為 INITIAL）
         serviceScope.launch {
-            try {
-                val activeNotifications = activeNotifications ?: emptyArray()
-                Log.i(TAG, "Processing ${activeNotifications.size} existing notifications")
-
-                activeNotifications.forEach { sbn ->
-                    processNotification(sbn, EventType.INITIAL, getCurrentRanking())
-                }
+            val activeNotifications = try {
+                activeNotifications ?: emptyArray()
             } catch (e: Exception) {
-                Log.e(TAG, "Error processing existing notifications", e)
+                Log.e(TAG, "Failed to get active notifications", e)
+                emptyArray()
             }
+            Log.i(TAG, "Processing ${activeNotifications.size} existing notifications")
+
+            val rankingMap = try {
+                getCurrentRanking()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to get current ranking", e)
+                null
+            }
+
+            var successCount = 0
+            var failCount = 0
+            for (sbn in activeNotifications) {
+                try {
+                    processNotification(sbn, EventType.INITIAL, rankingMap)
+                    successCount++
+                } catch (e: Exception) {
+                    failCount++
+                    Log.e(TAG, "Error processing notification: ${sbn.packageName} key=${ApiVersionHelper.getNotificationKey(sbn)}", e)
+                }
+            }
+            Log.i(TAG, "Initial capture complete: $successCount success, $failCount failed")
         }
     }
 
