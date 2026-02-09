@@ -27,9 +27,7 @@
             app:boxCornerRadiusTopEnd="8dp"
             app:boxCornerRadiusTopStart="8dp"
             app:startIconDrawable="@drawable/ic_timeline"
-            app:endIconMode="custom"
-            app:endIconDrawable="@drawable/ic_search"
-            app:endIconContentDescription="@string/nav_search"
+            app:endIconMode="clear_text"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -65,7 +63,6 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/timeline_show_all"
-                    android:checked="true"
                     style="@style/Widget.Material3.Chip.Filter" />
 
                 <com.google.android.material.chip.Chip
@@ -73,6 +70,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/timeline_show_deduplicated"
+                    android:checked="true"
                     style="@style/Widget.Material3.Chip.Filter" />
 
             </com.google.android.material.chip.ChipGroup>
@@ -107,10 +105,29 @@
             android:layout_height="match_parent"
             android:clipToPadding="false"
             android:paddingVertical="4dp"
+            android:scrollbars="vertical"
+            app:fastScrollEnabled="true"
+            app:fastScrollVerticalThumbDrawable="@drawable/fastscroll_thumb"
+            app:fastScrollVerticalTrackDrawable="@drawable/fastscroll_track"
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
             tools:listitem="@layout/item_timeline_notification" />
 
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+    <!-- 時間索引氣泡 -->
+    <TextView
+        android:id="@+id/time_bubble"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="24dp"
+        android:background="@drawable/bg_time_bubble"
+        android:textColor="?attr/colorOnPrimary"
+        android:textAppearance="?attr/textAppearanceLabelLarge"
+        android:elevation="4dp"
+        android:visibility="gone"
+        tools:text="2026年1月29日"
+        tools:visibility="visible" />
 
     <!-- 空狀態 -->
     <LinearLayout

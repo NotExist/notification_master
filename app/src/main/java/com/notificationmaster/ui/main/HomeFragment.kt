@@ -6,7 +6,6 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -204,10 +203,11 @@ class HomeFragment : Fragment() {
             textSize = 14f
             setTextColor(
                 if (feature.supported) {
-                    TypedValue().let { tv ->
-                        requireContext().theme.resolveAttribute(android.R.attr.textColorPrimary, tv, true)
-                        ContextCompat.getColor(requireContext(), tv.resourceId)
-                    }
+                    com.google.android.material.color.MaterialColors.getColor(
+                        requireContext(),
+                        android.R.attr.textColorPrimary,
+                        ContextCompat.getColor(requireContext(), R.color.text_secondary)
+                    )
                 } else {
                     ContextCompat.getColor(requireContext(), R.color.text_secondary)
                 }

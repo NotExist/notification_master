@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.tabs.TabLayout
 import com.notificationmaster.NotificationMasterApp
@@ -57,12 +58,21 @@ class ArchiveFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        appSourceAdapter = AppSourceAdapter { _ ->
-            // TODO: 導航到 App 通知列表
+        appSourceAdapter = AppSourceAdapter { appSource ->
+            val action = ArchiveFragmentDirections.actionArchiveToArchiveDetail(
+                packageName = appSource.packageName,
+                title = appSource.appName ?: appSource.packageName
+            )
+            findNavController().navigate(action)
         }
 
-        channelAdapter = ChannelAdapter { _ ->
-            // TODO: 導航到 Channel 通知列表
+        channelAdapter = ChannelAdapter { channel ->
+            val action = ArchiveFragmentDirections.actionArchiveToArchiveDetail(
+                packageName = channel.packageName,
+                channelId = channel.channelId,
+                title = channel.channelName ?: channel.channelId
+            )
+            findNavController().navigate(action)
         }
 
         binding.recyclerView.apply {

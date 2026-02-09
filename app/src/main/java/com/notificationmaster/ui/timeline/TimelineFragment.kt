@@ -7,11 +7,11 @@ import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.data.db.entity.NotificationEntity
@@ -21,7 +21,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 /**
  * 時間軸 Fragment
@@ -33,13 +36,15 @@ class TimelineFragment : Fragment() {
     private val binding get() = _binding!!
 
     private var adapter: TimelineAdapter? = null
-    private var isDeduplicatedMode = false
+    private var isDeduplicatedMode = true
     private var layoutManagerState: Parcelable? = null
     private var currentFilterText = ""
     private var allNotifications: List<NotificationEntity> = emptyList()
     private var loadJob: Job? = null
     // 快取 App 名稱：packageName → appLabel
     private val appLabelCache = mutableMapOf<String, String>()
+    private val dateFormat = SimpleDateFormat("yyyy年M月d日 EEEE", Locale.getDefault())
+    private var bubbleHideRunnable: Runnable? = null
 
     // 查詢時間範圍（預設過去 7 天）
     private val endTime: Long
@@ -84,6 +89,20 @@ class TimelineFragment : Fragment() {
         }
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
+
+        // 捲動時更新時間索引氣泡
+        binding.recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                updateTimeBubble()
+            }
+
+            override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
+                when (newState) {
+                    RecyclerView.SCROLL_STATE_DRAGGING -> showTimeBubble()
+                    RecyclerView.SCROLL_STATE_IDLE -> scheduleHideTimeBubble()
+                }
+            }
+        })
     }
 
     private fun setupFilterInput() {
@@ -96,16 +115,6 @@ class TimelineFragment : Fragment() {
             }
         })
 
-        // 搜尋圖示點擊 → 帶查詢文字導航到搜尋頁面
-        binding.layoutFilter.setEndIconOnClickListener {
-            val query = binding.editFilter.text?.toString()?.trim() ?: ""
-            if (query.isNotEmpty()) {
-                findNavController().navigate(
-                    R.id.nav_search,
-                    bundleOf("query" to query)
-                )
-            }
-        }
     }
 
     private fun setupFilterChips() {
@@ -292,6 +301,31 @@ class TimelineFragment : Fragment() {
 
     private fun updateCount(count: Int) {
         binding.textCount.text = getString(R.string.timeline_count_format, count)
+    }
+
+    private fun updateTimeBubble() {
+        val layoutManager = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val position = layoutManager.findFirstVisibleItemPosition()
+        if (position == RecyclerView.NO_POSITION) return
+
+        val item = adapter?.currentList?.getOrNull(position) ?: return
+        val dateText = when (item) {
+            is TimelineItem.DateHeader -> dateFormat.format(Date(item.date))
+            is TimelineItem.NotificationItem -> dateFormat.format(Date(item.notification.postTime))
+        }
+        binding.timeBubble.text = dateText
+    }
+
+    private fun showTimeBubble() {
+        bubbleHideRunnable?.let { binding.timeBubble.removeCallbacks(it) }
+        binding.timeBubble.visibility = View.VISIBLE
+    }
+
+    private fun scheduleHideTimeBubble() {
+        bubbleHideRunnable?.let { binding.timeBubble.removeCallbacks(it) }
+        val runnable = Runnable { _binding?.timeBubble?.visibility = View.GONE }
+        bubbleHideRunnable = runnable
+        binding.timeBubble.postDelayed(runnable, 1500L)
     }
 
     private fun navigateToDetail(notification: NotificationEntity) {

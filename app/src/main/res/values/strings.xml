@@ -97,6 +97,7 @@
     <string name="archive_by_app">依 App</string>
     <string name="archive_by_channel">依 Channel</string>
     <string name="channel_not_supported">Channel 功能需要 Android 8.0 (API 26) 以上</string>
+    <string name="archive_detail_empty">此來源尚無通知記錄</string>
 
     <!-- 權限狀態 -->
     <string name="permission_status_granted">已授權</string>

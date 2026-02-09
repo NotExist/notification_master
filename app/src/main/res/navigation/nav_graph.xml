@@ -21,7 +21,38 @@
         android:id="@+id/nav_archive"
         android:name="com.notificationmaster.ui.archive.ArchiveFragment"
         android:label="@string/nav_archive"
-        tools:layout="@layout/fragment_archive" />
+        tools:layout="@layout/fragment_archive">
+
+        <action
+            android:id="@+id/action_archive_to_archive_detail"
+            app:destination="@id/nav_archive_detail" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_archive_detail"
+        android:name="com.notificationmaster.ui.archive.ArchiveDetailFragment"
+        android:label="{title}"
+        tools:layout="@layout/fragment_archive_detail">
+
+        <argument
+            android:name="packageName"
+            app:argType="string" />
+
+        <argument
+            android:name="channelId"
+            android:defaultValue=""
+            app:argType="string" />
+
+        <argument
+            android:name="title"
+            app:argType="string" />
+
+        <action
+            android:id="@+id/action_archive_detail_to_detail"
+            app:destination="@id/nav_detail" />
+
+    </fragment>
 
     <fragment
         android:id="@+id/nav_search"
