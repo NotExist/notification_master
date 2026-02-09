@@ -156,6 +156,7 @@ class TimelineFragment : Fragment() {
             }
 
             flow.collectLatest { notifications ->
+                if (_binding == null) return@collectLatest
                 _binding?.swipeRefresh?.isRefreshing = false
                 allNotifications = notifications
                 applyFilterAndDisplay()
@@ -167,11 +168,15 @@ class TimelineFragment : Fragment() {
      * 根據目前過濾文字和去重模式顯示結果
      */
     private fun applyFilterAndDisplay() {
+        val binding = _binding ?: return
         val filtered = filterNotifications(allNotifications, currentFilterText)
         if (filtered.isEmpty()) {
-            showEmptyState()
+            binding.emptyState.visibility = View.VISIBLE
+            binding.recyclerView.visibility = View.GONE
+            binding.textCount.text = getString(R.string.timeline_count_format, 0)
         } else {
-            hideEmptyState()
+            binding.emptyState.visibility = View.GONE
+            binding.recyclerView.visibility = View.VISIBLE
             val database = NotificationMasterApp.getInstance().database
             val notificationDao = database.notificationDao()
 
@@ -187,7 +192,7 @@ class TimelineFragment : Fragment() {
                         layoutManagerState = null
                     }
                 }
-                updateCount(filtered.size)
+                _binding?.textCount?.text = getString(R.string.timeline_count_format, filtered.size)
             }
         }
     }
@@ -216,7 +221,8 @@ class TimelineFragment : Fragment() {
     private fun getAppLabel(packageName: String): String {
         return appLabelCache.getOrPut(packageName) {
             try {
-                val pm = requireContext().packageManager
+                val ctx = context ?: return@getOrPut packageName
+                val pm = ctx.packageManager
                 val appInfo = pm.getApplicationInfo(packageName, 0)
                 pm.getApplicationLabel(appInfo).toString()
             } catch (_: Exception) {
@@ -288,22 +294,8 @@ class TimelineFragment : Fragment() {
         return cal.timeInMillis
     }
 
-    private fun showEmptyState() {
-        binding.emptyState.visibility = View.VISIBLE
-        binding.recyclerView.visibility = View.GONE
-        binding.textCount.text = getString(R.string.timeline_count_format, 0)
-    }
-
-    private fun hideEmptyState() {
-        binding.emptyState.visibility = View.GONE
-        binding.recyclerView.visibility = View.VISIBLE
-    }
-
-    private fun updateCount(count: Int) {
-        binding.textCount.text = getString(R.string.timeline_count_format, count)
-    }
-
     private fun updateTimeBubble() {
+        val binding = _binding ?: return
         val layoutManager = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return
         val position = layoutManager.findFirstVisibleItemPosition()
         if (position == RecyclerView.NO_POSITION) return
@@ -317,11 +309,13 @@ class TimelineFragment : Fragment() {
     }
 
     private fun showTimeBubble() {
+        val binding = _binding ?: return
         bubbleHideRunnable?.let { binding.timeBubble.removeCallbacks(it) }
         binding.timeBubble.visibility = View.VISIBLE
     }
 
     private fun scheduleHideTimeBubble() {
+        val binding = _binding ?: return
         bubbleHideRunnable?.let { binding.timeBubble.removeCallbacks(it) }
         val runnable = Runnable { _binding?.timeBubble?.visibility = View.GONE }
         bubbleHideRunnable = runnable

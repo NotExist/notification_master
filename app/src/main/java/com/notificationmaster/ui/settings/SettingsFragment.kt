@@ -72,7 +72,7 @@ class SettingsFragment : Fragment() {
         if (allGranted) {
             showCalendarPicker()
         } else {
-            Toast.makeText(requireContext(), "需要日曆權限才能匯出", Toast.LENGTH_SHORT).show()
+            context?.let { Toast.makeText(it, "需要日曆權限才能匯出", Toast.LENGTH_SHORT).show() }
         }
     }
 
@@ -167,9 +167,10 @@ class SettingsFragment : Fragment() {
      * 更新儲存空間資訊
      */
     private fun updateStorageInfo() {
+        val ctx = context ?: return
         viewLifecycleOwner.lifecycleScope.launch {
             val dbSize = withContext(Dispatchers.IO) {
-                val dbFile = requireContext().getDatabasePath(NotificationDatabase.DATABASE_NAME)
+                val dbFile = ctx.getDatabasePath(NotificationDatabase.DATABASE_NAME)
                 val walFile = File(dbFile.path + "-wal")
                 val shmFile = File(dbFile.path + "-shm")
                 val db = if (dbFile.exists()) dbFile.length() else 0L
@@ -179,12 +180,12 @@ class SettingsFragment : Fragment() {
             }
 
             val mediaSize = withContext(Dispatchers.IO) {
-                MediaExtractor(requireContext()).getMediaDirSize()
+                MediaExtractor(ctx).getMediaDirSize()
             }
 
             val totalSize = dbSize.first + dbSize.second + dbSize.third + mediaSize
 
-            binding.textStorageInfo.text = buildString {
+            _binding?.textStorageInfo?.text = buildString {
                 append("資料庫: ${formatFileSize(dbSize.first)}")
                 if (dbSize.second > 0) append(" (WAL: ${formatFileSize(dbSize.second)})")
                 append("\n媒體: ${formatFileSize(mediaSize)}")
@@ -301,6 +302,7 @@ class SettingsFragment : Fragment() {
     }
 
     private fun exportToCalendar(calendarId: Long, detailLevel: Int, exporter: CalendarExporter) {
+        val ctx = context ?: return
         viewLifecycleOwner.lifecycleScope.launch {
             val database = NotificationMasterApp.getInstance().database
 
@@ -320,7 +322,7 @@ class SettingsFragment : Fragment() {
             }
 
             Toast.makeText(
-                requireContext(),
+                ctx,
                 "匯出完成：${result.successCount} 筆成功" +
                     if (result.failCount > 0) "，${result.failCount} 筆失敗" else "",
                 Toast.LENGTH_LONG
@@ -357,12 +359,13 @@ class SettingsFragment : Fragment() {
     private var pendingExportEndTime = 0L
 
     private fun exportArchiveToUri(uri: android.net.Uri) {
+        val ctx = context ?: return
         viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val database = NotificationMasterApp.getInstance().database
-                val exporter = ArchiveExporter(requireContext(), database)
+                val exporter = ArchiveExporter(ctx, database)
 
-                val outputStream = requireContext().contentResolver.openOutputStream(uri)
+                val outputStream = ctx.contentResolver.openOutputStream(uri)
                     ?: throw IllegalStateException("無法開啟輸出串流")
 
                 val stats = exporter.export(
@@ -373,13 +376,13 @@ class SettingsFragment : Fragment() {
                 outputStream.close()
 
                 Toast.makeText(
-                    requireContext(),
+                    ctx,
                     "匯出完成：${stats.notificationCount} 筆通知、${stats.eventCount} 筆事件",
                     Toast.LENGTH_LONG
                 ).show()
             } catch (e: Exception) {
                 Toast.makeText(
-                    requireContext(),
+                    ctx,
                     "匯出失敗：${e.message}",
                     Toast.LENGTH_LONG
                 ).show()
@@ -390,12 +393,13 @@ class SettingsFragment : Fragment() {
     // === JSON 封存匯入 ===
 
     private fun importArchiveFromUri(uri: android.net.Uri) {
+        val ctx = context ?: return
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                val inputStream = requireContext().contentResolver.openInputStream(uri)
+                val inputStream = ctx.contentResolver.openInputStream(uri)
                     ?: throw IllegalStateException("無法開啟輸入串流")
 
-                val importer = ArchiveImporter(requireContext())
+                val importer = ArchiveImporter(ctx)
                 val data = importer.import(inputStream)
                 inputStream.close()
 
@@ -415,13 +419,13 @@ class SettingsFragment : Fragment() {
                 } ?: ""
 
                 Toast.makeText(
-                    requireContext(),
+                    ctx,
                     "匯入完成：${data.notifications.size} 筆通知${envText}",
                     Toast.LENGTH_LONG
                 ).show()
             } catch (e: Exception) {
                 Toast.makeText(
-                    requireContext(),
+                    ctx,
                     "匯入失敗：${e.message}",
                     Toast.LENGTH_LONG
                 ).show()
@@ -516,6 +520,7 @@ class SettingsFragment : Fragment() {
     // === 清除資料 ===
 
     private fun clearAllData() {
+        val ctx = context ?: return
         viewLifecycleOwner.lifecycleScope.launch {
             val database = NotificationMasterApp.getInstance().database
 
@@ -529,7 +534,7 @@ class SettingsFragment : Fragment() {
                 database.deviceStateDao().deleteAll()
             }
 
-            Toast.makeText(requireContext(), "已清除所有資料", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, "已清除所有資料", Toast.LENGTH_SHORT).show()
             updateStorageInfo()
         }
     }

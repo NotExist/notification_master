@@ -284,6 +284,7 @@ class HomeFragment : Fragment() {
             }
 
             // 更新 UI
+            val binding = _binding ?: return@launch
             val numberFormat = NumberFormat.getNumberInstance()
             binding.textTodayCount.text = numberFormat.format(todayCount)
             binding.textTotalCount.text = numberFormat.format(totalCount)

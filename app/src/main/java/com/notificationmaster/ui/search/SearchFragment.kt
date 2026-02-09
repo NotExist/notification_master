@@ -95,6 +95,7 @@ class SearchFragment : Fragment() {
                 database.notificationDao().searchNotifications(query, 100)
             }
 
+            val binding = _binding ?: return@launch
             notificationAdapter.submitList(results)
             binding.textEmpty.visibility = if (results.isEmpty()) View.VISIBLE else View.GONE
         }
