@@ -109,6 +109,8 @@
             app:fastScrollEnabled="true"
             app:fastScrollVerticalThumbDrawable="@drawable/fastscroll_thumb"
             app:fastScrollVerticalTrackDrawable="@drawable/fastscroll_track"
+            app:fastScrollHorizontalThumbDrawable="@drawable/fastscroll_thumb"
+            app:fastScrollHorizontalTrackDrawable="@drawable/fastscroll_track"
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
             tools:listitem="@layout/item_timeline_notification" />
 
