@@ -92,6 +92,9 @@ class TimelineFragment : Fragment() {
         setupSwipeRefresh()
         setupPermissionButton()
         wasPermissionGranted = isNotificationListenerEnabled()
+        Log.d(TAG, "onViewCreated: permissionGranted=$wasPermissionGranted, " +
+            "serviceConnected=${NotificationCaptureService.isConnected}, " +
+            "serviceInstance=${NotificationCaptureService.getInstance() != null}")
         updateEmptyStateForPermission()
         loadNotifications()
     }
@@ -99,6 +102,8 @@ class TimelineFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         val isGranted = isNotificationListenerEnabled()
+        Log.d(TAG, "onResume: isGranted=$isGranted, wasGranted=$wasPermissionGranted, " +
+            "serviceConnected=${NotificationCaptureService.isConnected}")
         if (isGranted && !wasPermissionGranted) {
             // 權限剛授予 — 先更新 UI 並啟動 Flow 監聽
             // 不立即觸發 rebind，讓系統有時間自然綁定服務
@@ -175,6 +180,18 @@ class TimelineFragment : Fragment() {
 
     private fun setupSwipeRefresh() {
         binding.swipeRefresh.setOnRefreshListener {
+            val serviceConnected = NotificationCaptureService.isConnected
+            Log.d(TAG, "swipeRefresh: permissionGranted=$wasPermissionGranted, " +
+                "serviceConnected=$serviceConnected")
+            if (wasPermissionGranted) {
+                if (serviceConnected) {
+                    // 服務已連線 — 手動擷取當前活躍通知（不重複插入）
+                    NotificationCaptureService.getInstance()?.captureActiveNotifications()
+                } else {
+                    // 服務未連線 — 嘗試觸發重新綁定
+                    ensureServiceConnected()
+                }
+            }
             loadNotifications()
         }
     }
@@ -388,31 +405,38 @@ class TimelineFragment : Fragment() {
      */
     private fun ensureServiceConnected() {
         rebindJob?.cancel()
+        Log.d(TAG, "ensureServiceConnected: starting checks (interval=${REBIND_CHECK_INTERVAL_MS}ms, " +
+            "max=$MAX_REBIND_ATTEMPTS)")
         rebindJob = viewLifecycleOwner.lifecycleScope.launch {
             for (attempt in 0 until MAX_REBIND_ATTEMPTS) {
                 delay(REBIND_CHECK_INTERVAL_MS)
                 if (_binding == null) return@launch
 
-                if (NotificationCaptureService.isConnected) {
-                    Log.i(TAG, "Service connected (check #${attempt + 1})")
+                val connected = NotificationCaptureService.isConnected
+                val instanceExists = NotificationCaptureService.getInstance() != null
+                Log.d(TAG, "ensureServiceConnected check #${attempt + 1}: " +
+                    "connected=$connected, instance=$instanceExists")
+
+                if (connected) {
+                    // 服務已連線，手動觸發一次擷取確保有資料
+                    NotificationCaptureService.getInstance()?.captureActiveNotifications()
                     return@launch
                 }
 
-                Log.i(TAG, "Service not connected, rebind attempt #${attempt + 1}")
                 if (Build.VERSION.SDK_INT >= 24) {
                     try {
                         val ctx = context ?: return@launch
                         val cn = ComponentName(ctx, NotificationCaptureService::class.java)
                         NotificationListenerService.requestRebind(cn)
+                        Log.d(TAG, "requestRebind sent")
                     } catch (e: Exception) {
                         Log.w(TAG, "requestRebind failed", e)
                     }
                 }
             }
 
-            if (!NotificationCaptureService.isConnected) {
-                Log.w(TAG, "Service not connected after $MAX_REBIND_ATTEMPTS attempts")
-            }
+            Log.w(TAG, "Service not connected after $MAX_REBIND_ATTEMPTS attempts. " +
+                "User can pull-to-refresh to retry.")
         }
     }
 
