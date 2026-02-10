@@ -353,33 +353,39 @@ class TimelineFragment : Fragment() {
     /**
      * 要求系統重新綁定 NotificationListenerService
      * 解決授權後系統未立即綁定服務、不觸發 onListenerConnected 的問題
+     *
+     * 策略：先切換元件啟用狀態（全版本通用、最可靠），
+     * 再呼叫 requestRebind（API 24+ 官方 API，作為補充）。
+     * 雙重觸發確保各家 OEM ROM 都能正確重新綁定。
      */
     private fun requestServiceRebind() {
         val ctx = context ?: return
         val componentName = ComponentName(ctx, NotificationCaptureService::class.java)
+
+        // 方法 1：切換元件啟用狀態，強制 PackageManager 通知系統重新評估綁定
+        try {
+            ctx.packageManager.setComponentEnabledSetting(
+                componentName,
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.DONT_KILL_APP
+            )
+            ctx.packageManager.setComponentEnabledSetting(
+                componentName,
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                PackageManager.DONT_KILL_APP
+            )
+            Log.i("TimelineFragment", "Toggled component to force rebind")
+        } catch (e: Exception) {
+            Log.w("TimelineFragment", "Component toggle rebind failed", e)
+        }
+
+        // 方法 2（API 24+）：官方 requestRebind 作為補充
         if (Build.VERSION.SDK_INT >= 24) {
             try {
                 NotificationListenerService.requestRebind(componentName)
                 Log.i("TimelineFragment", "Requested service rebind (API 24+)")
             } catch (e: Exception) {
                 Log.w("TimelineFragment", "requestRebind failed", e)
-            }
-        } else {
-            // API 21-23：切換元件啟用狀態強制系統重新綁定
-            try {
-                ctx.packageManager.setComponentEnabledSetting(
-                    componentName,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-                ctx.packageManager.setComponentEnabledSetting(
-                    componentName,
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-                Log.i("TimelineFragment", "Toggled component to force rebind (API <24)")
-            } catch (e: Exception) {
-                Log.w("TimelineFragment", "Component toggle rebind failed", e)
             }
         }
     }
