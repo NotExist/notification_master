@@ -43,7 +43,11 @@ interface NotificationDao {
 
     @Query("""
         SELECT * FROM notifications
-        WHERE post_time BETWEEN :startTime AND :endTime
+        WHERE id IN (
+            SELECT MAX(id) FROM notifications
+            WHERE post_time BETWEEN :startTime AND :endTime
+            GROUP BY notification_key
+        )
         ORDER BY post_time DESC
     """)
     fun getNotificationsByTimeRange(startTime: Long, endTime: Long): Flow<List<NotificationEntity>>
@@ -64,17 +68,19 @@ interface NotificationDao {
     // === 查詢 - 去重顯示 ===
 
     /**
-     * 去重查詢 - 每個 content_hash 只取最新插入的一筆
-     * 注意：這是檢視層的去重，不是儲存層
-     *
-     * 使用 MAX(id) 而非 MAX(post_time) 來保證每個 hash 只回傳一行，
-     * 因為同一通知的 POSTED/UPDATED 事件共用相同 post_time 但有不同 id。
+     * 去重查詢（檢視層去重，非儲存層）
+     * 第一層：GROUP BY notification_key → 同一系統通知的多次更新僅取最新
+     * 第二層：GROUP BY content_hash → 不同通知但內容相同者再合併
      */
     @Query("""
         SELECT * FROM notifications
         WHERE id IN (
             SELECT MAX(id) FROM notifications
-            WHERE post_time BETWEEN :startTime AND :endTime
+            WHERE id IN (
+                SELECT MAX(id) FROM notifications
+                WHERE post_time BETWEEN :startTime AND :endTime
+                GROUP BY notification_key
+            )
             GROUP BY content_hash
         )
         ORDER BY post_time DESC
@@ -89,6 +95,20 @@ interface NotificationDao {
         WHERE content_hash = :hash AND post_time BETWEEN :startTime AND :endTime
     """)
     suspend fun getCountByHash(hash: String, startTime: Long, endTime: Long): Int
+
+    /**
+     * 取得去重合併數量 — 在「最新版本」中，有幾個不同 notification_key 共享此 content_hash
+     */
+    @Query("""
+        SELECT COUNT(DISTINCT notification_key) FROM notifications
+        WHERE id IN (
+            SELECT MAX(id) FROM notifications
+            WHERE post_time BETWEEN :startTime AND :endTime
+            GROUP BY notification_key
+        )
+        AND content_hash = :hash
+    """)
+    suspend fun getDeduplicatedCount(hash: String, startTime: Long, endTime: Long): Int
 
     // === 查詢 - 按來源 ===
 

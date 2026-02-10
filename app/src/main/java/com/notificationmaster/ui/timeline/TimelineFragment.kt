@@ -326,9 +326,9 @@ class TimelineFragment : Fragment() {
                 lastDate = notificationDate
             }
 
-            // 查詢相同 hash 的通知數量
+            // 統計被合併的不同通知數
             val similarCount = withContext(Dispatchers.IO) {
-                dao.getCountByHash(notification.contentHash, startTime, endTime)
+                dao.getDeduplicatedCount(notification.contentHash, startTime, endTime)
             }
 
             items.add(TimelineItem.NotificationItem(notification, similarCount))
