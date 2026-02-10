@@ -137,13 +137,7 @@ class TimelineFragment : Fragment() {
         binding.recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 updateTimeBubble()
-            }
-
-            override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
-                when (newState) {
-                    RecyclerView.SCROLL_STATE_DRAGGING -> showTimeBubble()
-                    RecyclerView.SCROLL_STATE_IDLE -> scheduleHideTimeBubble()
-                }
+                showAndScheduleHideBubble()
             }
         })
     }
@@ -380,15 +374,14 @@ class TimelineFragment : Fragment() {
         binding.timeBubble.translationY = swipeRefresh.top + trackRange * fraction
     }
 
-    private fun showTimeBubble() {
+    /**
+     * 顯示時間氣泡並排程自動隱藏
+     * 每次捲動事件觸發，確保 fast scroll thumb 拖曳期間氣泡持續可見
+     */
+    private fun showAndScheduleHideBubble() {
         val binding = _binding ?: return
         bubbleHideRunnable?.let { binding.timeBubble.removeCallbacks(it) }
         binding.timeBubble.visibility = View.VISIBLE
-    }
-
-    private fun scheduleHideTimeBubble() {
-        val binding = _binding ?: return
-        bubbleHideRunnable?.let { binding.timeBubble.removeCallbacks(it) }
         val runnable = Runnable { _binding?.timeBubble?.visibility = View.GONE }
         bubbleHideRunnable = runnable
         binding.timeBubble.postDelayed(runnable, 1500L)
