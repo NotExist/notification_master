@@ -1,7 +1,10 @@
 package com.notificationmaster.ui.main
 
 import android.os.Bundle
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.doOnLayout
+import androidx.core.view.updatePadding
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupActionBarWithNavController
@@ -25,6 +28,11 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(binding.toolbar)
 
         setupNavigation()
+
+        // 根據 BottomNavigationView 實際高度動態設定 fragment 容器底部間距
+        binding.bottomNav.doOnLayout { bottomNav ->
+            findViewById<View>(R.id.nav_host_fragment).updatePadding(bottom = bottomNav.height)
+        }
     }
 
     private fun setupNavigation() {
