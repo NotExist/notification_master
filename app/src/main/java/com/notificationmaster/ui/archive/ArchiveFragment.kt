@@ -1,6 +1,7 @@
 package com.notificationmaster.ui.archive
 
 import android.os.Bundle
+import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -28,6 +29,7 @@ class ArchiveFragment : Fragment() {
     private lateinit var appSourceAdapter: AppSourceAdapter
     private lateinit var channelAdapter: ChannelAdapter
     private var currentTab = Tab.BY_APP
+    private var layoutManagerState: Parcelable? = null
 
     /** Channel 功能是否可用 (API 26+) */
     private val isChannelSupported: Boolean
@@ -61,6 +63,7 @@ class ArchiveFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        layoutManagerState = binding.recyclerView.layoutManager?.onSaveInstanceState()
         super.onDestroyView()
         _binding = null
     }
@@ -134,9 +137,14 @@ class ArchiveFragment : Fragment() {
                 Tab.BY_APP -> {
                     binding.recyclerView.adapter = appSourceAdapter
                     database.appSourceDao().getAllAppSources().collectLatest { apps ->
-                        appSourceAdapter.submitList(apps)
-                        binding.textEmpty.text = getString(R.string.timeline_empty)
-                        binding.textEmpty.visibility = if (apps.isEmpty()) View.VISIBLE else View.GONE
+                        appSourceAdapter.submitList(apps) {
+                            layoutManagerState?.let { state ->
+                                _binding?.recyclerView?.layoutManager?.onRestoreInstanceState(state)
+                                layoutManagerState = null
+                            }
+                        }
+                        _binding?.textEmpty?.text = getString(R.string.timeline_empty)
+                        _binding?.textEmpty?.visibility = if (apps.isEmpty()) View.VISIBLE else View.GONE
                     }
                 }
                 Tab.BY_CHANNEL -> {
@@ -147,9 +155,14 @@ class ArchiveFragment : Fragment() {
 
                     binding.recyclerView.adapter = channelAdapter
                     database.channelDao().getAllChannels().collectLatest { channels ->
-                        channelAdapter.submitList(channels)
-                        binding.textEmpty.text = getString(R.string.timeline_empty)
-                        binding.textEmpty.visibility = if (channels.isEmpty()) View.VISIBLE else View.GONE
+                        channelAdapter.submitList(channels) {
+                            layoutManagerState?.let { state ->
+                                _binding?.recyclerView?.layoutManager?.onRestoreInstanceState(state)
+                                layoutManagerState = null
+                            }
+                        }
+                        _binding?.textEmpty?.text = getString(R.string.timeline_empty)
+                        _binding?.textEmpty?.visibility = if (channels.isEmpty()) View.VISIBLE else View.GONE
                     }
                 }
             }

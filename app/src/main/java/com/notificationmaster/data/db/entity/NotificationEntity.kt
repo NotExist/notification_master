@@ -18,7 +18,9 @@ import androidx.room.PrimaryKey
         Index(value = ["capture_time"]),
         Index(value = ["channel_id"]),
         Index(value = ["content_hash"]),
-        Index(value = ["group_key"])
+        Index(value = ["group_key"]),
+        Index(value = ["has_content_intent"]),
+        Index(value = ["content_intent_creator_package"])
     ]
 )
 data class NotificationEntity(
@@ -300,7 +302,28 @@ data class NotificationEntity(
 
     /** 被抑制的視覺效果 */
     @ColumnInfo(name = "suppressed_visual_effects")
-    val suppressedVisualEffects: Int
+    val suppressedVisualEffects: Int,
+
+    // === Intent 資訊 ===
+    /** 是否有 contentIntent (點擊動作) */
+    @ColumnInfo(name = "has_content_intent")
+    val hasContentIntent: Boolean,
+
+    /** 是否有 deleteIntent (滑除動作) */
+    @ColumnInfo(name = "has_delete_intent")
+    val hasDeleteIntent: Boolean,
+
+    /** 是否有 fullScreenIntent (全螢幕動作，如來電/鬧鐘) */
+    @ColumnInfo(name = "has_full_screen_intent")
+    val hasFullScreenIntent: Boolean,
+
+    /** contentIntent 建立者包名 */
+    @ColumnInfo(name = "content_intent_creator_package")
+    val contentIntentCreatorPackage: String?,
+
+    /** Intent 完整資訊 (JSON) — contentIntent/deleteIntent/fullScreenIntent/publicVersion */
+    @ColumnInfo(name = "intent_info_json")
+    val intentInfoJson: String?
 )
 
 /**

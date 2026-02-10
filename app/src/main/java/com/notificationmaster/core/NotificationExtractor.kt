@@ -185,7 +185,14 @@ class NotificationExtractor(private val context: Context) {
             isSuspended = if (Build.VERSION.SDK_INT >= 28) ranking?.isSuspended ?: false else false,
             suppressedVisualEffects = if (Build.VERSION.SDK_INT >= 24) {
                 ranking?.suppressedVisualEffects ?: 0
-            } else 0
+            } else 0,
+
+            // Intent 資訊
+            hasContentIntent = notification.contentIntent != null,
+            hasDeleteIntent = notification.deleteIntent != null,
+            hasFullScreenIntent = notification.fullScreenIntent != null,
+            contentIntentCreatorPackage = notification.contentIntent?.creatorPackage,
+            intentInfoJson = extractIntentInfo(notification)
         )
     }
 
@@ -306,6 +313,52 @@ class NotificationExtractor(private val context: Context) {
             }
         }
         return json.toString()
+    }
+
+    /**
+     * 提取 Intent 相關資訊（contentIntent/deleteIntent/fullScreenIntent/publicVersion）
+     */
+    private fun extractIntentInfo(notification: Notification): String {
+        val json = JSONObject()
+        json.put("contentIntent", extractPendingIntentInfo(notification.contentIntent))
+        json.put("deleteIntent", extractPendingIntentInfo(notification.deleteIntent))
+        json.put("fullScreenIntent", extractPendingIntentInfo(notification.fullScreenIntent))
+        json.put("publicVersion", notification.publicVersion?.let { extractPublicVersion(it) })
+        return json.toString()
+    }
+
+    /**
+     * 提取單一 PendingIntent 的描述性資訊
+     */
+    private fun extractPendingIntentInfo(pi: android.app.PendingIntent?): JSONObject? {
+        pi ?: return null
+        return JSONObject().apply {
+            put("creatorPackage", pi.creatorPackage)
+            put("creatorUid", pi.creatorUid)
+            put("creatorUserHandle", pi.creatorUserHandle?.hashCode())
+            if (Build.VERSION.SDK_INT >= 34) {
+                put("isActivity", pi.isActivity)
+                put("isBroadcast", pi.isBroadcast)
+                put("isService", pi.isService)
+                put("isForegroundService", pi.isForegroundService)
+                put("isImmutable", pi.isImmutable)
+            }
+        }
+    }
+
+    /**
+     * 提取 publicVersion（鎖屏顯示版本）的通知內容
+     */
+    private fun extractPublicVersion(notification: Notification): JSONObject {
+        val extras = notification.extras ?: Bundle()
+        return JSONObject().apply {
+            put("title", extras.getCharSequence(Notification.EXTRA_TITLE)?.toString())
+            put("text", extras.getCharSequence(Notification.EXTRA_TEXT)?.toString())
+            put("subText", extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString())
+            put("flags", notification.flags)
+            put("visibility", notification.visibility)
+            put("category", notification.category)
+        }
     }
 
     /**

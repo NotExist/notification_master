@@ -324,16 +324,32 @@ class TimelineFragment : Fragment() {
 
     private fun updateTimeBubble() {
         val binding = _binding ?: return
-        val layoutManager = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val rv = binding.recyclerView
+        val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return
         val position = layoutManager.findFirstVisibleItemPosition()
         if (position == RecyclerView.NO_POSITION) return
 
+        // 更新氣泡文字
         val item = adapter?.currentList?.getOrNull(position) ?: return
         val dateText = when (item) {
             is TimelineItem.DateHeader -> dateFormat.format(Date(item.date))
             is TimelineItem.NotificationItem -> dateFormat.format(Date(item.notification.postTime))
         }
         binding.timeBubble.text = dateText
+
+        // 計算捲動比例，讓氣泡跟隨 fast scroll thumb 垂直位置
+        val scrollRange = rv.computeVerticalScrollRange()
+        val scrollExtent = rv.computeVerticalScrollExtent()
+        val scrollOffset = rv.computeVerticalScrollOffset()
+        val maxScroll = scrollRange - scrollExtent
+        if (maxScroll <= 0) return
+
+        val fraction = scrollOffset.toFloat() / maxScroll
+        val swipeRefresh = binding.swipeRefresh
+        val bubbleHeight = binding.timeBubble.height.toFloat()
+        val trackRange = (swipeRefresh.bottom - swipeRefresh.top).toFloat() - bubbleHeight
+
+        binding.timeBubble.translationY = swipeRefresh.top + trackRange * fraction
     }
 
     private fun showTimeBubble() {
