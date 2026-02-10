@@ -3,6 +3,7 @@ package com.notificationmaster.export.archive
 import android.content.Context
 import android.util.Base64
 import android.util.Log
+import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.NotificationEventEntity
@@ -70,7 +71,7 @@ class ArchiveImporter(private val context: Context) {
                     val base64 = mediaJson.optString("base64", "")
                     if (base64.isNotEmpty()) {
                         val filePath = mediaJson.getString("filePath")
-                        val file = File(context.filesDir, filePath)
+                        val file = File(MediaExtractor.getMediaBaseDir(context), filePath)
                         file.parentFile?.mkdirs()
                         file.writeBytes(Base64.decode(base64, Base64.NO_WRAP))
                     }

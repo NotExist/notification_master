@@ -10,8 +10,8 @@
         name="external_files"
         path="." />
 
-    <!-- 媒體檔案目錄 -->
-    <files-path
+    <!-- 媒體檔案目錄（外部儲存，使用者可管理） -->
+    <external-files-path
         name="media"
         path="media/" />
 
