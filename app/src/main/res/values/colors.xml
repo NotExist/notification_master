@@ -30,6 +30,14 @@
     <color name="background_card">#FAFAFA</color>
     <color name="background_dark">#212121</color>
 
+    <!-- Importance level colors (0-5) -->
+    <color name="importance_none">#9E9E9E</color>
+    <color name="importance_min">#BDBDBD</color>
+    <color name="importance_low">#42A5F5</color>
+    <color name="importance_default">#4CAF50</color>
+    <color name="importance_high">#FF9800</color>
+    <color name="importance_max">#F44336</color>
+
     <!-- Text colors -->
     <color name="text_primary">#212121</color>
     <color name="text_secondary">#757575</color>

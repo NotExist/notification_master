@@ -5,6 +5,7 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import androidx.core.content.ContextCompat
 import com.notificationmaster.R
 import com.notificationmaster.data.db.entity.ChannelEntity
 import com.notificationmaster.databinding.ItemChannelBinding
@@ -13,9 +14,8 @@ import java.text.NumberFormat
 /**
  * Channel 列表 Adapter
  *
- * 佈局 Method B（三行式）：
- * Line 1: channelName (channelId) — count 在右側
- * Line 2: description — importance 原始值在右側
+ * Line 1: channelName (description) — count 在右側
+ * Line 2: channelId — importance（依等級著色）在右側
  * Line 3: groupId · appName (packageName)
  */
 class ChannelAdapter(
@@ -51,19 +51,19 @@ class ChannelAdapter(
         fun bind(item: ChannelEntity) {
             val context = binding.root.context
 
-            // Line 1: channelName (channelId) 或僅 channelId
+            // Line 1: channelName (description)，description 有才附加
             binding.textChannelName.text = when {
                 item.channelName == null -> item.channelId
-                item.channelName == item.channelId -> item.channelId
-                else -> "${item.channelName} (${item.channelId})"
+                item.description.isNullOrEmpty() -> item.channelName
+                else -> "${item.channelName} (${item.description})"
             }
 
-            // Line 2 左: description 或 fallback 提示
-            binding.textDescription.text = item.description
-                ?: context.getString(R.string.channel_no_description)
+            // Line 2 左: channelId
+            binding.textChannelId.text = item.channelId
 
-            // Line 2 右: importance 原始值
+            // Line 2 右: importance 原始值 + 依等級著色
             binding.textImportance.text = item.importance.toString()
+            binding.textImportance.setTextColor(ContextCompat.getColor(context, importanceColor(item.importance)))
 
             // Line 3: groupId · appName (packageName)
             val appLabel = resolveAppName(item.packageName)
@@ -101,6 +101,16 @@ class ChannelAdapter(
             } catch (_: Exception) {
                 null
             }
+        }
+
+        private fun importanceColor(importance: Int): Int = when (importance) {
+            0 -> R.color.importance_none
+            1 -> R.color.importance_min
+            2 -> R.color.importance_low
+            3 -> R.color.importance_default
+            4 -> R.color.importance_high
+            5 -> R.color.importance_max
+            else -> R.color.importance_default
         }
     }
 
