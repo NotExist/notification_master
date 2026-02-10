@@ -2,11 +2,15 @@ package com.notificationmaster.ui.timeline
 
 import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
 import android.provider.Settings
+import android.service.notification.NotificationListenerService
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -87,9 +91,10 @@ class TimelineFragment : Fragment() {
         super.onResume()
         val isGranted = isNotificationListenerEnabled()
         if (isGranted && !wasPermissionGranted) {
-            // 權限剛授予，重新載入資料
+            // 權限剛授予，要求系統重新綁定服務以觸發 onListenerConnected 初次收集
             wasPermissionGranted = true
             updateEmptyStateForPermission()
+            requestServiceRebind()
             loadNotifications()
         } else if (!isGranted && wasPermissionGranted) {
             wasPermissionGranted = false
@@ -343,6 +348,40 @@ class TimelineFragment : Fragment() {
         val runnable = Runnable { _binding?.timeBubble?.visibility = View.GONE }
         bubbleHideRunnable = runnable
         binding.timeBubble.postDelayed(runnable, 1500L)
+    }
+
+    /**
+     * 要求系統重新綁定 NotificationListenerService
+     * 解決授權後系統未立即綁定服務、不觸發 onListenerConnected 的問題
+     */
+    private fun requestServiceRebind() {
+        val ctx = context ?: return
+        val componentName = ComponentName(ctx, NotificationCaptureService::class.java)
+        if (Build.VERSION.SDK_INT >= 24) {
+            try {
+                NotificationListenerService.requestRebind(componentName)
+                Log.i("TimelineFragment", "Requested service rebind (API 24+)")
+            } catch (e: Exception) {
+                Log.w("TimelineFragment", "requestRebind failed", e)
+            }
+        } else {
+            // API 21-23：切換元件啟用狀態強制系統重新綁定
+            try {
+                ctx.packageManager.setComponentEnabledSetting(
+                    componentName,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                ctx.packageManager.setComponentEnabledSetting(
+                    componentName,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                Log.i("TimelineFragment", "Toggled component to force rebind (API <24)")
+            } catch (e: Exception) {
+                Log.w("TimelineFragment", "Component toggle rebind failed", e)
+            }
+        }
     }
 
     private fun isNotificationListenerEnabled(): Boolean {
