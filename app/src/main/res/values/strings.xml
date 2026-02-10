@@ -116,11 +116,24 @@
     <string name="tag_bubble_desc">氣泡通知 (API 29+)，可浮動在其他 App 之上的圓形圖示。\n由來源 App 設定 BubbleMetadata 觸發，使用者可在系統設定中停用。</string>
     <string name="tag_custom_view_desc">此通知使用自訂 RemoteViews 呈現內容。\n部分視覺資訊可能無法完整擷取至文字欄位。\n完整的原始資料仍保留在 extras 中。</string>
 
+    <!-- 媒體目錄設定 -->
+    <string name="settings_media_dir">媒體儲存目錄</string>
+    <string name="settings_media_dir_default">預設（App 私有目錄）</string>
+    <string name="settings_media_dir_choose">選擇目錄</string>
+    <string name="settings_media_dir_reset">重設</string>
+    <string name="settings_media_dir_set">自訂：%s</string>
+    <string name="settings_media_dir_success">已設定媒體儲存目錄</string>
+    <string name="settings_media_dir_invalid">無法存取所選目錄</string>
+    <string name="settings_media_dir_lost">自訂目錄已無法存取，新檔案將儲存到預設目錄</string>
+    <string name="settings_media_dir_reset_confirm">確定要恢復使用預設目錄嗎？\n\n已儲存在自訂目錄的檔案不會被移動或刪除，仍可正常檢視。</string>
+    <string name="settings_media_dir_reset_done">已恢復預設媒體目錄</string>
+
     <!-- 通用 -->
     <string name="ok">確定</string>
     <string name="loading">載入中…</string>
     <string name="error">錯誤</string>
     <string name="error_no_viewer">找不到可開啟此檔案的應用程式</string>
+    <string name="media_file_removed">已移除</string>
     <string name="unknown_app">未知 App</string>
     <string name="no_title">無標題</string>
     <string name="no_content">無內容</string>

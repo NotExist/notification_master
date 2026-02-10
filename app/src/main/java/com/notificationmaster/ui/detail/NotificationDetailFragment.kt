@@ -1,7 +1,6 @@
 package com.notificationmaster.ui.detail
 
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -13,7 +12,6 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.navArgs
@@ -22,6 +20,7 @@ import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.MediaAttachmentEntity
@@ -32,7 +31,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -255,8 +253,7 @@ class NotificationDetailFragment : Fragment() {
         val marginPx = (8 * resources.displayMetrics.density).toInt()
 
         for (attachment in attachments) {
-            val file = File(ctx.filesDir, attachment.filePath)
-            if (!file.exists()) continue
+            val fileExists = MediaExtractor.mediaFileExists(ctx, attachment.filePath)
 
             // 每張圖的容器：圖片 + 類型標籤
             val itemLayout = LinearLayout(ctx).apply {
@@ -273,30 +270,29 @@ class NotificationDetailFragment : Fragment() {
                 layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 contentDescription = attachment.mediaType.name
-                // 載入縮圖（限制取樣大小以節省記憶體）
-                val options = BitmapFactory.Options().apply {
-                    inJustDecodeBounds = true
-                }
-                BitmapFactory.decodeFile(file.absolutePath, options)
-                val sampleSize = maxOf(
-                    options.outWidth / sizePx,
-                    options.outHeight / sizePx,
-                    1
-                )
-                val decodeOptions = BitmapFactory.Options().apply {
-                    inSampleSize = sampleSize
-                }
-                val bitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
-                if (bitmap != null) {
-                    setImageBitmap(bitmap)
-                }
-                setOnClickListener {
-                    openMediaFile(file, attachment.mimeType)
+
+                if (fileExists) {
+                    val bitmap = MediaExtractor.loadMediaBitmapSampled(
+                        ctx, attachment.filePath, sizePx, sizePx
+                    )
+                    if (bitmap != null) {
+                        setImageBitmap(bitmap)
+                    }
+                    setOnClickListener {
+                        openMediaFile(attachment.filePath, attachment.mimeType)
+                    }
+                } else {
+                    setImageResource(android.R.drawable.ic_menu_report_image)
+                    alpha = 0.3f
                 }
             }
 
             val label = TextView(ctx).apply {
-                text = attachment.mediaType.name
+                text = if (fileExists) {
+                    attachment.mediaType.name
+                } else {
+                    ctx.getString(R.string.media_file_removed)
+                }
                 textSize = 10f
                 gravity = android.view.Gravity.CENTER
                 layoutParams = LinearLayout.LayoutParams(sizePx, LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -311,14 +307,14 @@ class NotificationDetailFragment : Fragment() {
     /**
      * 使用系統檔案檢視器開啟媒體檔案
      */
-    private fun openMediaFile(file: File, mimeType: String) {
+    private fun openMediaFile(filePath: String, mimeType: String) {
         val ctx = requireContext()
+        val uri = MediaExtractor.getShareUri(ctx, filePath)
+        if (uri == null) {
+            Toast.makeText(ctx, R.string.media_file_removed, Toast.LENGTH_SHORT).show()
+            return
+        }
         try {
-            val uri = FileProvider.getUriForFile(
-                ctx,
-                "${ctx.packageName}.fileprovider",
-                file
-            )
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, mimeType)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

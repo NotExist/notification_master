@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.util.Base64
 import com.notificationmaster.BuildConfig
+import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.NotificationEventEntity
@@ -12,7 +13,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -73,9 +73,9 @@ class ArchiveExporter(
                     put("contentHash", attachment.contentHash)
 
                     if (includeMediaBase64) {
-                        val file = File(context.filesDir, attachment.filePath)
-                        if (file.exists()) {
-                            put("base64", Base64.encodeToString(file.readBytes(), Base64.NO_WRAP))
+                        val bytes = MediaExtractor.readMediaBytes(context, attachment.filePath)
+                        if (bytes != null) {
+                            put("base64", Base64.encodeToString(bytes, Base64.NO_WRAP))
                         }
                     }
                 }

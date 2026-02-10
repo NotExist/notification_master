@@ -1,23 +1,21 @@
 package com.notificationmaster.ui.settings
 
 import android.Manifest
-import android.app.Activity
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
+import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -26,6 +24,7 @@ import com.notificationmaster.R
 import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.core.permission.PermissionDescriptions
 import com.notificationmaster.core.permission.PermissionInfo
+import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.databinding.FragmentSettingsBinding
 import com.notificationmaster.databinding.ItemPermissionInfoBinding
@@ -62,6 +61,13 @@ class SettingsFragment : Fragment() {
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let { importArchiveFromUri(it) }
+    }
+
+    // 媒體目錄選擇 SAF
+    private val mediaDirPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        uri?.let { handleMediaDirSelected(it) }
     }
 
     // 日曆權限請求
@@ -102,6 +108,7 @@ class SettingsFragment : Fragment() {
         setupDebugSettings()
         setupExportButtons()
         setupImportButtons()
+        setupMediaDirSettings()
         setupDataManagement()
     }
 
@@ -115,6 +122,8 @@ class SettingsFragment : Fragment() {
         super.onResume()
         updateDebugInfo()
         updateStorageInfo()
+        updateMediaDirDisplay()
+        validateCustomMediaDir()
     }
 
     override fun onDestroyView() {
@@ -223,6 +232,121 @@ class SettingsFragment : Fragment() {
     private fun setupImportButtons() {
         binding.btnImportJson.setOnClickListener {
             importJsonLauncher.launch(arrayOf("application/json"))
+        }
+    }
+
+    // === 媒體目錄設定 ===
+
+    private fun setupMediaDirSettings() {
+        binding.btnChooseMediaDir.setOnClickListener {
+            mediaDirPickerLauncher.launch(null)
+        }
+
+        binding.btnResetMediaDir.setOnClickListener {
+            resetMediaDir()
+        }
+
+        updateMediaDirDisplay()
+    }
+
+    /**
+     * 處理使用者選擇的媒體目錄
+     */
+    private fun handleMediaDirSelected(treeUri: android.net.Uri) {
+        val ctx = context ?: return
+        try {
+            // 取得持久性 URI 權限
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            ctx.contentResolver.takePersistableUriPermission(treeUri, flags)
+
+            // 驗證可寫入
+            val docFile = DocumentFile.fromTreeUri(ctx, treeUri)
+            if (docFile == null || !docFile.canWrite()) {
+                Toast.makeText(ctx, R.string.settings_media_dir_invalid, Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            // 儲存設定
+            val displayName = docFile.name ?: treeUri.lastPathSegment ?: treeUri.toString()
+            AppPreferences.setCustomMediaDir(ctx, treeUri, displayName)
+
+            Toast.makeText(ctx, R.string.settings_media_dir_success, Toast.LENGTH_SHORT).show()
+            updateMediaDirDisplay()
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Failed to take persistable URI permission", e)
+            Toast.makeText(ctx, R.string.settings_media_dir_invalid, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * 重設為預設媒體目錄
+     */
+    private fun resetMediaDir() {
+        val ctx = context ?: return
+        AlertDialog.Builder(ctx)
+            .setTitle(R.string.settings_media_dir_reset)
+            .setMessage(R.string.settings_media_dir_reset_confirm)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                // 釋放 persistable URI 權限
+                val oldUri = AppPreferences.getCustomMediaDirUri(ctx)
+                if (oldUri != null) {
+                    try {
+                        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        ctx.contentResolver.releasePersistableUriPermission(oldUri, flags)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to release persistable URI permission", e)
+                    }
+                }
+
+                AppPreferences.clearCustomMediaDir(ctx)
+                Toast.makeText(ctx, R.string.settings_media_dir_reset_done, Toast.LENGTH_SHORT).show()
+                updateMediaDirDisplay()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * 更新媒體目錄顯示狀態
+     */
+    private fun updateMediaDirDisplay() {
+        val ctx = context ?: return
+        val b = _binding ?: return
+
+        if (AppPreferences.isCustomMediaDirEnabled(ctx)) {
+            val displayName = AppPreferences.getCustomMediaDirDisplay(ctx) ?: "..."
+            b.textMediaDirPath.text = getString(R.string.settings_media_dir_set, displayName)
+            b.btnResetMediaDir.visibility = View.VISIBLE
+        } else {
+            b.textMediaDirPath.text = getString(R.string.settings_media_dir_default)
+            b.btnResetMediaDir.visibility = View.GONE
+        }
+    }
+
+    /**
+     * 驗證已儲存的自訂目錄 URI 是否仍可存取
+     * 在 onResume 時呼叫，偵測權限撤銷或外部儲存移除等情況
+     */
+    private fun validateCustomMediaDir() {
+        val ctx = context ?: return
+        val uri = AppPreferences.getCustomMediaDirUri(ctx) ?: return
+
+        try {
+            val docFile = DocumentFile.fromTreeUri(ctx, uri)
+            if (docFile == null || !docFile.canWrite()) {
+                _binding?.textMediaDirPath?.let { tv ->
+                    tv.text = getString(R.string.settings_media_dir_lost)
+                    tv.setTextColor(ContextCompat.getColor(ctx, R.color.status_disabled))
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Custom media dir validation failed", e)
+            _binding?.textMediaDirPath?.let { tv ->
+                tv.text = getString(R.string.settings_media_dir_lost)
+                tv.setTextColor(ContextCompat.getColor(ctx, R.color.status_disabled))
+            }
         }
     }
 
@@ -537,5 +661,9 @@ class SettingsFragment : Fragment() {
             Toast.makeText(ctx, "已清除所有資料", Toast.LENGTH_SHORT).show()
             updateStorageInfo()
         }
+    }
+
+    companion object {
+        private const val TAG = "SettingsFragment"
     }
 }

@@ -3,10 +3,15 @@ package com.notificationmaster.core.media
 import android.app.Notification
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.drawable.Icon
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import androidx.core.content.FileProvider
+import androidx.documentfile.provider.DocumentFile
+import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.data.db.entity.MediaAttachmentEntity
 import com.notificationmaster.data.db.entity.MediaType
 import java.io.File
@@ -15,18 +20,177 @@ import java.security.MessageDigest
 
 /**
  * 媒體提取器
- * 從 Notification extras 提取圖片等媒體資源並儲存到 App 內部儲存
+ * 從 Notification extras 提取圖片等媒體資源並儲存
+ *
+ * 支援兩種儲存模式：
+ * - 預設模式：getExternalFilesDir(null)/media/，filePath 為相對路徑 "media/{hash}.png"
+ * - 自訂模式：使用者透過 SAF 選擇的目錄，filePath 為完整 content URI 字串
  */
 class MediaExtractor(private val context: Context) {
 
     companion object {
         private const val TAG = "MediaExtractor"
         private const val MEDIA_DIR = "media"
+
+        /**
+         * 取得媒體檔案的基底目錄（外部儲存）
+         * 回傳 getExternalFilesDir(null)，外部儲存不可用時 fallback 到 filesDir
+         */
+        fun getMediaBaseDir(context: Context): File {
+            return context.getExternalFilesDir(null) ?: context.filesDir
+        }
+
+        /**
+         * 判斷 filePath 是否為 content URI（自訂目錄模式）
+         */
+        fun isContentUri(filePath: String): Boolean = filePath.startsWith("content://")
+
+        /**
+         * 統一檢查媒體檔案是否存在
+         */
+        fun mediaFileExists(context: Context, filePath: String): Boolean {
+            return try {
+                if (isContentUri(filePath)) {
+                    val uri = Uri.parse(filePath)
+                    context.contentResolver.openInputStream(uri)?.use { true } ?: false
+                } else {
+                    File(getMediaBaseDir(context), filePath).exists()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "mediaFileExists failed: $filePath", e)
+                false
+            }
+        }
+
+        /**
+         * 統一載入媒體縮圖（含取樣以節省記憶體）
+         * @param targetWidth 目標寬度（px）
+         * @param targetHeight 目標高度（px）
+         */
+        fun loadMediaBitmapSampled(
+            context: Context,
+            filePath: String,
+            targetWidth: Int,
+            targetHeight: Int
+        ): Bitmap? {
+            return try {
+                if (isContentUri(filePath)) {
+                    val uri = Uri.parse(filePath)
+                    // 先取得原始尺寸
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    context.contentResolver.openInputStream(uri)?.use {
+                        BitmapFactory.decodeStream(it, null, bounds)
+                    }
+                    val sampleSize = maxOf(
+                        bounds.outWidth / targetWidth,
+                        bounds.outHeight / targetHeight,
+                        1
+                    )
+                    val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                    context.contentResolver.openInputStream(uri)?.use {
+                        BitmapFactory.decodeStream(it, null, opts)
+                    }
+                } else {
+                    val file = File(getMediaBaseDir(context), filePath)
+                    if (!file.exists()) return null
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeFile(file.absolutePath, bounds)
+                    val sampleSize = maxOf(
+                        bounds.outWidth / targetWidth,
+                        bounds.outHeight / targetHeight,
+                        1
+                    )
+                    BitmapFactory.decodeFile(
+                        file.absolutePath,
+                        BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "loadMediaBitmapSampled failed: $filePath", e)
+                null
+            }
+        }
+
+        /**
+         * 統一讀取媒體檔案的完整位元組（匯出 Base64 用）
+         */
+        fun readMediaBytes(context: Context, filePath: String): ByteArray? {
+            return try {
+                if (isContentUri(filePath)) {
+                    val uri = Uri.parse(filePath)
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                } else {
+                    val file = File(getMediaBaseDir(context), filePath)
+                    if (file.exists()) file.readBytes() else null
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "readMediaBytes failed: $filePath", e)
+                null
+            }
+        }
+
+        /**
+         * 統一取得可用於分享的 URI
+         * - 相對路徑：透過 FileProvider
+         * - content URI：直接使用
+         */
+        fun getShareUri(context: Context, filePath: String): Uri? {
+            return try {
+                if (isContentUri(filePath)) {
+                    Uri.parse(filePath)
+                } else {
+                    val file = File(getMediaBaseDir(context), filePath)
+                    if (!file.exists()) return null
+                    FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "getShareUri failed: $filePath", e)
+                null
+            }
+        }
+
+        /**
+         * 統一刪除媒體檔案
+         */
+        fun deleteMediaFile(context: Context, filePath: String): Boolean {
+            return try {
+                if (isContentUri(filePath)) {
+                    val uri = Uri.parse(filePath)
+                    val docFile = DocumentFile.fromSingleUri(context, uri)
+                    docFile?.delete() ?: false
+                } else {
+                    val file = File(getMediaBaseDir(context), filePath)
+                    file.exists() && file.delete()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "deleteMediaFile failed: $filePath", e)
+                false
+            }
+        }
     }
 
     private val mediaDir: File by lazy {
-        File(context.filesDir, MEDIA_DIR).apply { mkdirs() }
+        File(getMediaBaseDir(context), MEDIA_DIR).apply { mkdirs() }
     }
+
+    /** 自訂媒體目錄的 DocumentFile（不可用時為 null） */
+    private val customMediaDocDir: DocumentFile? by lazy {
+        AppPreferences.getCustomMediaDirUri(context)?.let { treeUri ->
+            try {
+                DocumentFile.fromTreeUri(context, treeUri)?.takeIf { it.canWrite() }
+            } catch (e: Exception) {
+                Log.w(TAG, "Custom media dir unavailable", e)
+                null
+            }
+        }
+    }
+
+    /** 是否使用自訂目錄 */
+    private val useCustomDir: Boolean by lazy { customMediaDocDir != null }
 
     /**
      * 提取通知中的所有媒體附件
@@ -185,6 +349,7 @@ class MediaExtractor(private val context: Context) {
 
     /**
      * 儲存 Bitmap 並建立 Entity
+     * 自訂目錄啟用時優先寫入自訂目錄，失敗時 fallback 到預設目錄
      */
     private fun saveBitmap(
         bitmap: Bitmap,
@@ -192,10 +357,76 @@ class MediaExtractor(private val context: Context) {
         mediaType: MediaType,
         captureTime: Long
     ): MediaAttachmentEntity? {
-        return try {
-            val hash = bitmapHash(bitmap)
+        val hash = bitmapHash(bitmap)
 
-            // 檢查是否已有相同 hash 的檔案
+        if (useCustomDir) {
+            saveBitmapToCustomDir(bitmap, hash, notificationId, mediaType, captureTime)?.let {
+                return it
+            }
+            // fallback 到預設目錄
+            Log.w(TAG, "Custom dir write failed, falling back to default dir")
+        }
+
+        return saveBitmapToDefaultDir(bitmap, hash, notificationId, mediaType, captureTime)
+    }
+
+    /**
+     * 寫入自訂目錄（SAF DocumentFile）
+     */
+    private fun saveBitmapToCustomDir(
+        bitmap: Bitmap,
+        hash: String,
+        notificationId: Long,
+        mediaType: MediaType,
+        captureTime: Long
+    ): MediaAttachmentEntity? {
+        val docDir = customMediaDocDir ?: return null
+        return try {
+            // 去重：檢查同名檔案是否已存在
+            val fileName = "$hash.png"
+            val existing = docDir.findFile(fileName)
+            val docFile = if (existing != null && existing.exists()) {
+                existing
+            } else {
+                docDir.createFile("image/png", hash) ?: return null
+            }
+
+            // 僅新建的檔案需要寫入
+            if (existing == null) {
+                val outputUri = docFile.uri
+                context.contentResolver.openOutputStream(outputUri)?.use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                } ?: return null
+            }
+
+            MediaAttachmentEntity(
+                notificationId = notificationId,
+                mediaType = mediaType,
+                filePath = docFile.uri.toString(),
+                mimeType = "image/png",
+                fileSize = docFile.length(),
+                width = bitmap.width,
+                height = bitmap.height,
+                captureTime = captureTime,
+                contentHash = hash
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to save bitmap to custom dir", e)
+            null
+        }
+    }
+
+    /**
+     * 寫入預設目錄（現有邏輯）
+     */
+    private fun saveBitmapToDefaultDir(
+        bitmap: Bitmap,
+        hash: String,
+        notificationId: Long,
+        mediaType: MediaType,
+        captureTime: Long
+    ): MediaAttachmentEntity? {
+        return try {
             val existingFile = File(mediaDir, "$hash.png")
             val filePath = "${MEDIA_DIR}/$hash.png"
 
@@ -217,7 +448,7 @@ class MediaExtractor(private val context: Context) {
                 contentHash = hash
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to save bitmap", e)
+            Log.e(TAG, "Failed to save bitmap to default dir", e)
             null
         }
     }
@@ -263,25 +494,33 @@ class MediaExtractor(private val context: Context) {
     }
 
     /**
-     * 取得媒體目錄大小
+     * 取得媒體目錄大小（合計預設 + 自訂目錄）
      */
     fun getMediaDirSize(): Long {
-        return mediaDir.walkTopDown()
+        val defaultSize = mediaDir.walkTopDown()
             .filter { it.isFile }
             .sumOf { it.length() }
+
+        val customSize = try {
+            customMediaDocDir?.listFiles()?.sumOf { it.length() } ?: 0L
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to calculate custom dir size", e)
+            0L
+        }
+
+        return defaultSize + customSize
     }
 
     /**
-     * 清除指定時間之前的媒體檔案
+     * 刪除指定的媒體檔案
      *
-     * @param filePaths 要刪除的檔案路徑清單 (相對路徑)
+     * @param filePaths 要刪除的檔案路徑清單（相對路徑或 content URI）
      * @return 實際刪除的數量
      */
     fun deleteMediaFiles(filePaths: List<String>): Int {
         var count = 0
         for (path in filePaths) {
-            val file = File(context.filesDir, path)
-            if (file.exists() && file.delete()) {
+            if (deleteMediaFile(context, path)) {
                 count++
             }
         }
