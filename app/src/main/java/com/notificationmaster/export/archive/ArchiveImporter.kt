@@ -183,7 +183,12 @@ class ArchiveImporter(private val context: Context) {
             rankingRank = json.optInt("rankingRank", -1),
             isAmbient = json.optBoolean("isAmbient", false),
             isSuspended = json.optBoolean("isSuspended", false),
-            suppressedVisualEffects = json.optInt("suppressedVisualEffects", 0)
+            suppressedVisualEffects = json.optInt("suppressedVisualEffects", 0),
+            hasContentIntent = json.optBoolean("hasContentIntent", false),
+            hasDeleteIntent = json.optBoolean("hasDeleteIntent", false),
+            hasFullScreenIntent = json.optBoolean("hasFullScreenIntent", false),
+            contentIntentCreatorPackage = json.optString("contentIntentCreatorPackage").takeIf { it != "null" && it.isNotEmpty() },
+            intentInfoJson = json.optString("intentInfoJson").takeIf { it != "null" && it.isNotEmpty() }
         )
     }
 
