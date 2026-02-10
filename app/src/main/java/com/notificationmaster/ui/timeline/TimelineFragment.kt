@@ -2,7 +2,6 @@ package com.notificationmaster.ui.timeline
 
 import android.content.ComponentName
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
@@ -26,6 +25,7 @@ import com.notificationmaster.databinding.FragmentTimelineBinding
 import com.notificationmaster.service.NotificationCaptureService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -54,6 +54,15 @@ class TimelineFragment : Fragment() {
     private val dateFormat = SimpleDateFormat("yyyy年M月d日 EEEE", Locale.getDefault())
     private var bubbleHideRunnable: Runnable? = null
     private var wasPermissionGranted = false
+    private var rebindJob: Job? = null
+
+    companion object {
+        private const val TAG = "TimelineFragment"
+        /** 每次檢查服務連線狀態的間隔 (ms) */
+        private const val REBIND_CHECK_INTERVAL_MS = 2000L
+        /** 最多嘗試幾次 */
+        private const val MAX_REBIND_ATTEMPTS = 5
+    }
 
     // 查詢時間範圍（預設過去 7 天）
     private val endTime: Long
@@ -91,13 +100,15 @@ class TimelineFragment : Fragment() {
         super.onResume()
         val isGranted = isNotificationListenerEnabled()
         if (isGranted && !wasPermissionGranted) {
-            // 權限剛授予，要求系統重新綁定服務以觸發 onListenerConnected 初次收集
+            // 權限剛授予 — 先更新 UI 並啟動 Flow 監聽
+            // 不立即觸發 rebind，讓系統有時間自然綁定服務
             wasPermissionGranted = true
             updateEmptyStateForPermission()
-            requestServiceRebind()
             loadNotifications()
+            ensureServiceConnected()
         } else if (!isGranted && wasPermissionGranted) {
             wasPermissionGranted = false
+            rebindJob?.cancel()
             updateEmptyStateForPermission()
         }
     }
@@ -367,41 +378,40 @@ class TimelineFragment : Fragment() {
     }
 
     /**
-     * 要求系統重新綁定 NotificationListenerService
-     * 解決授權後系統未立即綁定服務、不觸發 onListenerConnected 的問題
+     * 確保 NotificationListenerService 在授權後成功連線
      *
-     * 策略：先切換元件啟用狀態（全版本通用、最可靠），
-     * 再呼叫 requestRebind（API 24+ 官方 API，作為補充）。
-     * 雙重觸發確保各家 OEM ROM 都能正確重新綁定。
+     * 系統授權後通常會自動綁定服務，但部分裝置/ROM 可能延遲或不觸發。
+     * 此方法定期檢查服務狀態，在系統未自動綁定時透過 requestRebind (API 24+) 觸發。
+     *
+     * 注意：不使用 setComponentEnabledSetting 元件切換，
+     * 因為 disable 元件會導致系統從 enabled_notification_listeners 移除，撤銷授權。
      */
-    private fun requestServiceRebind() {
-        val ctx = context ?: return
-        val componentName = ComponentName(ctx, NotificationCaptureService::class.java)
+    private fun ensureServiceConnected() {
+        rebindJob?.cancel()
+        rebindJob = viewLifecycleOwner.lifecycleScope.launch {
+            for (attempt in 0 until MAX_REBIND_ATTEMPTS) {
+                delay(REBIND_CHECK_INTERVAL_MS)
+                if (_binding == null) return@launch
 
-        // 方法 1：切換元件啟用狀態，強制 PackageManager 通知系統重新評估綁定
-        try {
-            ctx.packageManager.setComponentEnabledSetting(
-                componentName,
-                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                PackageManager.DONT_KILL_APP
-            )
-            ctx.packageManager.setComponentEnabledSetting(
-                componentName,
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                PackageManager.DONT_KILL_APP
-            )
-            Log.i("TimelineFragment", "Toggled component to force rebind")
-        } catch (e: Exception) {
-            Log.w("TimelineFragment", "Component toggle rebind failed", e)
-        }
+                if (NotificationCaptureService.isConnected) {
+                    Log.i(TAG, "Service connected (check #${attempt + 1})")
+                    return@launch
+                }
 
-        // 方法 2（API 24+）：官方 requestRebind 作為補充
-        if (Build.VERSION.SDK_INT >= 24) {
-            try {
-                NotificationListenerService.requestRebind(componentName)
-                Log.i("TimelineFragment", "Requested service rebind (API 24+)")
-            } catch (e: Exception) {
-                Log.w("TimelineFragment", "requestRebind failed", e)
+                Log.i(TAG, "Service not connected, rebind attempt #${attempt + 1}")
+                if (Build.VERSION.SDK_INT >= 24) {
+                    try {
+                        val ctx = context ?: return@launch
+                        val cn = ComponentName(ctx, NotificationCaptureService::class.java)
+                        NotificationListenerService.requestRebind(cn)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "requestRebind failed", e)
+                    }
+                }
+            }
+
+            if (!NotificationCaptureService.isConnected) {
+                Log.w(TAG, "Service not connected after $MAX_REBIND_ATTEMPTS attempts")
             }
         }
     }

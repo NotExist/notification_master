@@ -118,6 +118,18 @@ object PermissionDescriptions {
             rationale = "將通知記錄寫入系統日曆作為事件。",
             deniedImpact = "無法使用日曆匯出功能。",
             isRequired = false
+        ),
+        // === 未實作（預留） ===
+        PermissionInfo(
+            permission = "android.permission.BIND_ACCESSIBILITY_SERVICE",
+            displayName = "無障礙服務",
+            type = "系統權限",
+            relatedFeature = "Toast 訊息擷取（尚未實作）",
+            rationale = "透過 AccessibilityService 監聽 TYPE_NOTIFICATION_STATE_CHANGED 事件，" +
+                "擷取 Toast 等不經 NotificationManager 的短暫訊息。" +
+                "Toast 不屬於 Notification，NotificationListenerService 無法攔截。",
+            deniedImpact = "無法擷取 Toast 訊息，僅能記錄標準通知。",
+            isRequired = false
         )
     )
 
