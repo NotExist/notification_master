@@ -135,6 +135,16 @@ class NotificationDetailFragment : Fragment() {
         // 標籤
         binding.chipGroupFlags.removeAllViews()
 
+        // 系統通知抽屜分類標籤
+        if (notification.isConversation ||
+            (notification.isMessagingStyle && !notification.shortcutId.isNullOrEmpty())) {
+            addChip("Conversation", R.color.tag_conversation, R.string.tag_conversation_desc)
+        }
+        if (notification.importance in 1..2) {
+            addChip("Silent", R.color.tag_silent, R.string.tag_silent_desc)
+        }
+
+        // 通知屬性標籤
         if (notification.isOngoing) {
             addChip("Ongoing", R.color.event_initial, R.string.tag_ongoing_desc)
         }

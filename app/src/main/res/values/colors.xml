@@ -38,6 +38,10 @@
     <color name="importance_high">#FF9800</color>
     <color name="importance_max">#F44336</color>
 
+    <!-- Tag colors -->
+    <color name="tag_conversation">#00897B</color>
+    <color name="tag_silent">#78909C</color>
+
     <!-- Text colors -->
     <color name="text_primary">#212121</color>
     <color name="text_secondary">#757575</color>

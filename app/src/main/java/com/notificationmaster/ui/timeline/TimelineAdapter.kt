@@ -144,6 +144,17 @@ class TimelineAdapter(
             // 標籤
             binding.tagsContainer.removeAllViews()
 
+            // 系統通知抽屜分類標籤
+            if (notification.isConversation ||
+                (notification.isMessagingStyle && !notification.shortcutId.isNullOrEmpty())) {
+                addTag(binding.tagsContainer, "Conversation", R.color.tag_conversation, R.string.tag_conversation_desc)
+            }
+
+            if (notification.importance in 1..2) {
+                addTag(binding.tagsContainer, "Silent", R.color.tag_silent, R.string.tag_silent_desc)
+            }
+
+            // 通知屬性標籤
             if (notification.isOngoing) {
                 addTag(binding.tagsContainer, "Ongoing", R.color.event_initial, R.string.tag_ongoing_desc)
             }
@@ -156,8 +167,20 @@ class TimelineAdapter(
                 addTag(binding.tagsContainer, "Heads-up", R.color.status_warning, R.string.tag_headsup_desc)
             }
 
+            if (notification.isAutoCancel) {
+                addTag(binding.tagsContainer, "AutoCancel", R.color.event_updated, R.string.tag_auto_cancel_desc)
+            }
+
             if (notification.isGroupSummary) {
                 addTag(binding.tagsContainer, "Summary", R.color.event_updated, R.string.tag_summary_desc)
+            }
+
+            if (notification.hasBubbleMetadata) {
+                addTag(binding.tagsContainer, "Bubble", R.color.status_enabled, R.string.tag_bubble_desc)
+            }
+
+            if (notification.hasCustomContentView || notification.hasCustomBigContentView || notification.hasCustomHeadsUpContentView) {
+                addTag(binding.tagsContainer, "Custom View", R.color.text_secondary, R.string.tag_custom_view_desc)
             }
 
             // 相似通知數量
