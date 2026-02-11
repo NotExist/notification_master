@@ -1,5 +1,8 @@
 package com.notificationmaster.ui.detail
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -301,7 +304,8 @@ class NotificationDetailFragment : Fragment() {
         val marginPx = (8 * resources.displayMetrics.density).toInt()
 
         for (attachment in attachments) {
-            val fileExists = MediaExtractor.mediaFileExists(ctx, attachment.filePath)
+            val isUnavailable = attachment.filePath.isEmpty() && !attachment.sourceUri.isNullOrEmpty()
+            val fileExists = !isUnavailable && MediaExtractor.mediaFileExists(ctx, attachment.filePath)
 
             // 每張圖的容器：圖片 + 類型標籤
             val itemLayout = LinearLayout(ctx).apply {
@@ -333,13 +337,23 @@ class NotificationDetailFragment : Fragment() {
                     setImageResource(android.R.drawable.ic_menu_report_image)
                     alpha = 0.3f
                 }
+
+                // 不可用媒體：長按複製原始 URI
+                if (isUnavailable) {
+                    setOnLongClickListener {
+                        val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("media_uri", attachment.sourceUri))
+                        Toast.makeText(ctx, R.string.media_uri_copied, Toast.LENGTH_SHORT).show()
+                        true
+                    }
+                }
             }
 
             val label = TextView(ctx).apply {
-                text = if (fileExists) {
-                    attachment.mediaType.name
-                } else {
-                    ctx.getString(R.string.media_file_removed)
+                text = when {
+                    fileExists -> attachment.mediaType.name
+                    isUnavailable -> ctx.getString(R.string.media_unavailable)
+                    else -> ctx.getString(R.string.media_file_removed)
                 }
                 textSize = 10f
                 gravity = android.view.Gravity.CENTER

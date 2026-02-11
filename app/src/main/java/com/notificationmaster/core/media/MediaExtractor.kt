@@ -50,6 +50,7 @@ class MediaExtractor(private val context: Context) {
          * 統一檢查媒體檔案是否存在
          */
         fun mediaFileExists(context: Context, filePath: String): Boolean {
+            if (filePath.isEmpty()) return false
             return try {
                 if (isContentUri(filePath)) {
                     val uri = Uri.parse(filePath)
@@ -321,11 +322,37 @@ class MediaExtractor(private val context: Context) {
             if (!mimeType.startsWith("image/")) continue
 
             try {
-                saveFromUri(uri, mimeType, notificationId, captureTime, processedHashes)?.let {
-                    attachments.add(it)
+                val saved = saveFromUri(uri, mimeType, notificationId, captureTime, processedHashes)
+                if (saved != null) {
+                    attachments.add(saved)
+                } else {
+                    // URI 無法讀取（權限過期等），記錄為不可用附件
+                    attachments.add(MediaAttachmentEntity(
+                        notificationId = notificationId,
+                        mediaType = MediaType.MESSAGE_MEDIA,
+                        filePath = "",
+                        mimeType = mimeType,
+                        fileSize = 0,
+                        width = 0, height = 0,
+                        captureTime = captureTime,
+                        contentHash = "unavailable_${uri.hashCode()}",
+                        sourceUri = uri.toString()
+                    ))
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to extract messaging media: $uri", e)
+                // 例外時同樣記錄為不可用附件
+                attachments.add(MediaAttachmentEntity(
+                    notificationId = notificationId,
+                    mediaType = MediaType.MESSAGE_MEDIA,
+                    filePath = "",
+                    mimeType = mimeType,
+                    fileSize = 0,
+                    width = 0, height = 0,
+                    captureTime = captureTime,
+                    contentHash = "unavailable_${uri.hashCode()}",
+                    sourceUri = uri.toString()
+                ))
             }
         }
     }
@@ -354,14 +381,18 @@ class MediaExtractor(private val context: Context) {
 
         val ext = mimeTypeToExt(mimeType)
 
+        val uriString = uri.toString()
+
         if (useCustomDir) {
             saveBytesToCustomDir(bytes, hash, ext, mimeType, notificationId, captureTime,
-                bounds.outWidth, bounds.outHeight)?.let { return it }
+                bounds.outWidth, bounds.outHeight)?.let {
+                return it.copy(sourceUri = uriString)
+            }
             Log.w(TAG, "Custom dir write failed for URI media, falling back")
         }
 
         return saveBytesToDefaultDir(bytes, hash, ext, mimeType, notificationId, captureTime,
-            bounds.outWidth, bounds.outHeight)
+            bounds.outWidth, bounds.outHeight)?.copy(sourceUri = uriString)
     }
 
     private fun bytesHash(bytes: ByteArray): String {

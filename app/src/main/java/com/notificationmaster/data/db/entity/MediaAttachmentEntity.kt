@@ -83,5 +83,9 @@ data class MediaAttachmentEntity(
 
     /** Hash (用於去重) */
     @ColumnInfo(name = "content_hash")
-    val contentHash: String
+    val contentHash: String,
+
+    /** 原始來源 URI（content:// URI，無法提取時保留供參考） */
+    @ColumnInfo(name = "source_uri")
+    val sourceUri: String? = null
 )
