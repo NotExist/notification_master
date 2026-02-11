@@ -185,67 +185,114 @@ class NotificationDetailFragment : Fragment() {
 
         // Key 和 Hash
         binding.textKey.text = notification.notificationKey
-        binding.textHash.text = notification.contentHash.take(16) + "..."
+        binding.textHash.text = getString(R.string.format_hash_truncated, notification.contentHash.take(16))
     }
 
     private fun showEventDetail(event: NotificationEventEntity) {
-        val sb = StringBuilder()
-
-        // 基本資訊
-        sb.appendLine("notification_key: ${event.notificationKey}")
-        sb.appendLine("event_type: ${event.eventType.name}")
-        sb.appendLine("event_time: ${preciseTimeFormat.format(Date(event.eventTime))}")
-        sb.appendLine("event_time_raw: ${event.eventTime}")
-
-        // REMOVED 事件：移除原因
-        if (event.eventType == EventType.REMOVED && event.removalReason != null) {
-            sb.appendLine()
-            sb.appendLine("── 移除資訊 ──")
-            sb.appendLine("removal_reason: ${event.removalReason}")
-            sb.appendLine("removal_reason_category: ${event.removalReasonCategory}")
-            sb.appendLine("removal_reason_desc: ${ApiVersionHelper.getRemovalReasonDescription(event.removalReason)}")
-        }
-
-        // RANKING 事件：排序資訊
-        if (event.rankingRank != null || event.rankingImportance != null) {
-            sb.appendLine()
-            sb.appendLine("── Ranking 資訊 ──")
-            event.rankingRank?.let { sb.appendLine("rank: $it") }
-            event.rankingImportance?.let { sb.appendLine("importance: $it") }
-            event.isAmbient?.let { sb.appendLine("is_ambient: $it") }
-            event.isSuspended?.let { sb.appendLine("is_suspended: $it") }
-            event.suppressedVisualEffects?.let { sb.appendLine("suppressed_visual_effects: $it") }
-        }
-
-        // 內容快照
-        if (!event.contentSnapshot.isNullOrEmpty()) {
-            sb.appendLine()
-            sb.appendLine("── 內容快照 ──")
-            try {
-                val json = JSONObject(event.contentSnapshot)
-                sb.appendLine(json.toString(2))
-            } catch (_: Exception) {
-                sb.appendLine(event.contentSnapshot)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val notification = withContext(Dispatchers.IO) {
+                NotificationMasterApp.getInstance().database
+                    .notificationDao().getById(event.notificationId)
             }
-        }
+            val binding = _binding ?: return@launch
 
-        // 用等寬字體的 TextView 顯示
-        val textView = TextView(requireContext()).apply {
-            text = sb.toString()
-            typeface = android.graphics.Typeface.MONOSPACE
-            textSize = 12f
-            setPadding(48, 24, 48, 24)
-            setTextIsSelectable(true)
-        }
-        val scrollView = ScrollView(requireContext()).apply {
-            addView(textView)
-        }
+            val sb = StringBuilder()
 
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle("${event.eventType.name} 事件詳情")
-            .setView(scrollView)
-            .setPositiveButton(R.string.ok, null)
-            .show()
+            // 基本資訊
+            sb.appendLine("notification_key: ${event.notificationKey}")
+            sb.appendLine("event_type: ${event.eventType.name}")
+            sb.appendLine("event_time: ${preciseTimeFormat.format(Date(event.eventTime))}")
+            sb.appendLine("event_time_raw: ${event.eventTime}")
+
+            // REMOVED 事件：移除原因
+            if (event.eventType == EventType.REMOVED && event.removalReason != null) {
+                sb.appendLine()
+                sb.appendLine("── 移除資訊 ──")
+                sb.appendLine("removal_reason: ${event.removalReason}")
+                sb.appendLine("removal_reason_category: ${event.removalReasonCategory}")
+                sb.appendLine("removal_reason_desc: ${ApiVersionHelper.getRemovalReasonDescription(event.removalReason)}")
+            }
+
+            // RANKING 事件：排序資訊
+            if (event.rankingRank != null || event.rankingImportance != null) {
+                sb.appendLine()
+                sb.appendLine("── Ranking 資訊 ──")
+                event.rankingRank?.let { sb.appendLine("rank: $it") }
+                event.rankingImportance?.let { sb.appendLine("importance: $it") }
+                event.isAmbient?.let { sb.appendLine("is_ambient: $it") }
+                event.isSuspended?.let { sb.appendLine("is_suspended: $it") }
+                event.suppressedVisualEffects?.let { sb.appendLine("suppressed_visual_effects: $it") }
+            }
+
+            // 內容快照
+            if (!event.contentSnapshot.isNullOrEmpty()) {
+                sb.appendLine()
+                sb.appendLine("── 內容快照 ──")
+                try {
+                    val json = JSONObject(event.contentSnapshot)
+                    sb.appendLine(json.toString(2))
+                } catch (_: Exception) {
+                    sb.appendLine(event.contentSnapshot)
+                }
+            }
+
+            // 關聯通知記錄的完整資料
+            if (notification != null) {
+                // Extras JSON
+                if (!notification.extrasJson.isNullOrEmpty()) {
+                    sb.appendLine()
+                    sb.appendLine("── Extras JSON ──")
+                    try {
+                        val json = JSONObject(notification.extrasJson)
+                        sb.appendLine(json.toString(2))
+                    } catch (_: Exception) {
+                        sb.appendLine(notification.extrasJson)
+                    }
+                }
+
+                // Intent 資訊
+                if (!notification.intentInfoJson.isNullOrEmpty()) {
+                    sb.appendLine()
+                    sb.appendLine("── Intent 資訊 ──")
+                    try {
+                        val json = JSONObject(notification.intentInfoJson)
+                        sb.appendLine(json.toString(2))
+                    } catch (_: Exception) {
+                        sb.appendLine(notification.intentInfoJson)
+                    }
+                }
+
+                // RemoteViews 資訊
+                if (!notification.remoteViewsInfo.isNullOrEmpty()) {
+                    sb.appendLine()
+                    sb.appendLine("── RemoteViews 資訊 ──")
+                    try {
+                        val json = JSONObject(notification.remoteViewsInfo)
+                        sb.appendLine(json.toString(2))
+                    } catch (_: Exception) {
+                        sb.appendLine(notification.remoteViewsInfo)
+                    }
+                }
+            }
+
+            // 用等寬字體的 TextView 顯示
+            val textView = TextView(requireContext()).apply {
+                text = sb.toString()
+                typeface = android.graphics.Typeface.MONOSPACE
+                textSize = 12f
+                setPadding(48, 24, 48, 24)
+                setTextIsSelectable(true)
+            }
+            val scrollView = ScrollView(requireContext()).apply {
+                addView(textView)
+            }
+
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle("${event.eventType.name} 事件詳情")
+                .setView(scrollView)
+                .setPositiveButton(R.string.ok, null)
+                .show()
+        }
     }
 
     private fun displayMediaAttachments(attachments: List<MediaAttachmentEntity>) {
