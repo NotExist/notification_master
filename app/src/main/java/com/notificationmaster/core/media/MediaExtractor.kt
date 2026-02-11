@@ -1,5 +1,6 @@
 package com.notificationmaster.core.media
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.content.Context
 import android.graphics.Bitmap
@@ -297,6 +298,7 @@ class MediaExtractor(private val context: Context) {
      * 訊息透過 Message.setData(mimeType, uri) 設定媒體，
      * Bundle 中以 "type" (MIME) 和 "uri" (content URI) 存放
      */
+    @SuppressLint("InlinedApi")
     @Suppress("DEPRECATION")
     private fun extractMessagingMedia(
         extras: Bundle,
