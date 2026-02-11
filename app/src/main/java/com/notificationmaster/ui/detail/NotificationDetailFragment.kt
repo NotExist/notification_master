@@ -143,6 +143,9 @@ class NotificationDetailFragment : Fragment() {
         if (notification.importance in 1..2) {
             addChip("Silent", R.color.tag_silent, R.string.tag_silent_desc)
         }
+        if (notification.isMessagingStyle) {
+            addChip("MessagingStyle", R.color.tag_messaging_style, R.string.tag_messaging_style_desc)
+        }
 
         // 通知屬性標籤
         if (notification.isOngoing) {

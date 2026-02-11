@@ -153,6 +153,9 @@ class TimelineAdapter(
             if (notification.importance in 1..2) {
                 addTag(binding.tagsContainer, "Silent", R.color.tag_silent, R.string.tag_silent_desc)
             }
+            if (notification.isMessagingStyle) {
+                addTag(binding.tagsContainer, "MessagingStyle", R.color.tag_messaging_style, R.string.tag_messaging_style_desc)
+            }
 
             // 通知屬性標籤
             if (notification.isOngoing) {

@@ -37,6 +37,7 @@
     <!-- Tag colors -->
     <color name="tag_conversation">#00897B</color>
     <color name="tag_silent">#78909C</color>
+    <color name="tag_messaging_style">#1565C0</color>
 
     <!-- Text colors -->
     <color name="text_secondary">#757575</color>

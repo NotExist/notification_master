@@ -79,6 +79,10 @@ class NotificationAdapter(
             // 標籤
             binding.tagsContainer.removeAllViews()
 
+            if (item.isMessagingStyle) {
+                addTag(binding.tagsContainer, "MessagingStyle", R.color.tag_messaging_style, R.string.tag_messaging_style_desc)
+            }
+
             if (item.isOngoing) {
                 addTag(binding.tagsContainer, "Ongoing", R.color.event_initial, R.string.tag_ongoing_desc)
             }
