@@ -118,8 +118,23 @@ class NotificationExtractor(private val context: Context) {
             // Channel (API 26+)
             channelId = if (Build.VERSION.SDK_INT >= 26) notification.channelId else null,
 
+            // Shortcut (API 26+)
+            shortcutId = if (Build.VERSION.SDK_INT >= 26) notification.shortcutId else null,
+
             // Bubble (API 29+)
             hasBubbleMetadata = if (Build.VERSION.SDK_INT >= 29) notification.bubbleMetadata != null else false,
+            bubbleDesiredHeight = if (Build.VERSION.SDK_INT >= 29) {
+                notification.bubbleMetadata?.desiredHeight ?: 0
+            } else 0,
+            bubbleDesiredHeightResId = if (Build.VERSION.SDK_INT >= 29) {
+                notification.bubbleMetadata?.desiredHeightResId ?: 0
+            } else 0,
+            bubbleAutoExpand = if (Build.VERSION.SDK_INT >= 30) {
+                notification.bubbleMetadata?.autoExpandBubble ?: false
+            } else false,
+            bubbleSuppressNotification = if (Build.VERSION.SDK_INT >= 30) {
+                notification.bubbleMetadata?.isNotificationSuppressed ?: false
+            } else false,
 
             // 顏色
             color = notification.color,
@@ -186,6 +201,12 @@ class NotificationExtractor(private val context: Context) {
             suppressedVisualEffects = if (Build.VERSION.SDK_INT >= 24) {
                 ranking?.suppressedVisualEffects ?: 0
             } else 0,
+            isConversation = if (Build.VERSION.SDK_INT >= 31) {
+                ranking?.isConversation ?: false
+            } else false,
+            lastAudiblyAlertedMillis = if (Build.VERSION.SDK_INT >= 28) {
+                ranking?.lastAudiblyAlertedMillis ?: -1L
+            } else -1L,
 
             // Intent 資訊
             hasContentIntent = notification.contentIntent != null,

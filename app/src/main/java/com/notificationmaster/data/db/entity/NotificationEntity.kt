@@ -162,10 +162,30 @@ data class NotificationEntity(
     @ColumnInfo(name = "channel_id")
     val channelId: String?,
 
+    /** Shortcut ID (API 26+) — 關聯 sharing shortcut，判定對話通知的關鍵欄位 */
+    @ColumnInfo(name = "shortcut_id")
+    val shortcutId: String? = null,
+
     // === Bubble 資訊 (API 29+) ===
     /** 是否有 BubbleMetadata */
     @ColumnInfo(name = "has_bubble_metadata")
     val hasBubbleMetadata: Boolean,
+
+    /** Bubble 推薦高度 (dp, API 29+, 0 表示未設定) */
+    @ColumnInfo(name = "bubble_desired_height")
+    val bubbleDesiredHeight: Int = 0,
+
+    /** Bubble 推薦高度資源 ID (API 29+, 0 表示未設定) */
+    @ColumnInfo(name = "bubble_desired_height_res_id")
+    val bubbleDesiredHeightResId: Int = 0,
+
+    /** Bubble 是否自動展開 (API 30+) */
+    @ColumnInfo(name = "bubble_auto_expand")
+    val bubbleAutoExpand: Boolean = false,
+
+    /** Bubble 是否抑制通知顯示 (API 30+) */
+    @ColumnInfo(name = "bubble_suppress_notification")
+    val bubbleSuppressNotification: Boolean = false,
 
     // === 顏色 ===
     /** 通知顏色 */
@@ -303,6 +323,14 @@ data class NotificationEntity(
     /** 被抑制的視覺效果 */
     @ColumnInfo(name = "suppressed_visual_effects")
     val suppressedVisualEffects: Int,
+
+    /** 是否為對話通知 (API 31+, Ranking 送達) */
+    @ColumnInfo(name = "is_conversation")
+    val isConversation: Boolean = false,
+
+    /** 最後一次發出可聽見提示的時間 (API 28+, Ranking 送達, -1 表示不適用) */
+    @ColumnInfo(name = "last_audibly_alerted_millis")
+    val lastAudiblyAlertedMillis: Long = -1L,
 
     // === Intent 資訊 ===
     /** 是否有 contentIntent (點擊動作) */

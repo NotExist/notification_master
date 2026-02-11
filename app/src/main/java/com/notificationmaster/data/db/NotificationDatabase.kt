@@ -34,7 +34,7 @@ import com.notificationmaster.data.db.migration.Migrations
         ChannelEntity::class,
         DeviceStateEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
