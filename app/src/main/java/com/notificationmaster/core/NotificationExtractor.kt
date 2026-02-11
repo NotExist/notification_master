@@ -1,5 +1,6 @@
 package com.notificationmaster.core
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
@@ -205,7 +206,7 @@ class NotificationExtractor(private val context: Context) {
             isConversation = if (Build.VERSION.SDK_INT >= 31) {
                 ranking?.isConversation ?: false
             } else false,
-            lastAudiblyAlertedMillis = if (Build.VERSION.SDK_INT >= 28) {
+            lastAudiblyAlertedMillis = if (Build.VERSION.SDK_INT >= 29) {
                 ranking?.lastAudiblyAlertedMillis ?: -1L
             } else -1L,
 
@@ -277,6 +278,7 @@ class NotificationExtractor(private val context: Context) {
     /**
      * 檢查是否為 MessagingStyle
      */
+    @SuppressLint("InlinedApi")
     private fun isMessagingStyle(extras: Bundle): Boolean {
         if (Build.VERSION.SDK_INT < 24) return false
         return extras.containsKey(Notification.EXTRA_MESSAGES) ||

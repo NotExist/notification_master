@@ -1,5 +1,6 @@
 package com.notificationmaster.ui.timeline
 
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Build
@@ -443,6 +444,7 @@ class TimelineFragment : Fragment() {
         return flat?.contains(componentName.flattenToString()) == true
     }
 
+    @SuppressLint("InlinedApi")
     private fun setupPermissionButton() {
         binding.btnGrantPermission.setOnClickListener {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))

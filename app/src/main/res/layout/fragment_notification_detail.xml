@@ -38,7 +38,7 @@
                         android:id="@+id/img_app_icon"
                         android:layout_width="48dp"
                         android:layout_height="48dp"
-                        android:contentDescription="App icon"
+                        android:contentDescription="@string/content_desc_app_icon"
                         tools:src="@mipmap/ic_launcher" />
 
                     <LinearLayout
@@ -77,7 +77,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="標題"
+                    android:text="@string/label_title"
                     android:textAppearance="?attr/textAppearanceLabelMedium"
                     android:textColor="?android:attr/textColorSecondary" />
 
@@ -94,7 +94,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="內文"
+                    android:text="@string/label_content"
                     android:textAppearance="?attr/textAppearanceLabelMedium"
                     android:textColor="?android:attr/textColorSecondary" />
 
@@ -111,7 +111,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="時間"
+                    android:text="@string/label_time"
                     android:textAppearance="?attr/textAppearanceLabelMedium"
                     android:textColor="?android:attr/textColorSecondary" />
 
@@ -143,7 +143,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="標籤與狀態"
+                    android:text="@string/label_tags_and_status"
                     android:textAppearance="?attr/textAppearanceTitleSmall"
                     android:textStyle="bold" />
 
@@ -285,7 +285,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="詳細資訊"
+                    android:text="@string/label_detail_info"
                     android:textAppearance="?attr/textAppearanceTitleSmall"
                     android:textStyle="bold" />
 
@@ -302,7 +302,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Channel"
+                        android:text="@string/label_channel"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 
@@ -328,7 +328,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Group"
+                        android:text="@string/label_group"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 
@@ -351,7 +351,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Key"
+                        android:text="@string/label_key"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 
@@ -375,7 +375,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Content Hash"
+                        android:text="@string/label_content_hash"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 

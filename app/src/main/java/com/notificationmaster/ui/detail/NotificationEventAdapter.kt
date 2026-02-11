@@ -76,7 +76,7 @@ class NotificationEventAdapter(
             // 移除原因（僅 REMOVED 事件顯示）
             if (event.eventType == EventType.REMOVED && event.removalReason != null) {
                 binding.textRemovalReason.visibility = View.VISIBLE
-                binding.textRemovalReason.text = "(${getRemovalReasonText(context, event.removalReason)})"
+                binding.textRemovalReason.text = context.getString(R.string.format_removal_reason, getRemovalReasonText(context, event.removalReason))
             } else {
                 binding.textRemovalReason.visibility = View.GONE
             }

@@ -1,5 +1,6 @@
 package com.notificationmaster.ui.main
 
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Intent
 import android.graphics.drawable.GradientDrawable
@@ -90,6 +91,7 @@ class HomeFragment : Fragment() {
     /**
      * 開啟通知監聽設定頁面
      */
+    @SuppressLint("InlinedApi")
     private fun openNotificationListenerSettings() {
         val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
         startActivity(intent)
@@ -144,9 +146,9 @@ class HomeFragment : Fragment() {
             BuildConfig.VERSION_CODE.toLong()
         )
 
-        binding.textAndroidVersion.text = "Android ${envInfo.androidVersion} (API ${envInfo.apiLevel})"
-        binding.textDeviceModel.text = "${envInfo.deviceManufacturer} ${envInfo.deviceModel}"
-        binding.textAppVersion.text = "App 版本: ${envInfo.appVersion} (${envInfo.appVersionCode})"
+        binding.textAndroidVersion.text = getString(R.string.format_android_version, envInfo.androidVersion, envInfo.apiLevel)
+        binding.textDeviceModel.text = getString(R.string.format_device_model, envInfo.deviceManufacturer, envInfo.deviceModel)
+        binding.textAppVersion.text = getString(R.string.format_app_version, envInfo.appVersion, envInfo.appVersionCode)
     }
 
     /**
@@ -199,7 +201,7 @@ class HomeFragment : Fragment() {
         }
 
         val nameText = TextView(requireContext()).apply {
-            text = "${feature.name} (API ${feature.requiredApi}+)"
+            text = context.getString(R.string.format_feature_name, feature.name, feature.requiredApi)
             textSize = 14f
             setTextColor(
                 if (feature.supported) {

@@ -5,6 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="?attr/selectableItemBackground"
+    tools:ignore="Overdraw"
     android:gravity="center_vertical"
     android:orientation="horizontal"
     android:padding="16dp">
@@ -14,7 +15,7 @@
         android:id="@+id/img_app_icon"
         android:layout_width="48dp"
         android:layout_height="48dp"
-        android:contentDescription="App icon"
+        android:contentDescription="@string/content_desc_app_icon"
         tools:src="@mipmap/ic_launcher" />
 
     <LinearLayout

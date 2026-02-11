@@ -1,5 +1,6 @@
 package com.notificationmaster.core.permission
 
+import android.annotation.SuppressLint
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -34,6 +35,7 @@ data class PermissionInfo(
 
 object PermissionDescriptions {
 
+    @SuppressLint("InlinedApi")
     fun getAllPermissions(): List<PermissionInfo> = listOf(
         PermissionInfo(
             permission = "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE",

@@ -1,5 +1,6 @@
 package com.notificationmaster.ui.settings
 
+import android.annotation.SuppressLint
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
@@ -628,6 +629,7 @@ class SettingsFragment : Fragment() {
     /**
      * 引導使用者授予指定權限
      */
+    @SuppressLint("InlinedApi")
     private fun requestPermissionGrant(info: PermissionInfo) {
         when (info.permission) {
             // 通知監聽服務需要到系統設定頁面開啟

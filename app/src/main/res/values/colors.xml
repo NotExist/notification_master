@@ -3,12 +3,12 @@
     <!-- Primary colors -->
     <color name="primary">#1976D2</color>
     <color name="primary_dark">#1565C0</color>
-    <color name="primary_light">#42A5F5</color>
+
 
     <!-- Secondary colors -->
     <color name="secondary">#FF9800</color>
     <color name="secondary_dark">#F57C00</color>
-    <color name="secondary_light">#FFB74D</color>
+
 
     <!-- Basic colors -->
     <color name="white">#FFFFFF</color>
@@ -26,10 +26,6 @@
     <color name="status_disabled">#F44336</color>
     <color name="status_warning">#FF9800</color>
 
-    <!-- Background colors -->
-    <color name="background_card">#FAFAFA</color>
-    <color name="background_dark">#212121</color>
-
     <!-- Importance level colors (0-5) -->
     <color name="importance_none">#9E9E9E</color>
     <color name="importance_min">#BDBDBD</color>
@@ -43,7 +39,5 @@
     <color name="tag_silent">#78909C</color>
 
     <!-- Text colors -->
-    <color name="text_primary">#212121</color>
     <color name="text_secondary">#757575</color>
-    <color name="text_hint">#9E9E9E</color>
 </resources>

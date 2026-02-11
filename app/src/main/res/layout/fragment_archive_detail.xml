@@ -26,6 +26,7 @@
 
     <!-- 空狀態 -->
     <LinearLayout
+        tools:ignore="UseCompoundDrawables"
         android:id="@+id/empty_state"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -39,7 +40,7 @@
             android:layout_width="64dp"
             android:layout_height="64dp"
             android:alpha="0.5"
-            android:contentDescription="No notifications"
+            android:contentDescription="@string/content_desc_no_notifications"
             android:src="@drawable/ic_notifications_off" />
 
         <TextView
