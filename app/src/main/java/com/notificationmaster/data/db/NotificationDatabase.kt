@@ -19,7 +19,6 @@ import com.notificationmaster.data.db.entity.DeviceStateEntity
 import com.notificationmaster.data.db.entity.MediaAttachmentEntity
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.NotificationEventEntity
-import com.notificationmaster.data.db.migration.Migrations
 
 /**
  * Room 資料庫
@@ -34,7 +33,7 @@ import com.notificationmaster.data.db.migration.Migrations
         ChannelEntity::class,
         DeviceStateEntity::class
     ],
-    version = 4,
+    version = 1,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -68,8 +67,6 @@ abstract class NotificationDatabase : RoomDatabase() {
                 NotificationDatabase::class.java,
                 DATABASE_NAME
             )
-            .addMigrations(Migrations.MIGRATION_1_2)
-            .fallbackToDestructiveMigration()
             .build()
         }
     }
