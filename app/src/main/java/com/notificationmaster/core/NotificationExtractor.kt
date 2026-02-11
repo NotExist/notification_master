@@ -178,6 +178,7 @@ class NotificationExtractor(private val context: Context) {
             hasCustomContentView = notification.contentView != null,
             hasCustomBigContentView = notification.bigContentView != null,
             hasCustomHeadsUpContentView = notification.headsUpContentView != null,
+            remoteViewsInfo = extractRemoteViewsInfo(notification),
 
             // 完整 Extras
             extrasJson = bundleToJson(extras),
@@ -453,6 +454,38 @@ class NotificationExtractor(private val context: Context) {
         json.put("hasCustomContentView", notification.contentView != null)
         json.put("hasCustomBigContentView", notification.bigContentView != null)
 
+        return json.toString()
+    }
+
+    /**
+     * 提取 RemoteViews 資訊（layoutId + package）
+     * 三種自訂 View 有任一存在時才產生 JSON，否則回傳 null
+     */
+    private fun extractRemoteViewsInfo(notification: Notification): String? {
+        val cv = notification.contentView
+        val bv = notification.bigContentView
+        val hv = notification.headsUpContentView
+        if (cv == null && bv == null && hv == null) return null
+
+        val json = JSONObject()
+        cv?.let {
+            json.put("contentView", JSONObject().apply {
+                put("layoutId", it.layoutId)
+                put("package", it.`package`)
+            })
+        }
+        bv?.let {
+            json.put("bigContentView", JSONObject().apply {
+                put("layoutId", it.layoutId)
+                put("package", it.`package`)
+            })
+        }
+        hv?.let {
+            json.put("headsUpContentView", JSONObject().apply {
+                put("layoutId", it.layoutId)
+                put("package", it.`package`)
+            })
+        }
         return json.toString()
     }
 }

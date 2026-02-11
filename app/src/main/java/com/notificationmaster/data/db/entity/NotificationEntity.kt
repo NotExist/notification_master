@@ -279,6 +279,10 @@ data class NotificationEntity(
     @ColumnInfo(name = "has_custom_headsup_content_view")
     val hasCustomHeadsUpContentView: Boolean,
 
+    /** RemoteViews 詳細資訊 (JSON: layoutId, package per view type) */
+    @ColumnInfo(name = "remote_views_info")
+    val remoteViewsInfo: String? = null,
+
     // === 完整 Extras (JSON) ===
     /** 完整 extras bundle 序列化為 JSON */
     @ColumnInfo(name = "extras_json")
