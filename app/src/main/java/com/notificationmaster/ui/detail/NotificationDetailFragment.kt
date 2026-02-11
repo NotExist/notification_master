@@ -241,6 +241,18 @@ class NotificationDetailFragment : Fragment() {
 
             // 關聯通知記錄的完整資料
             if (notification != null) {
+                // Raw Data JSON
+                if (!notification.rawDataJson.isNullOrEmpty()) {
+                    sb.appendLine()
+                    sb.appendLine("── Raw Data ──")
+                    try {
+                        val json = JSONObject(notification.rawDataJson)
+                        sb.appendLine(json.toString(2))
+                    } catch (_: Exception) {
+                        sb.appendLine(notification.rawDataJson)
+                    }
+                }
+
                 // Extras JSON
                 if (!notification.extrasJson.isNullOrEmpty()) {
                     sb.appendLine()
@@ -250,30 +262,6 @@ class NotificationDetailFragment : Fragment() {
                         sb.appendLine(json.toString(2))
                     } catch (_: Exception) {
                         sb.appendLine(notification.extrasJson)
-                    }
-                }
-
-                // Intent 資訊
-                if (!notification.intentInfoJson.isNullOrEmpty()) {
-                    sb.appendLine()
-                    sb.appendLine("── Intent 資訊 ──")
-                    try {
-                        val json = JSONObject(notification.intentInfoJson)
-                        sb.appendLine(json.toString(2))
-                    } catch (_: Exception) {
-                        sb.appendLine(notification.intentInfoJson)
-                    }
-                }
-
-                // RemoteViews 資訊
-                if (!notification.remoteViewsInfo.isNullOrEmpty()) {
-                    sb.appendLine()
-                    sb.appendLine("── RemoteViews 資訊 ──")
-                    try {
-                        val json = JSONObject(notification.remoteViewsInfo)
-                        sb.appendLine(json.toString(2))
-                    } catch (_: Exception) {
-                        sb.appendLine(notification.remoteViewsInfo)
                     }
                 }
             }

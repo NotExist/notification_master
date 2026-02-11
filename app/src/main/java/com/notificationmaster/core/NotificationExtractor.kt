@@ -644,7 +644,8 @@ class NotificationExtractor(private val context: Context) {
                         put("smartActions", smartActionsToJson(actions))
                     }
                 }
-                if (Build.VERSION.SDK_INT >= 30) {
+                if (Build.VERSION.SDK_INT >= 31) {
+                    put("isConversation", ranking.isConversation)
                     ranking.conversationShortcutInfo?.let { info ->
                         put("shortcutInfo", JSONObject().apply {
                             put("id", info.id)
@@ -652,9 +653,6 @@ class NotificationExtractor(private val context: Context) {
                             put("longLabel", info.longLabel?.toString())
                         })
                     }
-                }
-                if (Build.VERSION.SDK_INT >= 31) {
-                    put("isConversation", ranking.isConversation)
                 }
             })
         }
