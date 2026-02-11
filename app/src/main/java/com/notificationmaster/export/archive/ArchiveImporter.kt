@@ -151,6 +151,7 @@ class ArchiveImporter(private val context: Context) {
             visibility = json.optInt("visibility", 0),
             category = json.optString("category").takeIf { it != "null" && it.isNotEmpty() },
             groupKey = json.optString("groupKey").takeIf { it != "null" && it.isNotEmpty() },
+            overrideGroupKey = json.optString("overrideGroupKey").takeIf { it != "null" && it.isNotEmpty() },
             sortKey = json.optString("sortKey").takeIf { it != "null" && it.isNotEmpty() },
             channelId = json.optString("channelId").takeIf { it != "null" && it.isNotEmpty() },
             hasBubbleMetadata = json.optBoolean("hasBubbleMetadata", false),
@@ -176,6 +177,7 @@ class ArchiveImporter(private val context: Context) {
             hasCustomBigContentView = false,
             hasCustomHeadsUpContentView = false,
             extrasJson = json.optString("extrasJson").takeIf { it != "null" && it.isNotEmpty() },
+            rawDataJson = json.optString("rawDataJson").takeIf { it != "null" && it.isNotEmpty() },
             contentHash = json.optString("contentHash", ""),
             actionCount = json.optInt("actionCount", 0),
             userId = 0,
@@ -187,8 +189,7 @@ class ArchiveImporter(private val context: Context) {
             hasContentIntent = json.optBoolean("hasContentIntent", false),
             hasDeleteIntent = json.optBoolean("hasDeleteIntent", false),
             hasFullScreenIntent = json.optBoolean("hasFullScreenIntent", false),
-            contentIntentCreatorPackage = json.optString("contentIntentCreatorPackage").takeIf { it != "null" && it.isNotEmpty() },
-            intentInfoJson = json.optString("intentInfoJson").takeIf { it != "null" && it.isNotEmpty() }
+            contentIntentCreatorPackage = json.optString("contentIntentCreatorPackage").takeIf { it != "null" && it.isNotEmpty() }
         )
     }
 

@@ -19,6 +19,7 @@ import androidx.room.PrimaryKey
         Index(value = ["channel_id"]),
         Index(value = ["content_hash"]),
         Index(value = ["group_key"]),
+        Index(value = ["override_group_key"]),
         Index(value = ["has_content_intent"]),
         Index(value = ["content_intent_creator_package"])
     ]
@@ -153,6 +154,10 @@ data class NotificationEntity(
     @ColumnInfo(name = "group_key")
     val groupKey: String?,
 
+    /** 系統覆寫的群組 Key (API 24+, Ranking/SBN) */
+    @ColumnInfo(name = "override_group_key")
+    val overrideGroupKey: String? = null,
+
     /** sortKey */
     @ColumnInfo(name = "sort_key")
     val sortKey: String?,
@@ -279,14 +284,14 @@ data class NotificationEntity(
     @ColumnInfo(name = "has_custom_headsup_content_view")
     val hasCustomHeadsUpContentView: Boolean,
 
-    /** RemoteViews 詳細資訊 (JSON: layoutId, package per view type) */
-    @ColumnInfo(name = "remote_views_info")
-    val remoteViewsInfo: String? = null,
-
     // === 完整 Extras (JSON) ===
     /** 完整 extras bundle 序列化為 JSON */
     @ColumnInfo(name = "extras_json")
     val extrasJson: String?,
+
+    /** SBN + Notification + Ranking 完整原始 dump (JSON) */
+    @ColumnInfo(name = "raw_data_json")
+    val rawDataJson: String? = null,
 
     // === 去重用 Hash ===
     /** 內容 Hash (用於去重檢視) */
@@ -351,11 +356,7 @@ data class NotificationEntity(
 
     /** contentIntent 建立者包名 */
     @ColumnInfo(name = "content_intent_creator_package")
-    val contentIntentCreatorPackage: String?,
-
-    /** Intent 完整資訊 (JSON) — contentIntent/deleteIntent/fullScreenIntent/publicVersion */
-    @ColumnInfo(name = "intent_info_json")
-    val intentInfoJson: String?
+    val contentIntentCreatorPackage: String?
 )
 
 /**

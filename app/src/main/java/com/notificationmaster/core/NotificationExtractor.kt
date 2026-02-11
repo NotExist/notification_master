@@ -117,6 +117,7 @@ class NotificationExtractor(private val context: Context) {
 
             // 群組
             groupKey = notification.group,
+            overrideGroupKey = if (Build.VERSION.SDK_INT >= 24) sbn.overrideGroupKey else null,
             sortKey = notification.sortKey,
 
             // Channel (API 26+)
@@ -182,10 +183,12 @@ class NotificationExtractor(private val context: Context) {
             hasCustomContentView = notification.contentView != null,
             hasCustomBigContentView = notification.bigContentView != null,
             hasCustomHeadsUpContentView = notification.headsUpContentView != null,
-            remoteViewsInfo = extractRemoteViewsInfo(notification),
 
             // 完整 Extras
             extrasJson = bundleToJson(extras),
+
+            // 完整原始 dump
+            rawDataJson = buildRawDataJson(sbn, notification, ranking),
 
             // 持久性類型
             persistenceType = inferPersistenceType(flags),
@@ -217,8 +220,7 @@ class NotificationExtractor(private val context: Context) {
             hasContentIntent = notification.contentIntent != null,
             hasDeleteIntent = notification.deleteIntent != null,
             hasFullScreenIntent = notification.fullScreenIntent != null,
-            contentIntentCreatorPackage = notification.contentIntent?.creatorPackage,
-            intentInfoJson = extractIntentInfo(notification)
+            contentIntentCreatorPackage = notification.contentIntent?.creatorPackage
         )
     }
 
@@ -538,5 +540,173 @@ class NotificationExtractor(private val context: Context) {
             })
         }
         return json.toString()
+    }
+
+    /**
+     * 建構完整原始資料 JSON (SBN + Notification + Ranking)
+     * 與 extrasJson 合起來 = 100% 原始資料
+     */
+    @Suppress("DEPRECATION")
+    private fun buildRawDataJson(
+        sbn: StatusBarNotification,
+        notification: Notification,
+        ranking: Ranking?
+    ): String {
+        val root = JSONObject()
+
+        // === sbn 區塊 ===
+        root.put("sbn", JSONObject().apply {
+            put("isClearable", sbn.isClearable)
+            if (Build.VERSION.SDK_INT >= 24) {
+                put("overrideGroupKey", sbn.overrideGroupKey)
+            }
+            if (Build.VERSION.SDK_INT >= 29) {
+                put("uid", sbn.uid)
+            }
+        })
+
+        // === notification 區塊 (非 extras 的部分) ===
+        root.put("notification", JSONObject().apply {
+            put("number", notification.number)
+            put("defaults", notification.defaults)
+            put("flagsDecoded", decodeFlagsToJson(notification.flags))
+
+            if (Build.VERSION.SDK_INT >= 26) {
+                put("timeoutAfter", notification.timeoutAfter)
+                put("badgeIconType", notification.badgeIconType)
+                put("settingsText", notification.settingsText?.toString())
+            }
+
+            if (Build.VERSION.SDK_INT >= 29) {
+                put("locusId", notification.locusId?.id)
+                put("allowSystemGeneratedContextualActions",
+                    notification.allowSystemGeneratedContextualActions)
+            }
+
+            // 整合 Intent 資訊
+            put("intents", JSONObject().apply {
+                put("contentIntent", extractPendingIntentInfo(notification.contentIntent))
+                put("deleteIntent", extractPendingIntentInfo(notification.deleteIntent))
+                put("fullScreenIntent", extractPendingIntentInfo(notification.fullScreenIntent))
+                put("publicVersion", notification.publicVersion?.let { extractPublicVersion(it) })
+            })
+
+            // 整合 RemoteViews 資訊
+            put("remoteViews", JSONObject().apply {
+                notification.contentView?.let {
+                    put("contentView", JSONObject().apply {
+                        put("layoutId", it.layoutId)
+                        put("package", it.`package`)
+                    })
+                }
+                notification.bigContentView?.let {
+                    put("bigContentView", JSONObject().apply {
+                        put("layoutId", it.layoutId)
+                        put("package", it.`package`)
+                    })
+                }
+                notification.headsUpContentView?.let {
+                    put("headsUpContentView", JSONObject().apply {
+                        put("layoutId", it.layoutId)
+                        put("package", it.`package`)
+                    })
+                }
+            })
+        })
+
+        // === ranking 區塊 (ranking 非 null 時才產生) ===
+        if (ranking != null) {
+            root.put("ranking", JSONObject().apply {
+                if (Build.VERSION.SDK_INT >= 24) {
+                    put("rank", ranking.rank)
+                    put("importance", ranking.importance)
+                    put("isAmbient", ranking.isAmbient)
+                    put("suppressedVisualEffects", ranking.suppressedVisualEffects)
+                }
+                if (Build.VERSION.SDK_INT >= 26) {
+                    put("overrideGroupKey", ranking.overrideGroupKey)
+                }
+                if (Build.VERSION.SDK_INT >= 28) {
+                    put("isSuspended", ranking.isSuspended)
+                    put("canShowBadge", ranking.canShowBadge())
+                }
+                if (Build.VERSION.SDK_INT >= 29) {
+                    put("lastAudiblyAlertedMillis", ranking.lastAudiblyAlertedMillis)
+                    put("canBubble", ranking.canBubble())
+                    // smartReplies
+                    ranking.smartReplies?.let { replies ->
+                        put("smartReplies", JSONArray().apply {
+                            for (reply in replies) put(reply.toString())
+                        })
+                    }
+                    // smartActions
+                    ranking.smartActions?.let { actions ->
+                        put("smartActions", smartActionsToJson(actions))
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= 30) {
+                    ranking.conversationShortcutInfo?.let { info ->
+                        put("shortcutInfo", JSONObject().apply {
+                            put("id", info.id)
+                            put("shortLabel", info.shortLabel?.toString())
+                            put("longLabel", info.longLabel?.toString())
+                        })
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= 31) {
+                    put("isConversation", ranking.isConversation)
+                }
+            })
+        }
+
+        return root.toString()
+    }
+
+    /**
+     * 解碼 Notification flags bitmask 為各 FLAG_* 布林值
+     */
+    @Suppress("DEPRECATION")
+    private fun decodeFlagsToJson(flags: Int): JSONObject {
+        return JSONObject().apply {
+            put("FLAG_SHOW_LIGHTS", (flags and Notification.FLAG_SHOW_LIGHTS) != 0)
+            put("FLAG_ONGOING_EVENT", (flags and Notification.FLAG_ONGOING_EVENT) != 0)
+            put("FLAG_INSISTENT", (flags and Notification.FLAG_INSISTENT) != 0)
+            put("FLAG_ONLY_ALERT_ONCE", (flags and Notification.FLAG_ONLY_ALERT_ONCE) != 0)
+            put("FLAG_AUTO_CANCEL", (flags and Notification.FLAG_AUTO_CANCEL) != 0)
+            put("FLAG_NO_CLEAR", (flags and Notification.FLAG_NO_CLEAR) != 0)
+            put("FLAG_FOREGROUND_SERVICE", (flags and Notification.FLAG_FOREGROUND_SERVICE) != 0)
+            put("FLAG_HIGH_PRIORITY", (flags and Notification.FLAG_HIGH_PRIORITY) != 0)
+            put("FLAG_LOCAL_ONLY", (flags and Notification.FLAG_LOCAL_ONLY) != 0)
+            put("FLAG_GROUP_SUMMARY", (flags and Notification.FLAG_GROUP_SUMMARY) != 0)
+            if (Build.VERSION.SDK_INT >= 29) {
+                put("FLAG_BUBBLE", (flags and Notification.FLAG_BUBBLE) != 0)
+            }
+        }
+    }
+
+    /**
+     * Smart Actions 轉為 JSONArray
+     */
+    private fun smartActionsToJson(actions: List<Notification.Action>): JSONArray {
+        return JSONArray().apply {
+            for (action in actions) {
+                put(JSONObject().apply {
+                    put("title", action.title?.toString())
+                    if (Build.VERSION.SDK_INT >= 28) {
+                        put("semanticAction", action.semanticAction)
+                    }
+                    if (Build.VERSION.SDK_INT >= 29) {
+                        put("isContextual", action.isContextual)
+                    }
+                    // 首個 remoteInput 的摘要
+                    action.remoteInputs?.firstOrNull()?.let { input ->
+                        put("remoteInput", JSONObject().apply {
+                            put("key", input.resultKey)
+                            put("label", input.label?.toString())
+                        })
+                    }
+                })
+            }
+        }
     }
 }
