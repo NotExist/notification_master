@@ -5,11 +5,14 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.drawable.Icon
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.service.notification.NotificationListenerService.Ranking
 import android.service.notification.NotificationListenerService.RankingMap
 import android.service.notification.StatusBarNotification
+import androidx.annotation.RequiresApi
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.core.dedup.ContentHashGenerator
 import com.notificationmaster.data.db.entity.ActionEntity
@@ -287,11 +290,13 @@ class NotificationExtractor(private val context: Context) {
 
     /**
      * 提取 MessagingStyle 訊息
+     * 包含基本欄位（text, time, sender）以及媒體附件資訊（type, uri）
+     * 和 sender_person 結構化資訊（API 28+）
      */
+    @Suppress("DEPRECATION")
     private fun extractMessages(extras: Bundle): String? {
         if (Build.VERSION.SDK_INT < 24) return null
 
-        @Suppress("DEPRECATION")
         val messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
         if (messages.isNullOrEmpty()) return null
 
@@ -302,6 +307,15 @@ class NotificationExtractor(private val context: Context) {
                 jsonObj.put("text", msg.getCharSequence("text")?.toString())
                 jsonObj.put("time", msg.getLong("time"))
                 jsonObj.put("sender", msg.getCharSequence("sender")?.toString())
+                // 媒體附件資訊 (Message.setData 設定的 mimeType 和 URI)
+                msg.getString("type")?.let { jsonObj.put("type", it) }
+                msg.getParcelable<Uri>("uri")?.let { jsonObj.put("uri", it.toString()) }
+                // sender_person 結構化資訊 (API 28+)
+                if (Build.VERSION.SDK_INT >= 28) {
+                    msg.getParcelable<android.app.Person>("sender_person")?.let { person ->
+                        jsonObj.put("sender_person", personToJson(person))
+                    }
+                }
                 jsonArray.put(jsonObj)
             }
         }
@@ -310,33 +324,68 @@ class NotificationExtractor(private val context: Context) {
     }
 
     /**
-     * Bundle 轉 JSON
+     * Person 物件序列化為 JSON（API 28+）
      */
-    @Suppress("DEPRECATION")
+    @RequiresApi(28)
+    private fun personToJson(person: android.app.Person): JSONObject {
+        return JSONObject().apply {
+            put("name", person.name?.toString())
+            put("key", person.key)
+            put("uri", person.uri?.toString())
+            put("isBot", person.isBot)
+            put("isImportant", person.isImportant)
+            put("hasIcon", person.icon != null)
+        }
+    }
+
+    /**
+     * Bundle 轉 JSON（遞迴序列化）
+     */
     private fun bundleToJson(bundle: Bundle): String {
+        return bundleToJsonObject(bundle, 0).toString()
+    }
+
+    private fun bundleToJsonObject(bundle: Bundle, depth: Int): JSONObject {
+        val maxDepth = 4
         val json = JSONObject()
         for (key in bundle.keySet()) {
             try {
                 val value = bundle.get(key)
-                when (value) {
-                    null -> json.put(key, JSONObject.NULL)
-                    is CharSequence -> json.put(key, value.toString())
-                    is Number -> json.put(key, value)
-                    is Boolean -> json.put(key, value)
-                    is Bitmap -> json.put(key, "[Bitmap ${value.width}x${value.height}]")
-                    is Bundle -> json.put(key, "[Bundle]")
-                    is Array<*> -> json.put(key, JSONArray(value.map { it?.toString() }))
-                    else -> if (Build.VERSION.SDK_INT >= 23 && value is android.graphics.drawable.Icon) {
-                        json.put(key, "[Icon]")
-                    } else {
-                        json.put(key, value.javaClass.simpleName)
-                    }
-                }
+                json.put(key, valueToJson(value, depth, maxDepth))
             } catch (e: Exception) {
                 json.put(key, "[Error: ${e.message}]")
             }
         }
-        return json.toString()
+        return json
+    }
+
+    @Suppress("DEPRECATION")
+    private fun valueToJson(value: Any?, depth: Int, maxDepth: Int): Any {
+        return when {
+            value == null -> JSONObject.NULL
+            value is CharSequence -> value.toString()
+            value is Number -> value
+            value is Boolean -> value
+            value is Bitmap -> "[Bitmap ${value.width}x${value.height}]"
+            value is Bundle -> {
+                if (depth < maxDepth) bundleToJsonObject(value, depth + 1)
+                else "[Bundle depth>$maxDepth]"
+            }
+            value is Array<*> -> {
+                val arr = JSONArray()
+                for (item in value) {
+                    arr.put(valueToJson(item, depth + 1, maxDepth))
+                }
+                arr
+            }
+            value is Uri -> value.toString()
+            Build.VERSION.SDK_INT >= 28 && value is android.app.Person -> personToJson(value)
+            Build.VERSION.SDK_INT >= 23 && value is Icon -> "[Icon]"
+            value is IntArray -> JSONArray(value.toList())
+            value is LongArray -> JSONArray(value.toList())
+            value is BooleanArray -> JSONArray(value.toList())
+            else -> "[${value.javaClass.simpleName}]"
+        }
     }
 
     /**
