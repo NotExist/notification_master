@@ -244,6 +244,11 @@ class MediaExtractor(private val context: Context) {
             extractMessagingAvatars(extras, notificationId, captureTime, attachments)
         }
 
+        // 6. MessagingStyle 訊息中的媒體 (API 24+)
+        if (Build.VERSION.SDK_INT >= 24) {
+            extractMessagingMedia(extras, notificationId, captureTime, attachments)
+        }
+
         return attachments
     }
 
@@ -284,6 +289,157 @@ class MediaExtractor(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to extract messaging avatars", e)
+        }
+    }
+
+    /**
+     * 提取 MessagingStyle 訊息中的媒體附件
+     * 訊息透過 Message.setData(mimeType, uri) 設定媒體，
+     * Bundle 中以 "type" (MIME) 和 "uri" (content URI) 存放
+     */
+    @Suppress("DEPRECATION")
+    private fun extractMessagingMedia(
+        extras: Bundle,
+        notificationId: Long,
+        captureTime: Long,
+        attachments: MutableList<MediaAttachmentEntity>
+    ) {
+        val messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES) ?: return
+
+        // 收集已有附件的 hash 避免重複
+        val processedHashes = mutableSetOf<String>()
+        attachments.mapTo(processedHashes) { it.contentHash }
+
+        for (msg in messages) {
+            val bundle = msg as? Bundle ?: continue
+            val mimeType = bundle.getString("type") ?: continue
+            val uri = bundle.getParcelable<Uri>("uri") ?: continue
+
+            // 僅處理圖片類型（影片/音訊未來可擴展）
+            if (!mimeType.startsWith("image/")) continue
+
+            try {
+                saveFromUri(uri, mimeType, notificationId, captureTime, processedHashes)?.let {
+                    attachments.add(it)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to extract messaging media: $uri", e)
+            }
+        }
+    }
+
+    /**
+     * 從 content URI 讀取媒體並儲存
+     * NLS 收到通知時 URI 權限仍有效，需即時提取
+     */
+    private fun saveFromUri(
+        uri: Uri,
+        mimeType: String,
+        notificationId: Long,
+        captureTime: Long,
+        processedHashes: MutableSet<String>
+    ): MediaAttachmentEntity? {
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: return null
+
+        val hash = bytesHash(bytes)
+        if (hash in processedHashes) return null
+        processedHashes.add(hash)
+
+        // 取得圖片尺寸
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+
+        val ext = mimeTypeToExt(mimeType)
+
+        if (useCustomDir) {
+            saveBytesToCustomDir(bytes, hash, ext, mimeType, notificationId, captureTime,
+                bounds.outWidth, bounds.outHeight)?.let { return it }
+            Log.w(TAG, "Custom dir write failed for URI media, falling back")
+        }
+
+        return saveBytesToDefaultDir(bytes, hash, ext, mimeType, notificationId, captureTime,
+            bounds.outWidth, bounds.outHeight)
+    }
+
+    private fun bytesHash(bytes: ByteArray): String {
+        return MessageDigest.getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") { "%02x".format(it) }
+            .take(32)
+    }
+
+    private fun mimeTypeToExt(mimeType: String): String {
+        return when {
+            mimeType.contains("png") -> "png"
+            mimeType.contains("gif") -> "gif"
+            mimeType.contains("webp") -> "webp"
+            else -> "jpg"
+        }
+    }
+
+    /**
+     * 原始位元組寫入預設目錄
+     */
+    private fun saveBytesToDefaultDir(
+        bytes: ByteArray, hash: String, ext: String, mimeType: String,
+        notificationId: Long, captureTime: Long, width: Int, height: Int
+    ): MediaAttachmentEntity? {
+        return try {
+            val file = File(mediaDir, "$hash.$ext")
+            val filePath = "$MEDIA_DIR/$hash.$ext"
+            if (!file.exists()) {
+                FileOutputStream(file).use { it.write(bytes) }
+            }
+            MediaAttachmentEntity(
+                notificationId = notificationId,
+                mediaType = MediaType.MESSAGE_MEDIA,
+                filePath = filePath,
+                mimeType = mimeType,
+                fileSize = file.length(),
+                width = width, height = height,
+                captureTime = captureTime,
+                contentHash = hash
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save bytes to default dir", e)
+            null
+        }
+    }
+
+    /**
+     * 原始位元組寫入自訂目錄
+     */
+    private fun saveBytesToCustomDir(
+        bytes: ByteArray, hash: String, ext: String, mimeType: String,
+        notificationId: Long, captureTime: Long, width: Int, height: Int
+    ): MediaAttachmentEntity? {
+        val docDir = customMediaDocDir ?: return null
+        return try {
+            val fileName = "$hash.$ext"
+            val existing = docDir.findFile(fileName)
+            val docFile = if (existing != null && existing.exists()) {
+                existing
+            } else {
+                docDir.createFile(mimeType, hash) ?: return null
+            }
+            if (existing == null) {
+                context.contentResolver.openOutputStream(docFile.uri)?.use { it.write(bytes) }
+                    ?: return null
+            }
+            MediaAttachmentEntity(
+                notificationId = notificationId,
+                mediaType = MediaType.MESSAGE_MEDIA,
+                filePath = docFile.uri.toString(),
+                mimeType = mimeType,
+                fileSize = docFile.length(),
+                width = width, height = height,
+                captureTime = captureTime,
+                contentHash = hash
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to save bytes to custom dir", e)
+            null
         }
     }
 

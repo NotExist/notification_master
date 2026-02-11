@@ -20,6 +20,8 @@ enum class MediaType {
     LARGE_ICON_BIG,
     /** MessagingStyle 對話頭像 (Person.getIcon(), API 28+) */
     MESSAGING_AVATAR,
+    /** MessagingStyle 訊息中的媒體附件 (Message.setData URI) */
+    MESSAGE_MEDIA,
     /** 其他附件 */
     OTHER
 }
