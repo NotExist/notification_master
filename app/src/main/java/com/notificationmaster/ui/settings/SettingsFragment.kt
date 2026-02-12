@@ -91,10 +91,9 @@ class SettingsFragment : Fragment() {
         debugDumper = DebugDumper(requireContext())
 
         setupEnvironmentCard()
-        setupDebugSettings()
-        setupExportButtons()
-        setupImportButtons()
         setupMediaDirSettings()
+        setupDebugSettings()
+        setupCalendarIntegration()
         setupDataManagement()
     }
 
@@ -205,19 +204,9 @@ class SettingsFragment : Fragment() {
         return "${df.format(value)} ${units[unitIndex]}"
     }
 
-    private fun setupExportButtons() {
+    private fun setupCalendarIntegration() {
         binding.btnExportIcal.setOnClickListener {
             requestCalendarExport()
-        }
-
-        binding.btnExportJson.setOnClickListener {
-            showArchiveExportDialog()
-        }
-    }
-
-    private fun setupImportButtons() {
-        binding.btnImportJson.setOnClickListener {
-            importJsonLauncher.launch(arrayOf("application/json"))
         }
     }
 
@@ -337,6 +326,14 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupDataManagement() {
+        binding.btnExportJson.setOnClickListener {
+            showArchiveExportDialog()
+        }
+
+        binding.btnImportJson.setOnClickListener {
+            importJsonLauncher.launch(arrayOf("application/json"))
+        }
+
         binding.btnClearData.setOnClickListener {
             AlertDialog.Builder(requireContext())
                 .setTitle("清除通知記錄資料庫")

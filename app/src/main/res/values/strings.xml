@@ -31,10 +31,9 @@
     <string name="settings_debug_mode">Debug 模式</string>
     <string name="settings_debug_mode_summary">將原始通知資料 dump 到外部儲存</string>
     <string name="settings_debug_clear">清除 Debug 資料</string>
-    <string name="settings_export">匯出</string>
+    <string name="settings_calendar_integration">日曆整合</string>
     <string name="settings_export_ical">匯出到日曆</string>
     <string name="settings_export_json">匯出為 JSON 封存</string>
-    <string name="settings_import">匯入</string>
     <string name="settings_import_json">匯入 JSON 封存</string>
     <string name="settings_storage">儲存空間</string>
     <string name="settings_data">資料管理</string>
