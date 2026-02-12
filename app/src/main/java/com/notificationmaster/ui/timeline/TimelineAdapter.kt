@@ -186,6 +186,23 @@ class TimelineAdapter(
                 addTag(binding.tagsContainer, "Custom View", R.color.text_secondary, R.string.tag_custom_view_desc)
             }
 
+            // Style 標籤（基於 template 尾綴匹配）
+            val style = notification.template
+            when {
+                style == null -> { /* 無 Style，不加標籤 */ }
+                style.endsWith("BigTextStyle") ->
+                    addTag(binding.tagsContainer, "BigTextStyle", R.color.tag_big_text_style, R.string.tag_big_text_style_desc)
+                style.endsWith("BigPictureStyle") ->
+                    addTag(binding.tagsContainer, "BigPictureStyle", R.color.tag_big_picture_style, R.string.tag_big_picture_style_desc)
+                style.endsWith("InboxStyle") ->
+                    addTag(binding.tagsContainer, "InboxStyle", R.color.tag_inbox_style, R.string.tag_inbox_style_desc)
+                style.endsWith("MediaStyle") || style.endsWith("DecoratedMediaCustomViewStyle") ->
+                    addTag(binding.tagsContainer, "MediaStyle", R.color.tag_media_style, R.string.tag_media_style_desc)
+                style.endsWith("CallStyle") ->
+                    addTag(binding.tagsContainer, "CallStyle", R.color.tag_call_style, R.string.tag_call_style_desc)
+                // MessagingStyle 和 DecoratedCustomViewStyle 已被其他標籤涵蓋
+            }
+
             // 相似通知數量
             if (item.similarCount > 1) {
                 binding.textSimilarCount.visibility = View.VISIBLE

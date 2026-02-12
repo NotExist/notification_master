@@ -38,6 +38,11 @@
     <color name="tag_conversation">#00897B</color>
     <color name="tag_silent">#78909C</color>
     <color name="tag_messaging_style">#1565C0</color>
+    <color name="tag_big_text_style">#6A1B9A</color>
+    <color name="tag_big_picture_style">#E65100</color>
+    <color name="tag_inbox_style">#2E7D32</color>
+    <color name="tag_media_style">#AD1457</color>
+    <color name="tag_call_style">#C62828</color>
 
     <!-- Text colors -->
     <color name="text_secondary">#757575</color>

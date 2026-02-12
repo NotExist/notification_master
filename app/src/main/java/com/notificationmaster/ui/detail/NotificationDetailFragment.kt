@@ -33,6 +33,7 @@ import com.notificationmaster.databinding.FragmentNotificationDetailBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -110,6 +111,9 @@ class NotificationDetailFragment : Fragment() {
                     mediaDao.getAttachmentsByNotificationIdSync(args.notificationId)
                 }
                 displayMediaAttachments(attachments)
+
+                // 顯示樣式資訊
+                displayStyleInfo(notification)
             }
         }
     }
@@ -171,6 +175,23 @@ class NotificationDetailFragment : Fragment() {
         }
         if (notification.hasCustomContentView || notification.hasCustomBigContentView || notification.hasCustomHeadsUpContentView) {
             addChip("Custom View", R.color.text_secondary, R.string.tag_custom_view_desc)
+        }
+
+        // Style 標籤（基於 template 尾綴匹配）
+        val style = notification.template
+        when {
+            style == null -> { /* 無 Style，不加標籤 */ }
+            style.endsWith("BigTextStyle") ->
+                addChip("BigTextStyle", R.color.tag_big_text_style, R.string.tag_big_text_style_desc)
+            style.endsWith("BigPictureStyle") ->
+                addChip("BigPictureStyle", R.color.tag_big_picture_style, R.string.tag_big_picture_style_desc)
+            style.endsWith("InboxStyle") ->
+                addChip("InboxStyle", R.color.tag_inbox_style, R.string.tag_inbox_style_desc)
+            style.endsWith("MediaStyle") || style.endsWith("DecoratedMediaCustomViewStyle") ->
+                addChip("MediaStyle", R.color.tag_media_style, R.string.tag_media_style_desc)
+            style.endsWith("CallStyle") ->
+                addChip("CallStyle", R.color.tag_call_style, R.string.tag_call_style_desc)
+            // MessagingStyle 和 DecoratedCustomViewStyle 已被其他標籤涵蓋
         }
 
         // Channel（API 26+）
@@ -386,6 +407,129 @@ class NotificationDetailFragment : Fragment() {
             Log.w("NotificationDetail", "Failed to open media file", e)
             Toast.makeText(ctx, R.string.error_no_viewer, Toast.LENGTH_SHORT).show()
         }
+    }
+
+    /**
+     * 根據通知的 Style 類型，從 extrasJson 解析並顯示額外的樣式資訊
+     */
+    private fun displayStyleInfo(notification: NotificationEntity) {
+        val _binding = _binding ?: return
+        val style = notification.template ?: return
+        val container = _binding.layoutStyleInfoContainer
+        container.removeAllViews()
+
+        val extras = try {
+            if (!notification.extrasJson.isNullOrEmpty()) JSONObject(notification.extrasJson) else null
+        } catch (_: Exception) { null }
+
+        var hasContent = false
+        val ctx = requireContext()
+
+        when {
+            style.endsWith("InboxStyle") -> {
+                // 解析 android.textLines 陣列
+                val textLines = extras?.optJSONArray("android.textLines")
+                if (textLines != null && textLines.length() > 0) {
+                    hasContent = true
+                    addStyleInfoLabel(container, "textLines")
+                    for (i in 0 until textLines.length()) {
+                        addStyleInfoText(container, textLines.optString(i, ""))
+                    }
+                }
+            }
+
+            style.endsWith("MediaStyle") || style.endsWith("DecoratedMediaCustomViewStyle") -> {
+                // compactActions 索引陣列
+                val compactActions = extras?.optJSONArray("android.compactActions")
+                if (compactActions != null) {
+                    hasContent = true
+                    val indices = (0 until compactActions.length())
+                        .map { compactActions.optInt(it, -1) }
+                        .filter { it >= 0 }
+                    addStyleInfoLabel(container, "compactActions")
+                    addStyleInfoText(container, indices.joinToString(", "))
+                }
+                // mediaSession 存在與否
+                val hasMediaSession = extras?.has("android.mediaSession") == true
+                if (hasMediaSession) {
+                    hasContent = true
+                    addStyleInfoLabel(container, "mediaSession")
+                    addStyleInfoText(container, "present")
+                }
+            }
+
+            style.endsWith("CallStyle") -> {
+                // callType
+                val callType = extras?.optInt("android.callType", -1) ?: -1
+                if (callType >= 0) {
+                    hasContent = true
+                    val typeDesc = when (callType) {
+                        1 -> "incoming (來電)"
+                        2 -> "ongoing (通話中)"
+                        3 -> "screening (篩選中)"
+                        else -> callType.toString()
+                    }
+                    addStyleInfoLabel(container, "callType")
+                    addStyleInfoText(container, typeDesc)
+                }
+                // callPerson
+                val callPerson = extras?.optString("android.callPerson", "")
+                if (!callPerson.isNullOrEmpty()) {
+                    hasContent = true
+                    addStyleInfoLabel(container, "callPerson")
+                    addStyleInfoText(container, callPerson)
+                }
+            }
+
+            style.endsWith("MessagingStyle") -> {
+                // conversationTitle 和 isGroupConversation（補充顯示）
+                val conversationTitle = notification.conversationTitle
+                    ?: extras?.optString("android.conversationTitle", "")
+                if (!conversationTitle.isNullOrEmpty()) {
+                    hasContent = true
+                    addStyleInfoLabel(container, "conversationTitle")
+                    addStyleInfoText(container, conversationTitle)
+                }
+                val isGroup = notification.isGroupConversation
+                if (isGroup) {
+                    hasContent = true
+                    addStyleInfoLabel(container, "isGroupConversation")
+                    addStyleInfoText(container, "true")
+                }
+            }
+
+            style.endsWith("BigTextStyle") -> {
+                // summaryText（若主內容區未顯示）
+                val summaryText = extras?.optString("android.summaryText", "")
+                if (!summaryText.isNullOrEmpty()) {
+                    hasContent = true
+                    addStyleInfoLabel(container, "summaryText")
+                    addStyleInfoText(container, summaryText)
+                }
+            }
+        }
+
+        _binding.cardStyleInfo.visibility = if (hasContent) View.VISIBLE else View.GONE
+    }
+
+    private fun addStyleInfoLabel(container: LinearLayout, label: String) {
+        val tv = TextView(container.context).apply {
+            text = label
+            textSize = 12f
+            setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
+            setPadding(0, 8, 0, 2)
+        }
+        container.addView(tv)
+    }
+
+    private fun addStyleInfoText(container: LinearLayout, content: String) {
+        val tv = TextView(container.context).apply {
+            text = content
+            textSize = 14f
+            setPadding(0, 0, 0, 4)
+            setTextIsSelectable(true)
+        }
+        container.addView(tv)
     }
 
     private fun addChip(text: String, colorRes: Int, descriptionRes: Int) {

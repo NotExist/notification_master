@@ -58,6 +58,7 @@
     <string name="detail_events">生命週期事件</string>
     <string name="detail_actions">動作按鈕</string>
     <string name="detail_media">媒體附件</string>
+    <string name="detail_style_info">樣式資訊</string>
 
     <!-- 移除原因 -->
     <string name="removal_user_click">使用者點擊</string>
@@ -95,6 +96,11 @@
     <string name="tag_conversation_desc">對話通知，出現在系統通知抽屜最頂端的「對話」區段。\n\n判斷依據：\n• API 31+：系統 Ranking 直接標記\n• API 26–30：使用 MessagingStyle 且關聯 shortcutId\n\n使用者可長按通知設為「優先」或「靜音」對話。</string>
     <string name="tag_silent_desc">靜音通知，不發出聲音或震動。\n出現在系統通知抽屜下方的「靜音通知」區段。\n\n判斷依據：Channel 重要性為 LOW 或 MIN。</string>
     <string name="tag_messaging_style_desc">使用 MessagingStyle 的通知，extras 中包含結構化的 android.messages 訊息陣列和 android.messagingUser 身份資訊。</string>
+    <string name="tag_big_text_style_desc">使用 BigTextStyle 的通知，展開時顯示多行長文字。\n\nextras 中包含 android.bigText 展開內容。</string>
+    <string name="tag_big_picture_style_desc">使用 BigPictureStyle 的通知，展開時顯示大圖片。\n\nextras 中包含 android.picture 點陣圖。</string>
+    <string name="tag_inbox_style_desc">使用 InboxStyle 的通知，展開時顯示多行條目清單。\n\nextras 中包含 android.textLines 文字行陣列。\n\n常見於多封郵件摘要。</string>
+    <string name="tag_media_style_desc">使用 MediaStyle 的通知，提供媒體播放控制介面。\n\nextras 中包含 android.mediaSession 媒體工作階段。\n\n常見於音樂播放器。</string>
+    <string name="tag_call_style_desc">使用 CallStyle 的通知 (API 31+)，提供通話專用介面。\n\n包含來電/去電/進行中通話的操作按鈕。</string>
 
     <!-- 媒體目錄設定 -->
     <string name="settings_media_dir">媒體儲存目錄</string>

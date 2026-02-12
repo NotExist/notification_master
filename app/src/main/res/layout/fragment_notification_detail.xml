@@ -235,6 +235,40 @@
 
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- 樣式資訊 Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_style_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            tools:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/detail_style_info"
+                    android:textAppearance="?attr/textAppearanceTitleSmall"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/layout_style_info_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- 動作按鈕 Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/card_actions"
