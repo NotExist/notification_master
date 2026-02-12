@@ -13,6 +13,7 @@ import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.data.db.entity.AppSourceEntity
 import com.notificationmaster.data.db.entity.ChannelEntity
 import com.notificationmaster.data.db.entity.EventType
+import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.core.capture.DeviceStateCapture
 import com.notificationmaster.core.media.MediaExtractor
