@@ -39,7 +39,7 @@
     <string name="settings_storage">儲存空間</string>
     <string name="settings_data">資料管理</string>
     <string name="settings_permission_info">權限說明</string>
-    <string name="settings_clear_data">清除所有資料</string>
+    <string name="settings_clear_data">清除通知記錄資料庫</string>
 
     <!-- 時間軸 -->
     <string name="timeline_empty">尚無通知記錄</string>

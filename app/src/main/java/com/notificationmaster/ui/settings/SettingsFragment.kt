@@ -339,7 +339,7 @@ class SettingsFragment : Fragment() {
     private fun setupDataManagement() {
         binding.btnClearData.setOnClickListener {
             AlertDialog.Builder(requireContext())
-                .setTitle("清除所有資料")
+                .setTitle("清除通知記錄資料庫")
                 .setMessage("確定要清除所有通知記錄嗎？此操作無法復原。")
                 .setPositiveButton(R.string.ok) { _, _ ->
                     clearAllData()
@@ -555,7 +555,7 @@ class SettingsFragment : Fragment() {
                 database.deviceStateDao().deleteAll()
             }
 
-            Toast.makeText(ctx, "已清除所有資料", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, "已清除通知記錄資料庫", Toast.LENGTH_SHORT).show()
             updateStorageInfo()
         }
     }
