@@ -7,11 +7,14 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
@@ -19,8 +22,11 @@ import androidx.lifecycle.lifecycleScope
 import com.notificationmaster.BuildConfig
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.notificationmaster.core.permission.PermissionDescriptions
+import com.notificationmaster.core.permission.PermissionInfo
 import com.notificationmaster.data.model.EnvironmentInfo
 import com.notificationmaster.databinding.FragmentHomeBinding
+import com.notificationmaster.databinding.ItemPermissionInfoBinding
 import com.notificationmaster.service.NotificationCaptureService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -36,6 +42,14 @@ class HomeFragment : Fragment() {
 
     private var _binding: FragmentHomeBinding? = null
     private val binding get() = _binding!!
+
+    // 權限說明頁面用的通用權限請求
+    private val generalPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        // 授權結果回來後重新顯示對話框，反映最新狀態
+        showPermissionInfoDialog()
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -71,6 +85,9 @@ class HomeFragment : Fragment() {
     private fun setupPermissionButton() {
         binding.btnEnablePermission.setOnClickListener {
             showPermissionDialog()
+        }
+        binding.btnPermissionInfo.setOnClickListener {
+            showPermissionInfoDialog()
         }
     }
 
@@ -290,6 +307,82 @@ class HomeFragment : Fragment() {
             val numberFormat = NumberFormat.getNumberInstance()
             binding.textTodayCount.text = numberFormat.format(todayCount)
             binding.textTotalCount.text = numberFormat.format(totalCount)
+        }
+    }
+
+    // === 權限說明 ===
+
+    private fun showPermissionInfoDialog() {
+        val permissions = PermissionDescriptions.getApplicablePermissions()
+        val ctx = requireContext()
+
+        val scrollView = ScrollView(ctx)
+        val container = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        scrollView.addView(container)
+
+        var dialog: AlertDialog? = null
+
+        for (p in permissions) {
+            val granted = PermissionDescriptions.checkGrantStatus(ctx, p)
+            val actionable = !granted && p.type != "普通權限"
+
+            val itemBinding = ItemPermissionInfoBinding.inflate(layoutInflater, container, false)
+
+            itemBinding.textPermissionName.text = buildString {
+                if (p.isRequired) append("[必要] ")
+                append(p.displayName)
+            }
+
+            itemBinding.textPermissionStatus.text = when {
+                granted -> getString(R.string.permission_status_granted)
+                actionable -> getString(R.string.permission_status_tap_to_grant)
+                else -> getString(R.string.permission_status_not_granted)
+            }
+            itemBinding.textPermissionStatus.setTextColor(
+                ContextCompat.getColor(ctx,
+                    if (granted) R.color.status_enabled else R.color.status_disabled)
+            )
+
+            itemBinding.textPermissionDesc.text = buildString {
+                append(p.relatedFeature)
+                if (!granted) {
+                    append("\n拒絕影響：${p.deniedImpact}")
+                }
+            }
+
+            if (actionable) {
+                val tv = TypedValue()
+                ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
+                itemBinding.root.setBackgroundResource(tv.resourceId)
+                itemBinding.root.isClickable = true
+                itemBinding.root.isFocusable = true
+                itemBinding.root.setOnClickListener {
+                    dialog?.dismiss()
+                    requestPermissionGrant(p)
+                }
+            }
+
+            container.addView(itemBinding.root)
+        }
+
+        dialog = AlertDialog.Builder(ctx)
+            .setTitle(R.string.settings_permission_info)
+            .setView(scrollView)
+            .setPositiveButton(R.string.ok, null)
+            .show()
+    }
+
+    @SuppressLint("InlinedApi")
+    private fun requestPermissionGrant(info: PermissionInfo) {
+        when (info.permission) {
+            "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" -> {
+                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            }
+            else -> {
+                generalPermissionLauncher.launch(arrayOf(info.permission))
+            }
         }
     }
 }

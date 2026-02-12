@@ -68,6 +68,14 @@
                     android:visibility="gone"
                     tools:visibility="visible" />
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_permission_info"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/settings_permission_info"
+                    style="@style/Widget.Material3.Button.TonalButton" />
+
             </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>

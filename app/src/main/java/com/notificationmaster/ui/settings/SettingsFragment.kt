@@ -1,17 +1,13 @@
 package com.notificationmaster.ui.settings
 
-import android.annotation.SuppressLint
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
-import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -23,12 +19,9 @@ import androidx.navigation.fragment.findNavController
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.media.MediaExtractor
-import com.notificationmaster.core.permission.PermissionDescriptions
-import com.notificationmaster.core.permission.PermissionInfo
 import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.databinding.FragmentSettingsBinding
-import com.notificationmaster.databinding.ItemPermissionInfoBinding
 import com.notificationmaster.debug.DebugDumper
 import com.notificationmaster.export.archive.ArchiveExporter
 import com.notificationmaster.export.archive.ArchiveImporter
@@ -81,14 +74,6 @@ class SettingsFragment : Fragment() {
         } else {
             context?.let { Toast.makeText(it, "需要日曆權限才能匯出", Toast.LENGTH_SHORT).show() }
         }
-    }
-
-    // 權限說明頁面用的通用權限請求
-    private val generalPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { _ ->
-        // 授權結果回來後重新顯示對話框，反映最新狀態
-        showPermissionInfoDialog()
     }
 
     override fun onCreateView(
@@ -352,11 +337,6 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupDataManagement() {
-        // 權限說明按鈕
-        binding.btnPermissionInfo.setOnClickListener {
-            showPermissionInfoDialog()
-        }
-
         binding.btnClearData.setOnClickListener {
             AlertDialog.Builder(requireContext())
                 .setTitle("清除所有資料")
@@ -554,91 +534,6 @@ class SettingsFragment : Fragment() {
                     "匯入失敗：${e.message}",
                     Toast.LENGTH_LONG
                 ).show()
-            }
-        }
-    }
-
-    // === 權限說明 ===
-
-    private fun showPermissionInfoDialog() {
-        val permissions = PermissionDescriptions.getApplicablePermissions()
-        val ctx = requireContext()
-
-        val scrollView = ScrollView(ctx)
-        val container = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        scrollView.addView(container)
-
-        var dialog: AlertDialog? = null
-
-        for (p in permissions) {
-            val granted = PermissionDescriptions.checkGrantStatus(ctx, p)
-            val actionable = !granted && p.type != "普通權限"
-
-            val itemBinding = ItemPermissionInfoBinding.inflate(layoutInflater, container, false)
-
-            // 名稱
-            itemBinding.textPermissionName.text = buildString {
-                if (p.isRequired) append("[必要] ")
-                append(p.displayName)
-            }
-
-            // 授權狀態
-            itemBinding.textPermissionStatus.text = when {
-                granted -> getString(R.string.permission_status_granted)
-                actionable -> getString(R.string.permission_status_tap_to_grant)
-                else -> getString(R.string.permission_status_not_granted)
-            }
-            itemBinding.textPermissionStatus.setTextColor(
-                ContextCompat.getColor(ctx,
-                    if (granted) R.color.status_enabled else R.color.status_disabled)
-            )
-
-            // 說明：功能 + 未授權時顯示拒絕影響
-            itemBinding.textPermissionDesc.text = buildString {
-                append(p.relatedFeature)
-                if (!granted) {
-                    append("\n拒絕影響：${p.deniedImpact}")
-                }
-            }
-
-            // 未授權且可操作：加上點擊引導
-            if (actionable) {
-                val tv = TypedValue()
-                ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
-                itemBinding.root.setBackgroundResource(tv.resourceId)
-                itemBinding.root.isClickable = true
-                itemBinding.root.isFocusable = true
-                itemBinding.root.setOnClickListener {
-                    dialog?.dismiss()
-                    requestPermissionGrant(p)
-                }
-            }
-
-            container.addView(itemBinding.root)
-        }
-
-        dialog = AlertDialog.Builder(ctx)
-            .setTitle(R.string.settings_permission_info)
-            .setView(scrollView)
-            .setPositiveButton(R.string.ok, null)
-            .show()
-    }
-
-    /**
-     * 引導使用者授予指定權限
-     */
-    @SuppressLint("InlinedApi")
-    private fun requestPermissionGrant(info: PermissionInfo) {
-        when (info.permission) {
-            // 通知監聽服務需要到系統設定頁面開啟
-            "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" -> {
-                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            }
-            // 危險權限透過系統對話框請求
-            else -> {
-                generalPermissionLauncher.launch(arrayOf(info.permission))
             }
         }
     }
