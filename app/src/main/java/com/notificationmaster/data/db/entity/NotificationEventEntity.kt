@@ -108,8 +108,8 @@ data class NotificationEventEntity(
     @ColumnInfo(name = "suppressed_visual_effects")
     val suppressedVisualEffects: Int?,
 
-    // === 內容快照 ===
-    /** 內容快照 (JSON，用於追蹤更新變化) */
-    @ColumnInfo(name = "content_snapshot")
-    val contentSnapshot: String?
+    // === 變動內容 ===
+    /** 變動內容 (JSON，僅 UPDATED 事件有值，記錄與前一版本的差異) */
+    @ColumnInfo(name = "content_diff")
+    val contentDiff: String?
 )

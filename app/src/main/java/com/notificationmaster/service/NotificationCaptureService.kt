@@ -22,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 /**
  * 通知擷取服務
@@ -231,6 +232,12 @@ class NotificationCaptureService : NotificationListenerService() {
         // 1. 提取通知資料
         val entity = extractor.extractNotification(sbn, rankingMap, captureTime)
 
+        // 1.5 UPDATED 事件時，取得前一版本以計算差異
+        val contentDiff = if (eventType == EventType.UPDATED) {
+            val previous = database.notificationDao().getLatestByKey(entity.notificationKey)
+            previous?.let { generateContentDiff(it, entity) }
+        } else null
+
         // 2. 儲存通知記錄
         val notificationId = database.notificationDao().insert(entity)
 
@@ -271,7 +278,7 @@ class NotificationCaptureService : NotificationListenerService() {
             isAmbient = entity.isAmbient,
             isSuspended = entity.isSuspended,
             suppressedVisualEffects = entity.suppressedVisualEffects,
-            contentSnapshot = extractor.generateContentSnapshot(sbn.notification)
+            contentDiff = contentDiff
         )
         database.notificationEventDao().insert(event)
 
@@ -323,7 +330,7 @@ class NotificationCaptureService : NotificationListenerService() {
                 isAmbient = null,
                 isSuspended = null,
                 suppressedVisualEffects = null,
-                contentSnapshot = null
+                contentDiff = null
             )
             database.notificationEventDao().insert(event)
 
@@ -350,12 +357,32 @@ class NotificationCaptureService : NotificationListenerService() {
                 val latestNotification = database.notificationDao().getLatestByKey(key)
 
                 if (latestNotification != null) {
-                    // 只在有變化時記錄
-                    val hasChanges = latestNotification.rankingRank != ranking.rank ||
-                            latestNotification.importance != ranking.importance ||
-                            latestNotification.isAmbient != ranking.isAmbient
+                    val newRank = ranking.rank
+                    val newImportance = ranking.importance
+                    val newIsAmbient = ranking.isAmbient
+                    val newIsSuspended = if (Build.VERSION.SDK_INT >= 28) ranking.isSuspended else false
+                    val newSuppressedVisualEffects = ranking.suppressedVisualEffects
 
-                    if (hasChanges) {
+                    // 計算 ranking diff
+                    val diff = JSONObject()
+                    if (latestNotification.rankingRank != newRank) {
+                        diff.put("rankingRank", JSONObject().put("old", latestNotification.rankingRank).put("new", newRank))
+                    }
+                    if (latestNotification.importance != newImportance) {
+                        diff.put("importance", JSONObject().put("old", latestNotification.importance).put("new", newImportance))
+                    }
+                    if (latestNotification.isAmbient != newIsAmbient) {
+                        diff.put("isAmbient", JSONObject().put("old", latestNotification.isAmbient).put("new", newIsAmbient))
+                    }
+                    if (latestNotification.isSuspended != newIsSuspended) {
+                        diff.put("isSuspended", JSONObject().put("old", latestNotification.isSuspended).put("new", newIsSuspended))
+                    }
+                    if (latestNotification.suppressedVisualEffects != newSuppressedVisualEffects) {
+                        diff.put("suppressedVisualEffects", JSONObject().put("old", latestNotification.suppressedVisualEffects).put("new", newSuppressedVisualEffects))
+                    }
+
+                    // 只在有變化時記錄
+                    if (diff.length() > 0) {
                         val event = NotificationEventEntity(
                             notificationId = latestNotification.id,
                             notificationKey = key,
@@ -363,14 +390,12 @@ class NotificationCaptureService : NotificationListenerService() {
                             eventTime = captureTime,
                             removalReason = null,
                             removalReasonCategory = null,
-                            rankingRank = ranking.rank,
-                            rankingImportance = ranking.importance,
-                            isAmbient = ranking.isAmbient,
-                            isSuspended = if (Build.VERSION.SDK_INT >= 28) ranking.isSuspended else false,
-                            suppressedVisualEffects = if (Build.VERSION.SDK_INT >= 24) {
-                                ranking.suppressedVisualEffects
-                            } else 0,
-                            contentSnapshot = null
+                            rankingRank = newRank,
+                            rankingImportance = newImportance,
+                            isAmbient = newIsAmbient,
+                            isSuspended = newIsSuspended,
+                            suppressedVisualEffects = newSuppressedVisualEffects,
+                            contentDiff = diff.toString()
                         )
                         database.notificationEventDao().insert(event)
                     }
@@ -498,5 +523,85 @@ class NotificationCaptureService : NotificationListenerService() {
             )
             database.channelDao().insert(channelEntity)
         }
+    }
+
+    /**
+     * 比對兩個 NotificationEntity，產生變動內容 JSON
+     * 僅記錄有變化的欄位，格式：{"欄位": {"old": 舊值, "new": 新值}}
+     * 無變動時回傳 null
+     */
+    private fun generateContentDiff(
+        old: NotificationEntity,
+        new: NotificationEntity
+    ): String? {
+        val diff = JSONObject()
+
+        fun diffString(key: String, oldVal: String?, newVal: String?) {
+            if (oldVal != newVal) {
+                diff.put(key, JSONObject().put("old", oldVal ?: JSONObject.NULL).put("new", newVal ?: JSONObject.NULL))
+            }
+        }
+
+        fun diffInt(key: String, oldVal: Int, newVal: Int) {
+            if (oldVal != newVal) {
+                diff.put(key, JSONObject().put("old", oldVal).put("new", newVal))
+            }
+        }
+
+        fun diffLong(key: String, oldVal: Long, newVal: Long) {
+            if (oldVal != newVal) {
+                diff.put(key, JSONObject().put("old", oldVal).put("new", newVal))
+            }
+        }
+
+        fun diffBool(key: String, oldVal: Boolean, newVal: Boolean) {
+            if (oldVal != newVal) {
+                diff.put(key, JSONObject().put("old", oldVal).put("new", newVal))
+            }
+        }
+
+        // 基本內容
+        diffString("title", old.title, new.title)
+        diffString("text", old.text, new.text)
+        diffString("bigText", old.bigText, new.bigText)
+        diffString("bigTitle", old.bigTitle, new.bigTitle)
+        diffString("subText", old.subText, new.subText)
+        diffString("infoText", old.infoText, new.infoText)
+        diffString("summaryText", old.summaryText, new.summaryText)
+        diffString("tickerText", old.tickerText, new.tickerText)
+
+        // 進度
+        diffInt("progress", old.progress, new.progress)
+        diffInt("progressMax", old.progressMax, new.progressMax)
+        diffBool("progressIndeterminate", old.progressIndeterminate, new.progressIndeterminate)
+
+        // MessagingStyle
+        diffString("conversationTitle", old.conversationTitle, new.conversationTitle)
+        diffBool("isGroupConversation", old.isGroupConversation, new.isGroupConversation)
+
+        // 樣式模板
+        diffString("template", old.template, new.template)
+
+        // 通知屬性
+        diffInt("flags", old.flags, new.flags)
+        diffInt("priority", old.priority, new.priority)
+        diffInt("visibility", old.visibility, new.visibility)
+        diffString("category", old.category, new.category)
+        diffInt("color", old.color, new.color)
+        diffString("groupKey", old.groupKey, new.groupKey)
+        diffString("sortKey", old.sortKey, new.sortKey)
+        diffLong("whenTime", old.whenTime, new.whenTime)
+
+        // Channel
+        diffString("channelId", old.channelId, new.channelId)
+
+        // 動作數量
+        diffInt("actionCount", old.actionCount, new.actionCount)
+
+        // 自訂 View
+        diffBool("hasCustomContentView", old.hasCustomContentView, new.hasCustomContentView)
+        diffBool("hasCustomBigContentView", old.hasCustomBigContentView, new.hasCustomBigContentView)
+
+        return if (diff.length() > 0) diff.toString() else null
     }
 }

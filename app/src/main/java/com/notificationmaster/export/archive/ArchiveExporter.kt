@@ -224,7 +224,7 @@ class ArchiveExporter(
             put("isAmbient", e.isAmbient)
             put("isSuspended", e.isSuspended)
             put("suppressedVisualEffects", e.suppressedVisualEffects)
-            put("contentSnapshot", e.contentSnapshot)
+            put("contentDiff", e.contentDiff)
         }
     }
 }

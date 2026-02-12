@@ -207,7 +207,7 @@ class ArchiveImporter(private val context: Context) {
             isAmbient = if (json.has("isAmbient")) json.optBoolean("isAmbient") else null,
             isSuspended = if (json.has("isSuspended")) json.optBoolean("isSuspended") else null,
             suppressedVisualEffects = json.optInt("suppressedVisualEffects", -1).takeIf { it >= 0 },
-            contentSnapshot = json.optString("contentSnapshot").takeIf { it != "null" && it.isNotEmpty() }
+            contentDiff = json.optString("contentDiff").takeIf { it != "null" && it.isNotEmpty() }
         )
     }
 }
