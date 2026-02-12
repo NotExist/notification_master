@@ -24,7 +24,7 @@ import java.security.MessageDigest
  * 從 Notification extras 提取圖片等媒體資源並儲存
  *
  * 支援兩種儲存模式：
- * - 預設模式：getExternalFilesDir(null)/media/，filePath 為相對路徑 "media/{hash}.png"
+ * - 預設模式：getExternalFilesDir(null)/media/，filePath 為相對路徑 "media/{MediaType}_{hash}.png"
  * - 自訂模式：使用者透過 SAF 選擇的目錄，filePath 為完整 content URI 字串
  */
 class MediaExtractor(private val context: Context) {
@@ -384,14 +384,16 @@ class MediaExtractor(private val context: Context) {
         val uriString = uri.toString()
 
         if (useCustomDir) {
-            saveBytesToCustomDir(bytes, hash, ext, mimeType, notificationId, captureTime,
+            saveBytesToCustomDir(bytes, hash, ext, mimeType, notificationId,
+                MediaType.MESSAGE_MEDIA, captureTime,
                 bounds.outWidth, bounds.outHeight)?.let {
                 return it.copy(sourceUri = uriString)
             }
             Log.w(TAG, "Custom dir write failed for URI media, falling back")
         }
 
-        return saveBytesToDefaultDir(bytes, hash, ext, mimeType, notificationId, captureTime,
+        return saveBytesToDefaultDir(bytes, hash, ext, mimeType, notificationId,
+            MediaType.MESSAGE_MEDIA, captureTime,
             bounds.outWidth, bounds.outHeight)?.copy(sourceUri = uriString)
     }
 
@@ -416,17 +418,18 @@ class MediaExtractor(private val context: Context) {
      */
     private fun saveBytesToDefaultDir(
         bytes: ByteArray, hash: String, ext: String, mimeType: String,
-        notificationId: Long, captureTime: Long, width: Int, height: Int
+        notificationId: Long, mediaType: MediaType, captureTime: Long, width: Int, height: Int
     ): MediaAttachmentEntity? {
         return try {
-            val file = File(mediaDir, "$hash.$ext")
-            val filePath = "$MEDIA_DIR/$hash.$ext"
+            val fileName = "${mediaType.name}_$hash.$ext"
+            val file = File(mediaDir, fileName)
+            val filePath = "$MEDIA_DIR/$fileName"
             if (!file.exists()) {
                 FileOutputStream(file).use { it.write(bytes) }
             }
             MediaAttachmentEntity(
                 notificationId = notificationId,
-                mediaType = MediaType.MESSAGE_MEDIA,
+                mediaType = mediaType,
                 filePath = filePath,
                 mimeType = mimeType,
                 fileSize = file.length(),
@@ -445,16 +448,16 @@ class MediaExtractor(private val context: Context) {
      */
     private fun saveBytesToCustomDir(
         bytes: ByteArray, hash: String, ext: String, mimeType: String,
-        notificationId: Long, captureTime: Long, width: Int, height: Int
+        notificationId: Long, mediaType: MediaType, captureTime: Long, width: Int, height: Int
     ): MediaAttachmentEntity? {
         val docDir = customMediaDocDir ?: return null
         return try {
-            val fileName = "$hash.$ext"
+            val fileName = "${mediaType.name}_$hash.$ext"
             val existing = docDir.findFile(fileName)
             val docFile = if (existing != null && existing.exists()) {
                 existing
             } else {
-                docDir.createFile(mimeType, hash) ?: return null
+                docDir.createFile(mimeType, "${mediaType.name}_$hash") ?: return null
             }
             if (existing == null) {
                 context.contentResolver.openOutputStream(docFile.uri)?.use { it.write(bytes) }
@@ -462,7 +465,7 @@ class MediaExtractor(private val context: Context) {
             }
             MediaAttachmentEntity(
                 notificationId = notificationId,
-                mediaType = MediaType.MESSAGE_MEDIA,
+                mediaType = mediaType,
                 filePath = docFile.uri.toString(),
                 mimeType = mimeType,
                 fileSize = docFile.length(),
@@ -572,12 +575,12 @@ class MediaExtractor(private val context: Context) {
         val docDir = customMediaDocDir ?: return null
         return try {
             // 去重：檢查同名檔案是否已存在
-            val fileName = "$hash.png"
+            val fileName = "${mediaType.name}_$hash.png"
             val existing = docDir.findFile(fileName)
             val docFile = if (existing != null && existing.exists()) {
                 existing
             } else {
-                docDir.createFile("image/png", hash) ?: return null
+                docDir.createFile("image/png", "${mediaType.name}_$hash") ?: return null
             }
 
             // 僅新建的檔案需要寫入
@@ -616,8 +619,9 @@ class MediaExtractor(private val context: Context) {
         captureTime: Long
     ): MediaAttachmentEntity? {
         return try {
-            val existingFile = File(mediaDir, "$hash.png")
-            val filePath = "${MEDIA_DIR}/$hash.png"
+            val fileName = "${mediaType.name}_$hash.png"
+            val existingFile = File(mediaDir, fileName)
+            val filePath = "${MEDIA_DIR}/$fileName"
 
             if (!existingFile.exists()) {
                 FileOutputStream(existingFile).use { out ->
