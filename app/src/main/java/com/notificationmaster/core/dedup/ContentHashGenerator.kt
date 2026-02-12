@@ -10,13 +10,13 @@ object ContentHashGenerator {
 
     /**
      * 產生內容 Hash
-     * 組合 packageName + title + text + bigText
+     * 組合 packageName + title + text + template
      */
     fun generateHash(
         packageName: String,
         title: String?,
         text: String?,
-        bigText: String?
+        template: String?
     ): String {
         val content = buildString {
             append(packageName)
@@ -25,7 +25,7 @@ object ContentHashGenerator {
             append("|")
             append(text ?: "")
             append("|")
-            append(bigText ?: "")
+            append(template ?: "")
         }
         return sha256(content)
     }
@@ -37,7 +37,7 @@ object ContentHashGenerator {
         packageName: String,
         title: String?,
         text: String?,
-        bigText: String?,
+        template: String?,
         subText: String?,
         progress: Int,
         progressMax: Int
@@ -49,7 +49,7 @@ object ContentHashGenerator {
             append("|")
             append(text ?: "")
             append("|")
-            append(bigText ?: "")
+            append(template ?: "")
             append("|")
             append(subText ?: "")
             append("|")

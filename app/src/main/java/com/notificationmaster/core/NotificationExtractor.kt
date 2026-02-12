@@ -57,13 +57,14 @@ class NotificationExtractor(private val context: Context) {
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
         val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
         val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
+        val template = extras.getString(Notification.EXTRA_TEMPLATE)
 
         // 產生內容 Hash
         val contentHash = ContentHashGenerator.generateHash(
             sbn.packageName,
             title,
             text,
-            bigText
+            template
         )
 
         @Suppress("DEPRECATION")
@@ -177,7 +178,7 @@ class NotificationExtractor(private val context: Context) {
             messages = extractMessages(extras),
 
             // 樣式模板
-            template = extras.getString(Notification.EXTRA_TEMPLATE),
+            template = template,
 
             // 自訂 View
             hasCustomContentView = notification.contentView != null,

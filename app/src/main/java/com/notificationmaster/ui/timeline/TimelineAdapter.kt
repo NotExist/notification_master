@@ -23,7 +23,8 @@ import java.util.Locale
  * 支援日期分組標題和通知項目
  */
 class TimelineAdapter(
-    private val onItemClick: (NotificationEntity) -> Unit
+    private val onItemClick: (NotificationEntity) -> Unit,
+    private val onSimilarClick: (NotificationEntity) -> Unit = {}
 ) : ListAdapter<TimelineItem, RecyclerView.ViewHolder>(DiffCallback()) {
 
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -210,8 +211,12 @@ class TimelineAdapter(
                     R.string.timeline_similar_count,
                     item.similarCount - 1
                 )
+                binding.textSimilarCount.setOnClickListener {
+                    onSimilarClick(notification)
+                }
             } else {
                 binding.textSimilarCount.visibility = View.GONE
+                binding.textSimilarCount.setOnClickListener(null)
             }
         }
 

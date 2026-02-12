@@ -16,14 +16,14 @@ class ContentHashGeneratorTest {
             packageName = "com.example.app",
             title = "Test Title",
             text = "Test Text",
-            bigText = null
+            template = null
         )
 
         val hash2 = ContentHashGenerator.generateHash(
             packageName = "com.example.app",
             title = "Test Title",
             text = "Test Text",
-            bigText = null
+            template = null
         )
 
         assertEquals(hash1, hash2)
@@ -35,14 +35,14 @@ class ContentHashGeneratorTest {
             packageName = "com.example.app1",
             title = "Test Title",
             text = "Test Text",
-            bigText = null
+            template = null
         )
 
         val hash2 = ContentHashGenerator.generateHash(
             packageName = "com.example.app2",
             title = "Test Title",
             text = "Test Text",
-            bigText = null
+            template = null
         )
 
         assertNotEquals(hash1, hash2)
@@ -54,14 +54,14 @@ class ContentHashGeneratorTest {
             packageName = "com.example.app",
             title = "Title 1",
             text = "Test Text",
-            bigText = null
+            template = null
         )
 
         val hash2 = ContentHashGenerator.generateHash(
             packageName = "com.example.app",
             title = "Title 2",
             text = "Test Text",
-            bigText = null
+            template = null
         )
 
         assertNotEquals(hash1, hash2)
@@ -73,14 +73,14 @@ class ContentHashGeneratorTest {
             packageName = "com.example.app",
             title = null,
             text = null,
-            bigText = null
+            template = null
         )
 
         val hash2 = ContentHashGenerator.generateHash(
             packageName = "com.example.app",
             title = null,
             text = null,
-            bigText = null
+            template = null
         )
 
         assertEquals(hash1, hash2)
@@ -92,11 +92,49 @@ class ContentHashGeneratorTest {
             packageName = "com.example.app",
             title = "Title",
             text = "Text",
-            bigText = "BigText"
+            template = "android.app.Notification\$BigTextStyle"
         )
 
         // SHA-256 產生 64 個十六進位字元
         assertEquals(64, hash.length)
+    }
+
+    @Test
+    fun `generateHash produces different hash for different template`() {
+        val hash1 = ContentHashGenerator.generateHash(
+            packageName = "com.example.app",
+            title = "Test Title",
+            text = "Test Text",
+            template = "android.app.Notification\$BigTextStyle"
+        )
+
+        val hash2 = ContentHashGenerator.generateHash(
+            packageName = "com.example.app",
+            title = "Test Title",
+            text = "Test Text",
+            template = "android.app.Notification\$InboxStyle"
+        )
+
+        assertNotEquals(hash1, hash2)
+    }
+
+    @Test
+    fun `generateHash produces different hash for null vs non-null template`() {
+        val hash1 = ContentHashGenerator.generateHash(
+            packageName = "com.example.app",
+            title = "Test Title",
+            text = "Test Text",
+            template = null
+        )
+
+        val hash2 = ContentHashGenerator.generateHash(
+            packageName = "com.example.app",
+            title = "Test Title",
+            text = "Test Text",
+            template = "android.app.Notification\$BigTextStyle"
+        )
+
+        assertNotEquals(hash1, hash2)
     }
 
     @Test
@@ -105,7 +143,7 @@ class ContentHashGeneratorTest {
             packageName = "com.example.app",
             title = "Downloading",
             text = "50%",
-            bigText = null,
+            template = null,
             subText = null,
             progress = 50,
             progressMax = 100
@@ -115,7 +153,7 @@ class ContentHashGeneratorTest {
             packageName = "com.example.app",
             title = "Downloading",
             text = "50%",
-            bigText = null,
+            template = null,
             subText = null,
             progress = 75,
             progressMax = 100

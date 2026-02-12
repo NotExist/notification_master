@@ -88,6 +88,22 @@ interface NotificationDao {
     fun getDeduplicatedNotifications(startTime: Long, endTime: Long): Flow<List<NotificationEntity>>
 
     /**
+     * 取得同 content_hash 的所有去重後通知（用於展開相似列表）
+     * 每個 notification_key 取最新一筆
+     */
+    @Query("""
+        SELECT * FROM notifications
+        WHERE id IN (
+            SELECT MAX(id) FROM notifications
+            WHERE post_time BETWEEN :startTime AND :endTime
+            GROUP BY notification_key
+        )
+        AND content_hash = :hash
+        ORDER BY post_time DESC
+    """)
+    suspend fun getSimilarNotifications(hash: String, startTime: Long, endTime: Long): List<NotificationEntity>
+
+    /**
      * 取得相同 hash 的通知數量
      */
     @Query("""

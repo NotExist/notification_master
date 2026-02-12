@@ -19,6 +19,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.data.db.entity.NotificationEntity
@@ -127,9 +128,10 @@ class TimelineFragment : Fragment() {
 
     private fun setupRecyclerView() {
         if (adapter == null) {
-            adapter = TimelineAdapter { notification ->
-                navigateToDetail(notification)
-            }
+            adapter = TimelineAdapter(
+                onItemClick = { notification -> navigateToDetail(notification) },
+                onSimilarClick = { notification -> showSimilarNotifications(notification) }
+            )
         }
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
@@ -462,6 +464,32 @@ class TimelineFragment : Fragment() {
         } else {
             binding.textEmptyHint.setText(R.string.timeline_empty_hint)
             binding.btnGrantPermission.visibility = View.GONE
+        }
+    }
+
+    private fun showSimilarNotifications(notification: NotificationEntity) {
+        val dao = NotificationMasterApp.getInstance().database.notificationDao()
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        viewLifecycleOwner.lifecycleScope.launch {
+            val similar = withContext(Dispatchers.IO) {
+                dao.getSimilarNotifications(notification.contentHash, startTime, endTime)
+            }
+            if (_binding == null) return@launch
+            if (similar.size <= 1) return@launch
+
+            val items = similar.map { n ->
+                val appLabel = getAppLabel(n.packageName)
+                val time = timeFormat.format(Date(n.postTime))
+                "$appLabel · $time\n${n.notificationKey}"
+            }.toTypedArray()
+
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.similar_notifications_title)
+                .setItems(items) { _, which ->
+                    navigateToDetail(similar[which])
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
         }
     }
 

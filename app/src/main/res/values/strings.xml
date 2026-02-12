@@ -50,6 +50,7 @@
     <string name="timeline_count_format">%d 筆</string>
     <string name="timeline_filter_hint">依標題、內容、App 名稱或包名過濾…</string>
     <string name="timeline_similar_count">+%d 筆相似</string>
+    <string name="similar_notifications_title">相似通知</string>
     <string name="timeline_today">今天</string>
     <string name="timeline_yesterday">昨天</string>
 
