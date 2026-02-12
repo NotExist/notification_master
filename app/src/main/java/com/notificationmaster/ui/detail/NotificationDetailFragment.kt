@@ -221,7 +221,7 @@ class NotificationDetailFragment : Fragment() {
                 NotificationMasterApp.getInstance().database
                     .notificationDao().getById(event.notificationId)
             }
-            val binding = _binding ?: return@launch
+            _binding ?: return@launch
 
             val sb = StringBuilder()
 
@@ -430,7 +430,6 @@ class NotificationDetailFragment : Fragment() {
         } catch (_: Exception) { null }
 
         var hasContent = false
-        val ctx = requireContext()
 
         when {
             style.endsWith("InboxStyle") -> {

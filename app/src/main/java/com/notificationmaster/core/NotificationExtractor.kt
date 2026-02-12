@@ -353,6 +353,7 @@ class NotificationExtractor(private val context: Context) {
         val json = JSONObject()
         for (key in bundle.keySet()) {
             try {
+                @Suppress("DEPRECATION")
                 val value = bundle.get(key)
                 json.put(key, valueToJson(value, depth, maxDepth))
             } catch (e: Exception) {
@@ -411,7 +412,7 @@ class NotificationExtractor(private val context: Context) {
         return JSONObject().apply {
             put("creatorPackage", pi.creatorPackage)
             put("creatorUid", pi.creatorUid)
-            put("creatorUserHandle", pi.creatorUserHandle?.hashCode())
+            put("creatorUserHandle", pi.creatorUserHandle.hashCode())
             if (Build.VERSION.SDK_INT >= 34) {
                 put("isActivity", pi.isActivity)
                 put("isBroadcast", pi.isBroadcast)
@@ -573,14 +574,16 @@ class NotificationExtractor(private val context: Context) {
                     put("lastAudiblyAlertedMillis", ranking.lastAudiblyAlertedMillis)
                     put("canBubble", ranking.canBubble())
                     // smartReplies
-                    ranking.smartReplies?.let { replies ->
+                    val replies = ranking.smartReplies
+                    if (replies.isNotEmpty()) {
                         put("smartReplies", JSONArray().apply {
                             for (reply in replies) put(reply.toString())
                         })
                     }
                     // smartActions
-                    ranking.smartActions?.let { actions ->
-                        put("smartActions", smartActionsToJson(actions))
+                    val smartActions = ranking.smartActions
+                    if (smartActions.isNotEmpty()) {
+                        put("smartActions", smartActionsToJson(smartActions))
                     }
                 }
                 if (Build.VERSION.SDK_INT >= 31) {
