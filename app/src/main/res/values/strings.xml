@@ -87,21 +87,21 @@
     <string name="permission_status_tap_to_grant">點擊授權 →</string>
 
     <!-- 通知標籤說明 -->
-    <string name="tag_ongoing_desc">持續通知，不可被使用者滑動移除。\n固定在通知欄上方的「進行中」區塊。\n\n常見於：音樂播放、導航、通話計時</string>
-    <string name="tag_fg_service_desc">前景服務通知，App 正在執行前景服務時系統強制要求顯示。\n服務結束前不會消失。\n\n常見於：音樂播放中、VPN 連線、即時定位</string>
+    <string name="tag_ongoing_desc">持續通知，不可被使用者滑動移除。\n固定在通知欄上方的「進行中」區塊。\n\n判斷依據：Notification flags 包含 FLAG_ONGOING_EVENT。\n\n常見於：音樂播放、導航、通話計時</string>
+    <string name="tag_fg_service_desc">前景服務通知，App 正在執行前景服務時系統強制要求顯示。\n服務結束前不會消失。\n\n判斷依據：Notification flags 包含 FLAG_FOREGROUND_SERVICE。\n\n常見於：音樂播放中、VPN 連線、即時定位</string>
     <string name="tag_headsup_desc">推斷此通知可能以螢幕頂部浮動方式顯示（約 4–5 秒後自動收回至通知欄）。\n\n判斷依據：\n• API 26+：Channel 重要性為 HIGH 以上\n• API 21–25：優先級為 HIGH 以上且設有音效或震動\n\n此為推斷值，實際顯示受勿擾模式等因素影響。</string>
-    <string name="tag_summary_desc">群組摘要通知，代表一組相關通知的折疊總覽。\n系統以此通知作為群組折疊時的顯示內容。\n\n例如：「你有 5 則訊息」、「3 封新郵件」</string>
-    <string name="tag_auto_cancel_desc">使用者點擊此通知後會自動從通知欄移除。\n大多數一般通知都設有此標記。</string>
-    <string name="tag_bubble_desc">氣泡通知 (API 29+)，可浮動在其他 App 之上的圓形圖示。\n由來源 App 設定 BubbleMetadata 觸發，使用者可在系統設定中停用。</string>
-    <string name="tag_custom_view_desc">此通知使用自訂 RemoteViews 呈現內容。\n視覺資訊存在於 RemoteViews 物件中，文字欄位可能不完整。\n已記錄 layout ID 與 package，extras Bundle 內容視來源 App 而定。</string>
+    <string name="tag_summary_desc">群組摘要通知，代表一組相關通知的折疊總覽。\n系統以此通知作為群組折疊時的顯示內容。\n\n判斷依據：Notification flags 包含 FLAG_GROUP_SUMMARY。\n\n例如：「你有 5 則訊息」、「3 封新郵件」</string>
+    <string name="tag_auto_cancel_desc">使用者點擊此通知後會自動從通知欄移除。\n大多數一般通知都設有此標記。\n\n判斷依據：Notification flags 包含 FLAG_AUTO_CANCEL。</string>
+    <string name="tag_bubble_desc">氣泡通知 (API 29+)，可浮動在其他 App 之上的圓形圖示。\n使用者可在系統設定中停用。\n\n判斷依據：Notification.BubbleMetadata 不為 null。</string>
+    <string name="tag_custom_view_desc">此通知使用自訂 RemoteViews 呈現內容。\n視覺資訊存在於 RemoteViews 物件中，文字欄位可能不完整。\n已記錄 layout ID 與 package，extras Bundle 內容視來源 App 而定。\n\n判斷依據：contentView、bigContentView 或 headsUpContentView 任一不為 null。</string>
     <string name="tag_conversation_desc">對話通知，出現在系統通知抽屜最頂端的「對話」區段。\n\n判斷依據：\n• API 31+：系統 Ranking 直接標記\n• API 26–30：使用 MessagingStyle 且關聯 shortcutId\n\n使用者可長按通知設為「優先」或「靜音」對話。</string>
     <string name="tag_silent_desc">靜音通知，不發出聲音或震動。\n出現在系統通知抽屜下方的「靜音通知」區段。\n\n判斷依據：Channel 重要性為 LOW 或 MIN。</string>
-    <string name="tag_messaging_style_desc">使用 MessagingStyle 的通知，extras 中包含結構化的 android.messages 訊息陣列和 android.messagingUser 身份資訊。</string>
-    <string name="tag_big_text_style_desc">使用 BigTextStyle 的通知，展開時顯示多行長文字。\n\nextras 中包含 android.bigText 展開內容。</string>
-    <string name="tag_big_picture_style_desc">使用 BigPictureStyle 的通知，展開時顯示大圖片。\n\nextras 中包含 android.picture 點陣圖。</string>
-    <string name="tag_inbox_style_desc">使用 InboxStyle 的通知，展開時顯示多行條目清單。\n\nextras 中包含 android.textLines 文字行陣列。\n\n常見於多封郵件摘要。</string>
-    <string name="tag_media_style_desc">使用 MediaStyle 的通知，提供媒體播放控制介面。\n\nextras 中包含 android.mediaSession 媒體工作階段。\n\n常見於音樂播放器。</string>
-    <string name="tag_call_style_desc">使用 CallStyle 的通知 (API 31+)，提供通話專用介面。\n\n包含來電/去電/進行中通話的操作按鈕。</string>
+    <string name="tag_messaging_style_desc">使用 MessagingStyle 的通知，extras 中包含結構化的 android.messages 訊息陣列和 android.messagingUser 身份資訊。\n\n判斷依據：extras 包含 EXTRA_MESSAGES 或 EXTRA_MESSAGING_PERSON (API 24+)。</string>
+    <string name="tag_big_text_style_desc">使用 BigTextStyle 的通知，展開時顯示多行長文字。\n\nextras 中包含 android.bigText 展開內容。\n\n判斷依據：extras 中 EXTRA_TEMPLATE 尾綴為 BigTextStyle。</string>
+    <string name="tag_big_picture_style_desc">使用 BigPictureStyle 的通知，展開時顯示大圖片。\n\nextras 中包含 android.picture 點陣圖。\n\n判斷依據：extras 中 EXTRA_TEMPLATE 尾綴為 BigPictureStyle。</string>
+    <string name="tag_inbox_style_desc">使用 InboxStyle 的通知，展開時顯示多行條目清單。\n\nextras 中包含 android.textLines 文字行陣列。\n\n判斷依據：extras 中 EXTRA_TEMPLATE 尾綴為 InboxStyle。\n\n常見於多封郵件摘要。</string>
+    <string name="tag_media_style_desc">使用 MediaStyle 的通知，提供媒體播放控制介面。\n\nextras 中包含 android.mediaSession 媒體工作階段。\n\n判斷依據：extras 中 EXTRA_TEMPLATE 尾綴為 MediaStyle 或 DecoratedMediaCustomViewStyle。\n\n常見於音樂播放器。</string>
+    <string name="tag_call_style_desc">使用 CallStyle 的通知 (API 31+)，提供通話專用介面。\n\n包含來電/去電/進行中通話的操作按鈕。\n\n判斷依據：extras 中 EXTRA_TEMPLATE 尾綴為 CallStyle。</string>
 
     <!-- 媒體目錄設定 -->
     <string name="settings_media_dir">媒體儲存目錄</string>
