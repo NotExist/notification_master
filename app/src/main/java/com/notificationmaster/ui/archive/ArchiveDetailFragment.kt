@@ -55,10 +55,10 @@ class ArchiveDetailFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        adapter = TimelineAdapter { notification ->
+        adapter = TimelineAdapter(onItemClick = { notification ->
             val action = ArchiveDetailFragmentDirections.actionArchiveDetailToDetail(notification.id)
             findNavController().navigate(action)
-        }
+        })
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
     }
