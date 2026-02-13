@@ -95,6 +95,7 @@
     <string name="tag_inbox_style_desc">使用 InboxStyle 的通知，展開時顯示多行條目清單。\n\nextras 中包含 android.textLines 文字行陣列。\n\n判斷依據：extras 中 EXTRA_TEMPLATE 尾綴為 InboxStyle。\n\n常見於多封郵件摘要。</string>
     <string name="tag_media_style_desc">使用 MediaStyle 的通知，提供媒體播放控制介面。\n\nextras 中包含 android.mediaSession 媒體工作階段。\n\n判斷依據：extras 中 EXTRA_TEMPLATE 尾綴為 MediaStyle 或 DecoratedMediaCustomViewStyle。\n\n常見於音樂播放器。</string>
     <string name="tag_call_style_desc">使用 CallStyle 的通知 (API 31+)，提供通話專用介面。\n\n包含來電/去電/進行中通話的操作按鈕。\n\n判斷依據：extras 中 EXTRA_TEMPLATE 尾綴為 CallStyle。</string>
+    <string name="tag_audible_desc">推斷此通知產生了聲響。\n\n判斷依據（因 API 級別而異）：\n• API 29+：系統回報 lastAudiblyAlertedMillis 接近通知到達時間（確認）\n• API 26–28：Channel importance ≥ DEFAULT（推斷）\n• API 21–25：通知設有音效 URI（推斷）</string>
 
     <!-- 媒體目錄設定 -->
     <string name="settings_media_dir">媒體儲存目錄</string>

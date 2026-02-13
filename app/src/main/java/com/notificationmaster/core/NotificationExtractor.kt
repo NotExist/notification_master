@@ -120,6 +120,16 @@ class NotificationExtractor(private val context: Context) {
             priority = notificationPriority,
             importance = channelImportance,
             likelyHeadsup = ApiVersionHelper.isLikelyHeadsUp(notification, channelImportance.takeIf { it >= 0 }),
+            isAudible = ApiVersionHelper.isLikelyAudible(
+                lastAudiblyAlertedMillis = if (Build.VERSION.SDK_INT >= 29) {
+                    ranking?.lastAudiblyAlertedMillis ?: -1L
+                } else -1L,
+                captureTime = captureTime,
+                importance = channelImportance,
+                flags = flags,
+                soundUri = notification.sound?.toString(),
+                isUpdate = false
+            ),
 
             // 可見性
             visibility = notification.visibility,

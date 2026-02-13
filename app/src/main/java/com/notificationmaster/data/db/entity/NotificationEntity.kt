@@ -139,6 +139,10 @@ data class NotificationEntity(
     @ColumnInfo(name = "likely_headsup")
     val likelyHeadsup: Boolean,
 
+    /** 推斷此通知是否產生聲響 */
+    @ColumnInfo(name = "is_audible")
+    val isAudible: Boolean,
+
     // === 可見性 ===
     /** visibility (VISIBILITY_PUBLIC/PRIVATE/SECRET) */
     @ColumnInfo(name = "visibility")

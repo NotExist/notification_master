@@ -191,6 +191,7 @@ class ArchiveExporter(
             put("priority", n.priority)
             put("importance", n.importance)
             put("likelyHeadsup", n.likelyHeadsup)
+            put("isAudible", n.isAudible)
             put("visibility", n.visibility)
             put("category", n.category)
             put("groupKey", n.groupKey)

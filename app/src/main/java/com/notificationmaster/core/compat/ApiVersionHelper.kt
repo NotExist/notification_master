@@ -148,6 +148,33 @@ object ApiVersionHelper {
         }
     }
 
+    // === Audible 推斷 ===
+
+    /**
+     * 推斷通知是否產生聲響
+     * - API 29+：lastAudiblyAlertedMillis 與 captureTime 差距 ≤ 5 秒 → 確認
+     * - API 26-28：importance >= DEFAULT 且非 FLAG_ONLY_ALERT_ONCE 的 UPDATED → 推斷
+     * - Pre-26：soundUri 非 null → 推斷
+     */
+    fun isLikelyAudible(
+        lastAudiblyAlertedMillis: Long,
+        captureTime: Long,
+        importance: Int,
+        flags: Int,
+        soundUri: String?,
+        isUpdate: Boolean
+    ): Boolean {
+        return if (Build.VERSION.SDK_INT >= API_BUBBLES) { // API 29+
+            lastAudiblyAlertedMillis > 0 && (captureTime - lastAudiblyAlertedMillis) <= 5000
+        } else if (Build.VERSION.SDK_INT >= API_NOTIFICATION_CHANNEL) { // API 26-28
+            val isDefaultOrHigher = importance >= android.app.NotificationManager.IMPORTANCE_DEFAULT
+            val isOnlyAlertOnce = (flags and Notification.FLAG_ONLY_ALERT_ONCE) != 0
+            isDefaultOrHigher && !(isUpdate && isOnlyAlertOnce)
+        } else { // Pre-26
+            soundUri != null
+        }
+    }
+
     // === Flags 解析 ===
 
     fun isOngoing(flags: Int): Boolean = (flags and Notification.FLAG_ONGOING_EVENT) != 0

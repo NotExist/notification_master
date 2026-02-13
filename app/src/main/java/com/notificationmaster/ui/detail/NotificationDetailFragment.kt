@@ -183,6 +183,9 @@ class NotificationDetailFragment : Fragment() {
         if (notification.likelyHeadsup) {
             addChip("Heads-up", R.color.status_warning, R.string.tag_headsup_desc)
         }
+        if (notification.isAudible) {
+            addChip("Audible", R.color.tag_audible, R.string.tag_audible_desc)
+        }
         if (notification.isAutoCancel) {
             addChip("AutoCancel", R.color.event_updated, R.string.tag_auto_cancel_desc)
         }

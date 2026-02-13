@@ -148,6 +148,7 @@ class ArchiveImporter(private val context: Context) {
             priority = json.optInt("priority", 0),
             importance = json.optInt("importance", -1),
             likelyHeadsup = json.optBoolean("likelyHeadsup", false),
+            isAudible = json.optBoolean("isAudible", false),
             visibility = json.optInt("visibility", 0),
             category = json.optString("category").takeIf { it != "null" && it.isNotEmpty() },
             groupKey = json.optString("groupKey").takeIf { it != "null" && it.isNotEmpty() },

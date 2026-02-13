@@ -43,6 +43,7 @@
     <color name="tag_inbox_style">#2E7D32</color>
     <color name="tag_media_style">#AD1457</color>
     <color name="tag_call_style">#C62828</color>
+    <color name="tag_audible">#F57C00</color>
 
     <!-- Text colors -->
     <color name="text_secondary">#757575</color>
