@@ -20,12 +20,23 @@ import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.PersistenceType
 import org.json.JSONArray
 import org.json.JSONObject
+import java.security.MessageDigest
 
 /**
  * 通知資料提取器
  * 從 StatusBarNotification 和 Notification 物件中提取所有可存取的資訊
  */
 class NotificationExtractor(private val context: Context) {
+
+    companion object {
+        /** 已知會由 MediaExtractor 另存的 Bitmap extras key → 媒體類型名稱 */
+        @SuppressLint("InlinedApi")
+        private val EXTRAS_MEDIA_MAPPING = mapOf(
+            Notification.EXTRA_LARGE_ICON to "LARGE_ICON",
+            Notification.EXTRA_PICTURE to "PICTURE",
+            Notification.EXTRA_LARGE_ICON_BIG to "LARGE_ICON_BIG"
+        )
+    }
 
     /**
      * 從 StatusBarNotification 提取完整資訊
@@ -342,6 +353,17 @@ class NotificationExtractor(private val context: Context) {
     }
 
     /**
+     * 計算 Bitmap Hash（與 MediaExtractor.bitmapHash 相同演算法）
+     */
+    private fun computeBitmapHash(bitmap: Bitmap): String {
+        val buffer = java.nio.ByteBuffer.allocate(bitmap.byteCount)
+        bitmap.copyPixelsToBuffer(buffer)
+        return MessageDigest.getInstance("SHA-256")
+            .digest(buffer.array())
+            .joinToString("") { "%02x".format(it) }.take(32)
+    }
+
+    /**
      * Bundle 轉 JSON（遞迴序列化）
      */
     private fun bundleToJson(bundle: Bundle): String {
@@ -355,6 +377,15 @@ class NotificationExtractor(private val context: Context) {
             try {
                 @Suppress("DEPRECATION")
                 val value = bundle.get(key)
+
+                // 已知 Bitmap extras：附加實際存檔檔名參照
+                val mediaType = EXTRAS_MEDIA_MAPPING[key]
+                if (mediaType != null && value is Bitmap) {
+                    val hash = computeBitmapHash(value)
+                    json.put(key, "[Bitmap ${value.width}x${value.height}, saved to ${mediaType}_${hash}.png]")
+                    continue
+                }
+
                 json.put(key, valueToJson(value, depth, maxDepth))
             } catch (e: Exception) {
                 json.put(key, "[Error: ${e.message}]")
@@ -390,18 +421,6 @@ class NotificationExtractor(private val context: Context) {
             value is BooleanArray -> JSONArray(value.toList())
             else -> "[${value.javaClass.simpleName}]"
         }
-    }
-
-    /**
-     * 提取 Intent 相關資訊（contentIntent/deleteIntent/fullScreenIntent/publicVersion）
-     */
-    private fun extractIntentInfo(notification: Notification): String {
-        val json = JSONObject()
-        json.put("contentIntent", extractPendingIntentInfo(notification.contentIntent))
-        json.put("deleteIntent", extractPendingIntentInfo(notification.deleteIntent))
-        json.put("fullScreenIntent", extractPendingIntentInfo(notification.fullScreenIntent))
-        json.put("publicVersion", notification.publicVersion?.let { extractPublicVersion(it) })
-        return json.toString()
     }
 
     /**
@@ -451,35 +470,14 @@ class NotificationExtractor(private val context: Context) {
     }
 
     /**
-     * 提取 RemoteViews 資訊（layoutId + package）
-     * 三種自訂 View 有任一存在時才產生 JSON，否則回傳 null
+     * 解析 RemoteViews layout resource name
+     * 透過來源 App 的 Context 取得 resource name（如 "com.whatsapp:layout/notification_content"）
      */
-    private fun extractRemoteViewsInfo(notification: Notification): String? {
-        val cv = notification.contentView
-        val bv = notification.bigContentView
-        val hv = notification.headsUpContentView
-        if (cv == null && bv == null && hv == null) return null
-
-        val json = JSONObject()
-        cv?.let {
-            json.put("contentView", JSONObject().apply {
-                put("layoutId", it.layoutId)
-                put("package", it.`package`)
-            })
-        }
-        bv?.let {
-            json.put("bigContentView", JSONObject().apply {
-                put("layoutId", it.layoutId)
-                put("package", it.`package`)
-            })
-        }
-        hv?.let {
-            json.put("headsUpContentView", JSONObject().apply {
-                put("layoutId", it.layoutId)
-                put("package", it.`package`)
-            })
-        }
-        return json.toString()
+    private fun resolveLayoutName(packageName: String, layoutId: Int): String? {
+        return try {
+            val pkgCtx = context.createPackageContext(packageName, 0)
+            pkgCtx.resources.getResourceName(layoutId)
+        } catch (_: Exception) { null }
     }
 
     /**
@@ -537,18 +535,27 @@ class NotificationExtractor(private val context: Context) {
                     put("contentView", JSONObject().apply {
                         put("layoutId", it.layoutId)
                         put("package", it.`package`)
+                        resolveLayoutName(it.`package`, it.layoutId)?.let { name ->
+                            put("layoutName", name)
+                        }
                     })
                 }
                 notification.bigContentView?.let {
                     put("bigContentView", JSONObject().apply {
                         put("layoutId", it.layoutId)
                         put("package", it.`package`)
+                        resolveLayoutName(it.`package`, it.layoutId)?.let { name ->
+                            put("layoutName", name)
+                        }
                     })
                 }
                 notification.headsUpContentView?.let {
                     put("headsUpContentView", JSONObject().apply {
                         put("layoutId", it.layoutId)
                         put("package", it.`package`)
+                        resolveLayoutName(it.`package`, it.layoutId)?.let { name ->
+                            put("layoutName", name)
+                        }
                     })
                 }
             })
