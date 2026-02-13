@@ -660,8 +660,6 @@ class NotificationDetailFragment : Fragment() {
      */
     private fun buildIntentDescription(name: String, meta: JSONObject?): String {
         if (meta == null) return name
-        val parts = mutableListOf(name)
-        meta.optString("creatorPackage", "").takeIf { it.isNotEmpty() }?.let { parts.add(it) }
 
         // API 34+ type flags
         val types = mutableListOf<String>()
@@ -669,9 +667,8 @@ class NotificationDetailFragment : Fragment() {
         if (meta.optBoolean("isBroadcast", false)) types.add("Broadcast")
         if (meta.optBoolean("isService", false)) types.add("Service")
         if (meta.optBoolean("isForegroundService", false)) types.add("FgService")
-        if (types.isNotEmpty()) parts.add("(${types.joinToString("/")})")
 
-        return parts.joinToString(" · ")
+        return if (types.isNotEmpty()) "$name (${types.joinToString("/")})" else name
     }
 
     /**

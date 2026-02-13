@@ -527,6 +527,20 @@ class NotificationExtractor(private val context: Context) {
                 put("deleteIntent", extractPendingIntentInfo(notification.deleteIntent))
                 put("fullScreenIntent", extractPendingIntentInfo(notification.fullScreenIntent))
                 put("publicVersion", notification.publicVersion?.let { extractPublicVersion(it) })
+                // Action 的 PendingIntent 資訊
+                notification.actions?.let { actions ->
+                    if (actions.isNotEmpty()) {
+                        put("actions", JSONArray().apply {
+                            for ((i, action) in actions.withIndex()) {
+                                put(JSONObject().apply {
+                                    put("index", i)
+                                    put("title", action.title?.toString())
+                                    put("actionIntent", extractPendingIntentInfo(action.actionIntent))
+                                })
+                            }
+                        })
+                    }
+                }
             })
 
             // 整合 RemoteViews 資訊
