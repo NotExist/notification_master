@@ -1,5 +1,6 @@
 package com.notificationmaster.ui.main
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
@@ -28,6 +29,7 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(binding.toolbar)
 
         setupNavigation()
+        handleShortcutIntent(intent)
 
         // 根據 BottomNavigationView 實際高度動態設定 fragment 容器底部間距
         binding.bottomNav.doOnLayout { bottomNav ->
@@ -52,6 +54,22 @@ class MainActivity : AppCompatActivity() {
 
         setupActionBarWithNavController(navController, appBarConfiguration)
         binding.bottomNav.setupWithNavController(navController)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleShortcutIntent(intent)
+    }
+
+    private fun handleShortcutIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("show_audible", false) == true) {
+            // 確保導航到 timeline
+            val navHostFragment = supportFragmentManager
+                .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
+            navHostFragment.navController.navigate(R.id.nav_timeline)
+            // TimelineFragment 會在 onViewCreated 中讀取 activity intent extra
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {

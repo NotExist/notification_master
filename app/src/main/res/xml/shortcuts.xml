@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="recent_audible"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_audible"
+        android:shortcutShortLabel="@string/shortcut_audible_short"
+        android:shortcutLongLabel="@string/shortcut_audible_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="${applicationId}"
+            android:targetClass="com.notificationmaster.ui.main.MainActivity">
+            <extra android:name="show_audible" android:value="true" />
+        </intent>
+    </shortcut>
+</shortcuts>

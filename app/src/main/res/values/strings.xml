@@ -148,4 +148,6 @@
 
     <!-- Audible / Shortcut -->
     <string name="timeline_audible_only">有聲</string>
+    <string name="shortcut_audible_short">最近發聲</string>
+    <string name="shortcut_audible_long">最近發出聲音的通知</string>
 </resources>
