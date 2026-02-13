@@ -47,6 +47,7 @@ class TimelineFragment : Fragment() {
 
     private var adapter: TimelineAdapter? = null
     private var isDeduplicatedMode = true
+    private var isAudibleMode = false
     private var layoutManagerState: Parcelable? = null
     private var currentFilterText = ""
     private var allNotifications: List<NotificationEntity> = emptyList()
@@ -98,6 +99,13 @@ class TimelineFragment : Fragment() {
             "serviceConnected=${NotificationCaptureService.isConnected}, " +
             "serviceInstance=${NotificationCaptureService.getInstance() != null}")
         updateEmptyStateForPermission()
+
+        // 檢查是否由 shortcut / intent 觸發 audible 模式
+        if (activity?.intent?.getBooleanExtra("show_audible", false) == true) {
+            activateAudibleMode()
+            activity?.intent?.removeExtra("show_audible")
+        }
+
         loadNotifications()
     }
 
@@ -161,6 +169,7 @@ class TimelineFragment : Fragment() {
         binding.chipShowAll.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 isDeduplicatedMode = false
+                isAudibleMode = false
                 binding.swipeRefresh.isRefreshing = true
                 loadNotifications()
             }
@@ -169,6 +178,16 @@ class TimelineFragment : Fragment() {
         binding.chipDeduplicated.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 isDeduplicatedMode = true
+                isAudibleMode = false
+                binding.swipeRefresh.isRefreshing = true
+                loadNotifications()
+            }
+        }
+
+        binding.chipAudible.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                isDeduplicatedMode = false
+                isAudibleMode = true
                 binding.swipeRefresh.isRefreshing = true
                 loadNotifications()
             }
@@ -201,10 +220,10 @@ class TimelineFragment : Fragment() {
         val notificationDao = database.notificationDao()
 
         loadJob = viewLifecycleOwner.lifecycleScope.launch {
-            val flow = if (isDeduplicatedMode) {
-                notificationDao.getDeduplicatedNotifications(startTime, endTime)
-            } else {
-                notificationDao.getNotificationsByTimeRange(startTime, endTime)
+            val flow = when {
+                isAudibleMode -> notificationDao.getRecentAudibleNotifications()
+                isDeduplicatedMode -> notificationDao.getDeduplicatedNotifications(startTime, endTime)
+                else -> notificationDao.getNotificationsByTimeRange(startTime, endTime)
             }
 
             flow.collectLatest { notifications ->
@@ -465,6 +484,15 @@ class TimelineFragment : Fragment() {
             binding.textEmptyHint.setText(R.string.timeline_empty_hint)
             binding.btnGrantPermission.visibility = View.GONE
         }
+    }
+
+    /**
+     * 切換到 Audible 篩選模式
+     */
+    private fun activateAudibleMode() {
+        isAudibleMode = true
+        isDeduplicatedMode = false
+        binding.chipAudible.isChecked = true
     }
 
     private fun showSimilarNotifications(notification: NotificationEntity) {

@@ -72,6 +72,13 @@
                     android:checked="true"
                     style="@style/Widget.Material3.Chip.Filter" />
 
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_audible"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/timeline_audible_only"
+                    style="@style/Widget.Material3.Chip.Filter" />
+
             </com.google.android.material.chip.ChipGroup>
 
             <!-- 統計數字 -->

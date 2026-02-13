@@ -126,6 +126,23 @@ interface NotificationDao {
     """)
     suspend fun getDeduplicatedCount(hash: String, startTime: Long, endTime: Long): Int
 
+    // === 查詢 - Audible ===
+
+    /**
+     * 取得最近有聲通知（每個 notification_key 取最新一筆）
+     */
+    @Query("""
+        SELECT * FROM notifications
+        WHERE id IN (
+            SELECT MAX(id) FROM notifications
+            WHERE is_audible = 1
+            GROUP BY notification_key
+        )
+        ORDER BY post_time DESC
+        LIMIT :limit
+    """)
+    fun getRecentAudibleNotifications(limit: Int = 20): Flow<List<NotificationEntity>>
+
     // === 查詢 - 按來源 ===
 
     @Query("""
