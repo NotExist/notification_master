@@ -240,17 +240,6 @@ class NotificationDetailFragment : Fragment() {
                 sb.appendLine("removal_reason_desc: ${ApiVersionHelper.getRemovalReasonDescription(event.removalReason)}")
             }
 
-            // RANKING 事件：排序資訊
-            if (event.rankingRank != null || event.rankingImportance != null) {
-                sb.appendLine()
-                sb.appendLine("── Ranking 資訊 ──")
-                event.rankingRank?.let { sb.appendLine("rank: $it") }
-                event.rankingImportance?.let { sb.appendLine("importance: $it") }
-                event.isAmbient?.let { sb.appendLine("is_ambient: $it") }
-                event.isSuspended?.let { sb.appendLine("is_suspended: $it") }
-                event.suppressedVisualEffects?.let { sb.appendLine("suppressed_visual_effects: $it") }
-            }
-
             // 變動內容
             if (!event.contentDiff.isNullOrEmpty()) {
                 sb.appendLine()

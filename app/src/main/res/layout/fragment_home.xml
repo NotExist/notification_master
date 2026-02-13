@@ -15,7 +15,6 @@
 
         <!-- 權限狀態卡片 -->
         <com.google.android.material.card.MaterialCardView
-            android:id="@+id/card_permission"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
@@ -36,45 +35,11 @@
                     android:textStyle="bold" />
 
                 <LinearLayout
+                    android:id="@+id/permissions_container"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <View
-                        android:id="@+id/status_indicator"
-                        android:layout_width="12dp"
-                        android:layout_height="12dp"
-                        android:background="@drawable/status_indicator_background" />
-
-                    <TextView
-                        android:id="@+id/text_permission_status"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:layout_weight="1"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        tools:text="通知監聽服務已啟用" />
-
-                </LinearLayout>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_enable_permission"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:text="@string/enable_notification_listener"
-                    android:visibility="gone"
-                    tools:visibility="visible" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_permission_info"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="@string/settings_permission_info"
-                    style="@style/Widget.Material3.Button.TonalButton" />
+                    android:orientation="vertical" />
 
             </LinearLayout>
 

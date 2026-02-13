@@ -11,11 +11,6 @@
 
     <!-- 權限相關 -->
     <string name="permission_status">權限狀態</string>
-    <string name="notification_listener_enabled">通知監聽服務已啟用</string>
-    <string name="notification_listener_disabled">通知監聽服務未啟用</string>
-    <string name="enable_notification_listener">啟用通知監聽</string>
-    <string name="permission_required_title">需要權限</string>
-    <string name="permission_required_message">Notification Master 需要「通知存取權」才能擷取通知。請在設定中啟用此權限。</string>
     <string name="go_to_settings">前往設定</string>
     <string name="cancel">取消</string>
 
@@ -37,7 +32,6 @@
     <string name="settings_import_json">匯入 JSON 封存</string>
     <string name="settings_storage">儲存空間</string>
     <string name="settings_data">資料管理</string>
-    <string name="settings_permission_info">權限說明</string>
     <string name="settings_clear_data">清除通知記錄資料庫</string>
 
     <!-- 時間軸 -->
@@ -144,7 +138,6 @@
     <string name="format_android_version">Android %1$s (API %2$d)</string>
     <string name="format_device_model">%1$s %2$s</string>
     <string name="format_app_version">App 版本: %1$s (%2$d)</string>
-    <string name="format_feature_name">%1$s (API %2$d+)</string>
     <string name="format_hash_truncated">%1$s…</string>
     <string name="format_removal_reason">(%1$s)</string>
 </resources>

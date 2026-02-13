@@ -47,19 +47,28 @@ data class EnvironmentInfo(
 }
 
 /**
- * 功能項目資訊
+ * API 層級功能群組
+ * 以 API 版本為大分類，各功能項為小項目
  */
-data class FeatureInfo(
+data class ApiFeatureGroup(
+    /** API 層級 */
+    val apiLevel: Int,
+    /** Android 版本名稱 (如 "6.0 Marshmallow") */
+    val androidVersion: String,
+    /** 當前裝置是否支援此 API 層級 */
+    val supported: Boolean,
+    /** 此 API 層級下的功能項目 */
+    val features: List<FeatureItem>
+)
+
+/**
+ * 個別功能項目
+ */
+data class FeatureItem(
     /** 功能名稱 */
     val name: String,
-    /** 功能說明 */
-    val description: String,
-    /** 最低需求 API */
-    val requiredApi: Int,
-    /** 是否支援 */
-    val supported: Boolean,
-    /** 不支援時的說明 */
-    val unsupportedReason: String
+    /** 實質影響功能描述 */
+    val description: String
 )
 
 /**
@@ -104,91 +113,98 @@ data class SupportedFeatures(
             )
         }
 
-        private fun getUnsupportedReason(requiredApi: Int): String {
-            val currentApi = Build.VERSION.SDK_INT
-            val androidVersion = when (requiredApi) {
-                21 -> "5.0 Lollipop"
-                23 -> "6.0 Marshmallow"
-                24 -> "7.0 Nougat"
-                26 -> "8.0 Oreo"
-                28 -> "9.0 Pie"
-                29 -> "10"
-                30 -> "11"
-                31 -> "12"
-                32 -> "12L"
-                33 -> "13"
-                34 -> "14"
-                else -> requiredApi.toString()
-            }
-            return "需要 Android $androidVersion (API $requiredApi)，目前為 API $currentApi"
+        private fun androidVersionName(apiLevel: Int): String = when (apiLevel) {
+            23 -> "6.0 Marshmallow"
+            24 -> "7.0 Nougat"
+            26 -> "8.0 Oreo"
+            28 -> "9 Pie"
+            29 -> "10"
+            31 -> "12"
+            33 -> "13"
+            34 -> "14"
+            else -> "API $apiLevel"
         }
     }
 
     /**
-     * 取得功能清單 (用於 UI 顯示) - 簡化版
+     * 以 API 層級分組的功能清單（用於 UI 顯示）
      */
-    fun toDisplayList(): List<Pair<String, Boolean>> = listOf(
-        "Icon 類別 (API 23+)" to iconClass,
-        "直接回覆 (API 24+)" to directReply,
-        "MessagingStyle (API 24+)" to messagingStyle,
-        "Ranking 詳細資訊 (API 24+)" to rankingDetails,
-        "通知 Channel (API 26+)" to notificationChannel,
-        "語意動作 (API 28+)" to semanticAction,
-        "Bubbles (API 29+)" to bubbles
-    )
-
-    /**
-     * 取得詳細功能清單 (含不支援原因)
-     */
-    fun toDetailedList(): List<FeatureInfo> = listOf(
-        FeatureInfo(
-            name = "Icon 類別",
-            description = "提取高品質通知圖示",
-            requiredApi = 23,
-            supported = iconClass,
-            unsupportedReason = if (!iconClass) Companion.getUnsupportedReason(23) else ""
-        ),
-        FeatureInfo(
-            name = "直接回覆",
-            description = "記錄通知的直接回覆動作資訊",
-            requiredApi = 24,
-            supported = directReply,
-            unsupportedReason = if (!directReply) Companion.getUnsupportedReason(24) else ""
-        ),
-        FeatureInfo(
-            name = "MessagingStyle",
-            description = "解析訊息類通知的對話內容",
-            requiredApi = 24,
-            supported = messagingStyle,
-            unsupportedReason = if (!messagingStyle) Companion.getUnsupportedReason(24) else ""
-        ),
-        FeatureInfo(
-            name = "Ranking 詳細資訊",
-            description = "記錄通知排序、重要性和環境模式變更",
-            requiredApi = 24,
-            supported = rankingDetails,
-            unsupportedReason = if (!rankingDetails) Companion.getUnsupportedReason(24) else ""
-        ),
-        FeatureInfo(
-            name = "通知 Channel",
-            description = "按 Channel 分類歸檔通知",
-            requiredApi = 26,
-            supported = notificationChannel,
-            unsupportedReason = if (!notificationChannel) Companion.getUnsupportedReason(26) else ""
-        ),
-        FeatureInfo(
-            name = "語意動作",
-            description = "識別動作按鈕的語意類型（回覆、刪除等）",
-            requiredApi = 28,
-            supported = semanticAction,
-            unsupportedReason = if (!semanticAction) Companion.getUnsupportedReason(28) else ""
-        ),
-        FeatureInfo(
-            name = "Bubbles",
-            description = "記錄氣泡通知資訊",
-            requiredApi = 29,
-            supported = bubbles,
-            unsupportedReason = if (!bubbles) Companion.getUnsupportedReason(29) else ""
+    fun toGroupedList(): List<ApiFeatureGroup> {
+        val sdk = Build.VERSION.SDK_INT
+        return listOf(
+            ApiFeatureGroup(
+                apiLevel = 23,
+                androidVersion = androidVersionName(23),
+                supported = sdk >= 23,
+                features = listOf(
+                    FeatureItem("小圖示提取", "使用 Icon 類別提取高品質通知小圖示")
+                )
+            ),
+            ApiFeatureGroup(
+                apiLevel = 24,
+                androidVersion = androidVersionName(24),
+                supported = sdk >= 24,
+                features = listOf(
+                    FeatureItem("直接回覆", "記錄通知的直接回覆動作資訊"),
+                    FeatureItem("MessagingStyle", "提取訊息通知的對話內容與媒體附件"),
+                    FeatureItem("Ranking 追蹤", "記錄通知排序位置、重要性和環境模式變更"),
+                    FeatureItem("服務重新綁定", "支援主動重新連接通知監聽服務")
+                )
+            ),
+            ApiFeatureGroup(
+                apiLevel = 26,
+                androidVersion = androidVersionName(26),
+                supported = sdk >= 26,
+                features = listOf(
+                    FeatureItem("通知頻道", "記錄頻道 ID、名稱、重要性等分類資訊"),
+                    FeatureItem("通知屬性擴充", "Shortcut ID、角標類型、自動過期時間")
+                )
+            ),
+            ApiFeatureGroup(
+                apiLevel = 28,
+                androidVersion = androidVersionName(28),
+                supported = sdk >= 28,
+                features = listOf(
+                    FeatureItem("語意動作", "識別動作按鈕類型（回覆、刪除、封存等）"),
+                    FeatureItem("Person 資訊", "提取通知中的人物名稱和頭像圖片"),
+                    FeatureItem("App 暫停狀態", "記錄 App 是否被系統暫停")
+                )
+            ),
+            ApiFeatureGroup(
+                apiLevel = 29,
+                androidVersion = androidVersionName(29),
+                supported = sdk >= 29,
+                features = listOf(
+                    FeatureItem("氣泡通知", "記錄 Bubble metadata 和頻道氣泡支援"),
+                    FeatureItem("智慧建議", "記錄系統生成的建議回覆和建議動作"),
+                    FeatureItem("網路類型偵測", "裝置狀態中記錄 Wi-Fi / 行動數據等連線類型")
+                )
+            ),
+            ApiFeatureGroup(
+                apiLevel = 31,
+                androidVersion = androidVersionName(31),
+                supported = sdk >= 31,
+                features = listOf(
+                    FeatureItem("動作需認證", "記錄需要解鎖認證的動作按鈕"),
+                    FeatureItem("對話通知", "識別對話類型通知並記錄快捷方式資訊")
+                )
+            ),
+            ApiFeatureGroup(
+                apiLevel = 33,
+                androidVersion = androidVersionName(33),
+                supported = sdk >= 33,
+                features = listOf(
+                    FeatureItem("POST_NOTIFICATIONS", "App 自身通知需要 runtime 權限授權")
+                )
+            ),
+            ApiFeatureGroup(
+                apiLevel = 34,
+                androidVersion = androidVersionName(34),
+                supported = sdk >= 34,
+                features = listOf(
+                    FeatureItem("PendingIntent 類型", "識別通知意圖類型（Activity / Service / Broadcast）")
+                )
+            )
         )
-    )
+    }
 }
