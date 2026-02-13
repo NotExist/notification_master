@@ -1,11 +1,14 @@
 package com.notificationmaster.ui.detail
 
+import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.util.Log
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -23,11 +26,14 @@ import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.notificationmaster.core.cache.PendingIntentCache
 import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.core.compat.ApiVersionHelper
+import com.notificationmaster.data.db.entity.ActionEntity
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.MediaAttachmentEntity
 import com.notificationmaster.data.db.entity.NotificationEntity
+import com.notificationmaster.data.db.entity.SemanticAction
 import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.databinding.FragmentNotificationDetailBinding
 import kotlinx.coroutines.Dispatchers
@@ -114,6 +120,19 @@ class NotificationDetailFragment : Fragment() {
 
                 // 顯示樣式資訊
                 displayStyleInfo(notification)
+
+                // 載入動作按鈕
+                val actionDao = database.actionDao()
+                val actions = withContext(Dispatchers.IO) {
+                    actionDao.getActionsByNotificationIdSync(args.notificationId)
+                }
+                displayActions(actions, notification.notificationKey)
+
+                // 顯示 Intent 資訊
+                displayIntentInfo(notification)
+
+                // 顯示自訂 View 資訊
+                displayRemoteViewsInfo(notification)
             }
         }
     }
@@ -525,6 +544,277 @@ class NotificationDetailFragment : Fragment() {
             setTextIsSelectable(true)
         }
         container.addView(tv)
+    }
+
+    private fun displayActions(actions: List<ActionEntity>, notificationKey: String) {
+        val _binding = _binding ?: return
+        if (actions.isEmpty()) {
+            _binding.cardActions.visibility = View.GONE
+            return
+        }
+
+        _binding.cardActions.visibility = View.VISIBLE
+        val container = _binding.layoutActionsContainer
+        container.removeAllViews()
+
+        val intentSet = PendingIntentCache.get(notificationKey)
+
+        for ((index, action) in actions.withIndex()) {
+            // 動作間分隔線
+            if (index > 0) {
+                val divider = View(container.context).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, 1
+                    ).apply {
+                        topMargin = (8 * resources.displayMetrics.density).toInt()
+                        bottomMargin = (8 * resources.displayMetrics.density).toInt()
+                    }
+                    setBackgroundColor(ContextCompat.getColor(context, R.color.text_tertiary))
+                    alpha = 0.3f
+                }
+                container.addView(divider)
+            }
+
+            // 動作標題行（含狀態圓點）
+            val titleText = action.title ?: "(無標題)"
+            val actionPi = intentSet?.actionIntents?.get(action.actionIndex)
+            addIntentRow(container, "[${action.actionIndex}] $titleText", actionPi)
+
+            // 語意動作（Semantic Action, API 28+）
+            val semanticName = semanticActionName(action.semanticAction)
+            if (semanticName != null) {
+                addStyleInfoText(container, "語意動作: $semanticName")
+            }
+
+            // 回覆資訊
+            if (action.isReplyAction) {
+                val replyInfo = buildString {
+                    append("直接回覆")
+                    if (!action.replyLabel.isNullOrEmpty()) {
+                        append(" · ${action.replyLabel}")
+                    }
+                }
+                addStyleInfoText(container, replyInfo)
+
+                // 預設回覆選項
+                if (!action.replyChoices.isNullOrEmpty()) {
+                    try {
+                        val choices = JSONArray(action.replyChoices)
+                        val choiceList = (0 until choices.length()).map { choices.getString(it) }
+                        addStyleInfoText(container, "預設選項: ${choiceList.joinToString(", ")}")
+                    } catch (_: Exception) { }
+                }
+            }
+
+            // 標記
+            val flags = mutableListOf<String>()
+            if (action.isContextual) flags.add("Contextual")
+            if (action.isAuthenticationRequired) flags.add("需認證")
+            if (!action.allowsFreeFormInput && action.isReplyAction) flags.add("不允許自由輸入")
+            if (flags.isNotEmpty()) {
+                addStyleInfoText(container, flags.joinToString(" · "))
+            }
+        }
+    }
+
+    /**
+     * 顯示 Intent 資訊區塊（contentIntent / deleteIntent / fullScreenIntent）
+     */
+    private fun displayIntentInfo(notification: NotificationEntity) {
+        val _binding = _binding ?: return
+        if (!notification.hasContentIntent && !notification.hasDeleteIntent && !notification.hasFullScreenIntent) {
+            _binding.layoutIntents.visibility = View.GONE
+            return
+        }
+
+        _binding.layoutIntents.visibility = View.VISIBLE
+        val container = _binding.layoutIntentsContainer
+        container.removeAllViews()
+
+        val intentSet = PendingIntentCache.get(notification.notificationKey)
+
+        // 從 rawDataJson 解析 intent 元資料
+        val intentMeta = try {
+            notification.rawDataJson?.let { raw ->
+                JSONObject(raw).optJSONObject("notification")?.optJSONObject("intents")
+            }
+        } catch (_: Exception) { null }
+
+        // 依序顯示各 intent
+        if (notification.hasContentIntent) {
+            val desc = buildIntentDescription("contentIntent", intentMeta?.optJSONObject("contentIntent"))
+            addIntentRow(container, desc, intentSet?.contentIntent)
+        }
+        if (notification.hasDeleteIntent) {
+            val desc = buildIntentDescription("deleteIntent", intentMeta?.optJSONObject("deleteIntent"))
+            addIntentRow(container, desc, intentSet?.deleteIntent)
+        }
+        if (notification.hasFullScreenIntent) {
+            val desc = buildIntentDescription("fullScreenIntent", intentMeta?.optJSONObject("fullScreenIntent"))
+            addIntentRow(container, desc, intentSet?.fullScreenIntent)
+        }
+    }
+
+    /**
+     * 從 rawDataJson 中的 intent 元資料組裝描述文字
+     */
+    private fun buildIntentDescription(name: String, meta: JSONObject?): String {
+        if (meta == null) return name
+        val parts = mutableListOf(name)
+        meta.optString("creatorPackage", "").takeIf { it.isNotEmpty() }?.let { parts.add(it) }
+
+        // API 34+ type flags
+        val types = mutableListOf<String>()
+        if (meta.optBoolean("isActivity", false)) types.add("Activity")
+        if (meta.optBoolean("isBroadcast", false)) types.add("Broadcast")
+        if (meta.optBoolean("isService", false)) types.add("Service")
+        if (meta.optBoolean("isForegroundService", false)) types.add("FgService")
+        if (types.isNotEmpty()) parts.add("(${types.joinToString("/")})")
+
+        return parts.joinToString(" · ")
+    }
+
+    /**
+     * 顯示自訂 View (RemoteViews) 資訊區塊
+     */
+    private fun displayRemoteViewsInfo(notification: NotificationEntity) {
+        val _binding = _binding ?: return
+        if (!notification.hasCustomContentView && !notification.hasCustomBigContentView && !notification.hasCustomHeadsUpContentView) {
+            _binding.layoutRemoteViews.visibility = View.GONE
+            return
+        }
+
+        _binding.layoutRemoteViews.visibility = View.VISIBLE
+        val container = _binding.layoutRemoteViewsContainer
+        container.removeAllViews()
+
+        // 從 rawDataJson 解析 remoteViews 元資料
+        val remoteViewsMeta = try {
+            notification.rawDataJson?.let { raw ->
+                JSONObject(raw).optJSONObject("notification")?.optJSONObject("remoteViews")
+            }
+        } catch (_: Exception) { null }
+
+        if (notification.hasCustomContentView) {
+            val desc = buildRemoteViewDescription("contentView", remoteViewsMeta?.optJSONObject("contentView"))
+            addStyleInfoText(container, desc)
+        }
+        if (notification.hasCustomBigContentView) {
+            val desc = buildRemoteViewDescription("bigContentView", remoteViewsMeta?.optJSONObject("bigContentView"))
+            addStyleInfoText(container, desc)
+        }
+        if (notification.hasCustomHeadsUpContentView) {
+            val desc = buildRemoteViewDescription("headsUpContentView", remoteViewsMeta?.optJSONObject("headsUpContentView"))
+            addStyleInfoText(container, desc)
+        }
+    }
+
+    /**
+     * 從 rawDataJson 中的 remoteViews 元資料組裝描述文字
+     * 優先顯示 layoutName，否則 layoutId (package)
+     */
+    private fun buildRemoteViewDescription(name: String, meta: JSONObject?): String {
+        if (meta == null) return name
+        val layoutName = meta.optString("layoutName", "")
+        return if (layoutName.isNotEmpty()) {
+            "$name: $layoutName"
+        } else {
+            val layoutId = meta.optInt("layoutId", 0)
+            val pkg = meta.optString("package", "")
+            "$name: $layoutId ($pkg)"
+        }
+    }
+
+    /**
+     * 新增一行 intent 資訊：12dp 圓形狀態指示器 + 文字
+     * 綠色 = 快取中（可點擊觸發），灰色 = 已過期
+     */
+    private fun addIntentRow(container: LinearLayout, text: String, pendingIntent: PendingIntent?) {
+        val ctx = container.context
+        val dp = resources.displayMetrics.density
+        val dotSizePx = (12 * dp).toInt()
+
+        val row = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = (4 * dp).toInt()
+            }
+        }
+
+        val dot = createStatusDot(ctx, dotSizePx, pendingIntent != null)
+        row.addView(dot)
+
+        val tv = TextView(ctx).apply {
+            this.text = text
+            textSize = 13f
+            setPadding((6 * dp).toInt(), 0, 0, 0)
+        }
+        row.addView(tv)
+
+        // 存活時可點擊觸發
+        if (pendingIntent != null) {
+            row.isClickable = true
+            row.isFocusable = true
+            val typedValue = android.util.TypedValue()
+            ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, typedValue, true)
+            row.setBackgroundResource(typedValue.resourceId)
+            row.setOnClickListener {
+                try {
+                    pendingIntent.send()
+                    Toast.makeText(ctx, R.string.intent_triggered, Toast.LENGTH_SHORT).show()
+                } catch (_: PendingIntent.CanceledException) {
+                    Toast.makeText(ctx, R.string.intent_send_failed, Toast.LENGTH_SHORT).show()
+                    // 圓點變灰
+                    updateDotColor(dot, dotSizePx, false)
+                }
+            }
+        }
+
+        container.addView(row)
+    }
+
+    /**
+     * 建立 12dp 圓形狀態指示器
+     */
+    private fun createStatusDot(ctx: Context, sizePx: Int, isAlive: Boolean): View {
+        return View(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(ContextCompat.getColor(ctx,
+                    if (isAlive) R.color.status_enabled else R.color.text_tertiary))
+            }
+        }
+    }
+
+    /**
+     * 更新圓點顏色
+     */
+    private fun updateDotColor(dot: View, sizePx: Int, isAlive: Boolean) {
+        dot.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(ContextCompat.getColor(dot.context,
+                if (isAlive) R.color.status_enabled else R.color.text_tertiary))
+        }
+    }
+
+    private fun semanticActionName(value: Int): String? = when (value) {
+        SemanticAction.NONE -> null
+        SemanticAction.REPLY -> "Reply"
+        SemanticAction.MARK_AS_READ -> "Mark as Read"
+        SemanticAction.MARK_AS_UNREAD -> "Mark as Unread"
+        SemanticAction.DELETE -> "Delete"
+        SemanticAction.ARCHIVE -> "Archive"
+        SemanticAction.MUTE -> "Mute"
+        SemanticAction.UNMUTE -> "Unmute"
+        SemanticAction.THUMBS_UP -> "Thumbs Up"
+        SemanticAction.THUMBS_DOWN -> "Thumbs Down"
+        SemanticAction.CALL -> "Call"
+        else -> "Unknown ($value)"
     }
 
     private fun addChip(text: String, colorRes: Int, descriptionRes: Int) {

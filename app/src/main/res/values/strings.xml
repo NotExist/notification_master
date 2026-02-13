@@ -133,6 +133,10 @@
     <string name="label_group">Group</string>
     <string name="label_key">Key</string>
     <string name="label_content_hash">Content Hash</string>
+    <string name="label_intents">Intent 資訊</string>
+    <string name="label_remote_views">自訂 View</string>
+    <string name="intent_send_failed">Intent 發送失敗（已取消或過期）</string>
+    <string name="intent_triggered">已觸發</string>
 
     <!-- 格式字串 -->
     <string name="format_android_version">Android %1$s (API %2$d)</string>

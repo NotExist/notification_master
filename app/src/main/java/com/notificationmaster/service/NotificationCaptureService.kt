@@ -8,6 +8,7 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.core.NotificationExtractor
+import com.notificationmaster.core.cache.PendingIntentCache
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.data.db.entity.AppSourceEntity
@@ -68,6 +69,7 @@ class NotificationCaptureService : NotificationListenerService() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
 
+        PendingIntentCache.clear()
         instance = null
         isConnected = false
         serviceScope.cancel()
@@ -161,6 +163,7 @@ class NotificationCaptureService : NotificationListenerService() {
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         Log.w(TAG, "Listener disconnected")
+        PendingIntentCache.clear()
         isConnected = false
     }
 
@@ -247,6 +250,9 @@ class NotificationCaptureService : NotificationListenerService() {
         if (actions.isNotEmpty()) {
             database.actionDao().insertAll(actions)
         }
+
+        // 3.1 快取 PendingIntent 參照
+        cachePendingIntents(sbn)
 
         // 3.5 提取並儲存媒體附件
         try {
@@ -339,6 +345,8 @@ class NotificationCaptureService : NotificationListenerService() {
         } else {
             Log.w(TAG, "Removal event for unknown notification: $key")
         }
+
+        PendingIntentCache.remove(key)
     }
 
     /**
@@ -524,6 +532,26 @@ class NotificationCaptureService : NotificationListenerService() {
             )
             database.channelDao().insert(channelEntity)
         }
+    }
+
+    /**
+     * 快取通知中的 PendingIntent 參照
+     */
+    private fun cachePendingIntents(sbn: StatusBarNotification) {
+        val notification = sbn.notification
+        val key = ApiVersionHelper.getNotificationKey(sbn)
+
+        val actionIntents = mutableMapOf<Int, android.app.PendingIntent>()
+        notification.actions?.forEachIndexed { index, action ->
+            action.actionIntent?.let { actionIntents[index] = it }
+        }
+
+        PendingIntentCache.put(key, PendingIntentCache.IntentSet(
+            contentIntent = notification.contentIntent,
+            deleteIntent = notification.deleteIntent,
+            fullScreenIntent = notification.fullScreenIntent,
+            actionIntents = actionIntents
+        ))
     }
 
     /**
