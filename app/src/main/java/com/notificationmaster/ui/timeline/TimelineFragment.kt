@@ -101,7 +101,10 @@ class TimelineFragment : Fragment() {
         updateEmptyStateForPermission()
 
         // 檢查是否由 shortcut / intent 觸發 audible 模式
-        if (activity?.intent?.getBooleanExtra("show_audible", false) == true) {
+        // shortcuts.xml 的 <extra android:value="true"> 傳入的是 String，不是 boolean
+        val intent = activity?.intent
+        if (intent?.getStringExtra("show_audible") == "true" ||
+            intent?.getBooleanExtra("show_audible", false) == true) {
             activateAudibleMode()
             activity?.intent?.removeExtra("show_audible")
         }

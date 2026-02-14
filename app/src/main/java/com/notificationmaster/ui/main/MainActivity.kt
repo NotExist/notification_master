@@ -63,13 +63,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleShortcutIntent(intent: Intent?) {
-        if (intent?.getBooleanExtra("show_audible", false) == true) {
+        // shortcuts.xml 的 <extra android:value="true"> 傳入的是 String，不是 boolean
+        if (intent?.hasShowAudible() == true) {
             // 確保導航到 timeline
             val navHostFragment = supportFragmentManager
                 .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
             navHostFragment.navController.navigate(R.id.nav_timeline)
             // TimelineFragment 會在 onViewCreated 中讀取 activity intent extra
         }
+    }
+
+    companion object {
+        /** 檢查 intent 是否帶有 show_audible extra（相容 String 和 Boolean 兩種型別） */
+        fun Intent.hasShowAudible(): Boolean =
+            getStringExtra("show_audible") == "true" ||
+            getBooleanExtra("show_audible", false)
     }
 
     override fun onSupportNavigateUp(): Boolean {
