@@ -167,7 +167,7 @@ data class SupportedFeatures(
                 features = listOf(
                     FeatureItem("通知頻道", "記錄頻道 ID、名稱、重要性等分類資訊"),
                     FeatureItem("通知屬性擴充", "Shortcut ID、角標類型、自動過期時間"),
-                    FeatureItem("發聲推斷（importance）", "Channel importance ≥ DEFAULT 推斷通知可能發聲")
+                    FeatureItem("發聲推斷（importance）", "Channel importance ≥ DEFAULT 推斷通知可能產生可感知提示（聲音或振動）")
                 )
             ),
             ApiFeatureGroup(
@@ -185,7 +185,7 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(29),
                 supported = sdk >= 29,
                 features = listOf(
-                    FeatureItem("發聲偵測", "透過 lastAudiblyAlertedMillis 精確判斷通知是否產生聲響"),
+                    FeatureItem("發聲偵測", "透過 lastAudiblyAlertedMillis 精確判斷通知是否產生可感知提示（聲音或振動）"),
                     FeatureItem("氣泡通知", "記錄 Bubble metadata 和頻道氣泡支援"),
                     FeatureItem("智慧建議", "記錄系統生成的建議回覆和建議動作"),
                     FeatureItem("網路類型偵測", "裝置狀態中記錄 Wi-Fi / 行動數據等連線類型")

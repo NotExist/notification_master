@@ -341,7 +341,7 @@ data class NotificationEntity(
     @ColumnInfo(name = "is_conversation")
     val isConversation: Boolean = false,
 
-    /** 最後一次發出可聽見提示的時間 (API 28+, Ranking 送達, -1 表示不適用) */
+    /** 最後一次發出可感知提示的時間 (API 29+, Ranking 送達, -1 表示不適用) */
     @ColumnInfo(name = "last_audibly_alerted_millis")
     val lastAudiblyAlertedMillis: Long = -1L,
 

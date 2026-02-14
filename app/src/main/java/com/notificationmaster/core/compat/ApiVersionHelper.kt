@@ -39,6 +39,9 @@ object ApiVersionHelper {
     /** Bubbles 引入 */
     const val API_BUBBLES = 29
 
+    /** lastAudiblyAlertedMillis 引入 */
+    const val API_AUDIBLE_ALERTED = 29
+
     /** Authentication Required 引入 */
     const val API_AUTH_REQUIRED = 31
 
@@ -164,7 +167,7 @@ object ApiVersionHelper {
         soundUri: String?,
         isUpdate: Boolean
     ): Boolean {
-        return if (Build.VERSION.SDK_INT >= API_BUBBLES) { // API 29+
+        return if (Build.VERSION.SDK_INT >= API_AUDIBLE_ALERTED) { // API 29+
             lastAudiblyAlertedMillis > 0 && (captureTime - lastAudiblyAlertedMillis) <= 5000
         } else if (Build.VERSION.SDK_INT >= API_NOTIFICATION_CHANNEL) { // API 26-28
             val isDefaultOrHigher = importance >= android.app.NotificationManager.IMPORTANCE_DEFAULT
