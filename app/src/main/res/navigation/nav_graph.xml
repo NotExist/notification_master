@@ -77,6 +77,24 @@
             android:id="@+id/action_settings_to_home"
             app:destination="@id/nav_home" />
 
+        <action
+            android:id="@+id/action_settings_to_filter"
+            app:destination="@id/nav_filter_settings" />
+
+    </fragment>
+
+    <!-- 過濾設定頁面（從設定進入） -->
+    <fragment
+        android:id="@+id/nav_filter_settings"
+        android:name="com.notificationmaster.ui.settings.FilterSettingsFragment"
+        android:label="@string/settings_filter_title"
+        tools:layout="@layout/fragment_filter_settings">
+
+        <argument
+            android:name="category"
+            app:argType="string"
+            android:defaultValue="NOTIFICATION" />
+
     </fragment>
 
     <!-- 環境資訊頁面（從設定進入） -->

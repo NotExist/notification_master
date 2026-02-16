@@ -34,6 +34,9 @@ interface AppSourceDao {
     @Query("SELECT * FROM app_sources ORDER BY notification_count DESC")
     fun getAllAppSources(): Flow<List<AppSourceEntity>>
 
+    @Query("SELECT * FROM app_sources ORDER BY notification_count DESC")
+    suspend fun getAll(): List<AppSourceEntity>
+
     @Query("SELECT * FROM app_sources WHERE package_name = :packageName LIMIT 1")
     suspend fun getByPackageName(packageName: String): AppSourceEntity?
 

@@ -9,6 +9,8 @@ import android.util.Log
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.core.NotificationExtractor
 import com.notificationmaster.core.cache.PendingIntentCache
+import com.notificationmaster.core.filter.FilterCategory
+import com.notificationmaster.core.filter.FilterRuleStore
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.data.db.entity.AppSourceEntity
@@ -62,6 +64,7 @@ class NotificationCaptureService : NotificationListenerService() {
         debugDumper = DebugDumper(this)
         deviceStateCapture = DeviceStateCapture(this)
         mediaExtractor = MediaExtractor(this)
+        FilterRuleStore.load(this, FilterCategory.NOTIFICATION)
         instance = this
     }
 
@@ -233,6 +236,13 @@ class NotificationCaptureService : NotificationListenerService() {
     ) {
         val captureTime = System.currentTimeMillis()
 
+        // 0. 過濾檢查（在 extraction 之前，避免不必要的 IO）
+        val filterChannelId = if (Build.VERSION.SDK_INT >= 26) sbn.notification.channelId else null
+        if (FilterRuleStore.matches(FilterCategory.NOTIFICATION, sbn.packageName, filterChannelId, eventType)) {
+            Log.d(TAG, "Filtered: ${sbn.packageName}/$filterChannelId event=$eventType")
+            return
+        }
+
         // 1. 提取通知資料
         val entity = extractor.extractNotification(sbn, rankingMap, captureTime)
 
@@ -320,6 +330,13 @@ class NotificationCaptureService : NotificationListenerService() {
         val captureTime = System.currentTimeMillis()
         val key = ApiVersionHelper.getNotificationKey(sbn)
 
+        // 過濾檢查（被過濾的通知仍需清理 PendingIntentCache）
+        val filterChannelId: String? = if (Build.VERSION.SDK_INT >= 26) sbn.notification.channelId else null
+        if (FilterRuleStore.matches(FilterCategory.NOTIFICATION, sbn.packageName, filterChannelId, EventType.REMOVED)) {
+            PendingIntentCache.remove(key)
+            return
+        }
+
         // 取得最新的通知記錄
         val latestNotification = database.notificationDao().getLatestByKey(key)
 
@@ -366,6 +383,14 @@ class NotificationCaptureService : NotificationListenerService() {
                 val latestNotification = database.notificationDao().getLatestByKey(key)
 
                 if (latestNotification != null) {
+                    // 過濾檢查
+                    if (FilterRuleStore.matches(
+                            FilterCategory.NOTIFICATION,
+                            latestNotification.packageName,
+                            latestNotification.channelId,
+                            EventType.RANKING
+                        )) continue
+
                     val newRank = ranking.rank
                     val newImportance = ranking.importance
                     val newIsAmbient = ranking.isAmbient

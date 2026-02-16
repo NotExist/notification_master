@@ -12,12 +12,15 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
+import androidx.core.os.bundleOf
 import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.notificationmaster.core.filter.FilterCategory
+import com.notificationmaster.core.filter.FilterRuleStore
 import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.data.db.NotificationDatabase
@@ -90,7 +93,12 @@ class SettingsFragment : Fragment() {
 
         debugDumper = DebugDumper(requireContext())
 
+        // 確保兩個 category 的規則已載入
+        FilterRuleStore.load(requireContext(), FilterCategory.NOTIFICATION)
+        FilterRuleStore.load(requireContext(), FilterCategory.CALENDAR_EXPORT)
+
         setupEnvironmentCard()
+        setupFilterSettings()
         setupMediaDirSettings()
         setupDebugSettings()
         setupCalendarIntegration()
@@ -103,12 +111,34 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    private fun setupFilterSettings() {
+        binding.cardFilter.setOnClickListener {
+            findNavController().navigate(
+                R.id.action_settings_to_filter,
+                bundleOf("category" to FilterCategory.NOTIFICATION.name)
+            )
+        }
+        updateFilterSummary()
+    }
+
+    private fun updateFilterSummary() {
+        val b = _binding ?: return
+        val count = FilterRuleStore.getRules(FilterCategory.NOTIFICATION).size
+        b.textFilterSummary.text = if (count > 0) {
+            getString(R.string.settings_filter_count, count)
+        } else {
+            getString(R.string.settings_filter_summary)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         updateDebugInfo()
         updateStorageInfo()
         updateMediaDirDisplay()
         validateCustomMediaDir()
+        updateFilterSummary()
+        updateCalendarWhitelistSummary()
     }
 
     override fun onDestroyView() {
@@ -207,6 +237,24 @@ class SettingsFragment : Fragment() {
     private fun setupCalendarIntegration() {
         binding.btnExportIcal.setOnClickListener {
             requestCalendarExport()
+        }
+
+        binding.btnCalendarWhitelist.setOnClickListener {
+            findNavController().navigate(
+                R.id.action_settings_to_filter,
+                bundleOf("category" to FilterCategory.CALENDAR_EXPORT.name)
+            )
+        }
+        updateCalendarWhitelistSummary()
+    }
+
+    private fun updateCalendarWhitelistSummary() {
+        val b = _binding ?: return
+        val count = FilterRuleStore.getRules(FilterCategory.CALENDAR_EXPORT).size
+        b.textCalendarWhitelistSummary.text = if (count > 0) {
+            getString(R.string.settings_calendar_whitelist_count, count)
+        } else {
+            getString(R.string.settings_calendar_whitelist_summary)
         }
     }
 
@@ -419,8 +467,23 @@ class SettingsFragment : Fragment() {
                     .getNotificationsByTimeRangePaged(startTime, endTime, 500, 0)
             }
 
+            // 套用日曆匯出白名單
+            FilterRuleStore.load(ctx, FilterCategory.CALENDAR_EXPORT)
+            val whitelistRules = FilterRuleStore.getRules(FilterCategory.CALENDAR_EXPORT)
+            val filteredNotifications = if (whitelistRules.isEmpty()) {
+                notifications  // 無白名單規則 → 匯出全部
+            } else {
+                notifications.filter { notif ->
+                    FilterRuleStore.matchesSource(
+                        FilterCategory.CALENDAR_EXPORT,
+                        notif.packageName,
+                        notif.channelId
+                    )
+                }
+            }
+
             val result = withContext(Dispatchers.IO) {
-                exporter.exportToCalendar(notifications, calendarId, detailLevel)
+                exporter.exportToCalendar(filteredNotifications, calendarId, detailLevel)
             }
 
             Toast.makeText(

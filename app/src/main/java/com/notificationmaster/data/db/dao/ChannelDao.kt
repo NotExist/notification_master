@@ -53,6 +53,9 @@ interface ChannelDao {
     @Query("SELECT * FROM channels WHERE package_name = :packageName ORDER BY notification_count DESC")
     fun getChannelsByPackage(packageName: String): Flow<List<ChannelEntity>>
 
+    @Query("SELECT * FROM channels WHERE package_name = :packageName ORDER BY notification_count DESC")
+    suspend fun getByPackageName(packageName: String): List<ChannelEntity>
+
     @Query("""
         SELECT * FROM channels
         WHERE package_name = :packageName AND channel_id = :channelId

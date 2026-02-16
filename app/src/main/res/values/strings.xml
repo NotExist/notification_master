@@ -146,6 +146,33 @@
     <string name="format_hash_truncated">%1$s…</string>
     <string name="format_removal_reason">(%1$s)</string>
 
+    <!-- 過濾設定 -->
+    <string name="settings_filter_title">通知過濾</string>
+    <string name="settings_filter_summary">設定不記錄的 App 或 Channel</string>
+    <string name="settings_filter_count">%d 條規則</string>
+    <string name="filter_empty">尚無過濾規則</string>
+    <string name="filter_empty_hint">新增規則後，符合條件的通知將不會被記錄。</string>
+    <string name="filter_add_rule">新增規則</string>
+    <string name="filter_select_app">選擇 App</string>
+    <string name="filter_select_scope">選擇範圍</string>
+    <string name="filter_scope_all_channels">整個 App（所有 Channel）</string>
+    <string name="filter_scope_specific_channel">指定 Channel</string>
+    <string name="filter_mode_ignore_all">完全忽略</string>
+    <string name="filter_select_events">選擇事件類型</string>
+    <string name="filter_select_all">全選</string>
+    <string name="filter_delete_confirm">確定要刪除此過濾規則嗎？</string>
+    <string name="filter_rule_added">已新增過濾規則</string>
+    <string name="filter_rule_deleted">已刪除過濾規則</string>
+    <string name="filter_all_channels">所有 Channel</string>
+
+    <!-- 日曆匯出白名單 -->
+    <string name="settings_calendar_whitelist">匯出白名單</string>
+    <string name="settings_calendar_whitelist_summary">設定要匯出到日曆的 App 或 Channel</string>
+    <string name="settings_calendar_whitelist_count">%d 條規則</string>
+    <string name="settings_calendar_whitelist_title">日曆匯出白名單</string>
+    <string name="calendar_whitelist_empty">尚無白名單規則</string>
+    <string name="calendar_whitelist_empty_hint">無白名單規則時將匯出所有通知。\n新增規則後，僅匯出符合條件的通知。</string>
+
     <!-- Audible / Shortcut -->
     <string name="timeline_audible_only">有聲</string>
     <string name="shortcut_audible_short">最近發聲</string>
