@@ -25,6 +25,7 @@ import com.notificationmaster.R
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.databinding.FragmentTimelineBinding
 import com.notificationmaster.service.NotificationCaptureService
+import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -141,7 +142,15 @@ class TimelineFragment : Fragment() {
         if (adapter == null) {
             adapter = TimelineAdapter(
                 onItemClick = { notification -> navigateToDetail(notification) },
-                onSimilarClick = { notification -> showSimilarNotifications(notification) }
+                onSimilarClick = { notification -> showSimilarNotifications(notification) },
+                onItemLongClick = { notification ->
+                    FilterRuleDialogHelper.showAddRuleDialog(
+                        context = requireContext(),
+                        category = null,
+                        prefillPackageName = notification.packageName,
+                        prefillChannelId = notification.channelId
+                    )
+                }
             )
         }
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())

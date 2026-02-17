@@ -13,7 +13,8 @@ import java.text.NumberFormat
  * App 來源列表 Adapter
  */
 class AppSourceAdapter(
-    private val onItemClick: (AppSourceEntity) -> Unit
+    private val onItemClick: (AppSourceEntity) -> Unit,
+    private val onItemLongClick: (AppSourceEntity) -> Unit = {}
 ) : ListAdapter<AppSourceEntity, AppSourceAdapter.ViewHolder>(DiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -39,6 +40,13 @@ class AppSourceAdapter(
                 if (position != RecyclerView.NO_POSITION) {
                     onItemClick(getItem(position))
                 }
+            }
+            binding.root.setOnLongClickListener {
+                val position = bindingAdapterPosition
+                if (position != RecyclerView.NO_POSITION) {
+                    onItemLongClick(getItem(position))
+                }
+                true
             }
         }
 

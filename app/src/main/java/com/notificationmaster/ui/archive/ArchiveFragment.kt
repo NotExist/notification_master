@@ -14,6 +14,7 @@ import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.databinding.FragmentArchiveBinding
+import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -69,22 +70,41 @@ class ArchiveFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        appSourceAdapter = AppSourceAdapter { appSource ->
-            val action = ArchiveFragmentDirections.actionArchiveToArchiveDetail(
-                packageName = appSource.packageName,
-                title = appSource.appName ?: appSource.packageName
-            )
-            findNavController().navigate(action)
-        }
+        appSourceAdapter = AppSourceAdapter(
+            onItemClick = { appSource ->
+                val action = ArchiveFragmentDirections.actionArchiveToArchiveDetail(
+                    packageName = appSource.packageName,
+                    title = appSource.appName ?: appSource.packageName
+                )
+                findNavController().navigate(action)
+            },
+            onItemLongClick = { appSource ->
+                FilterRuleDialogHelper.showAddRuleDialog(
+                    context = requireContext(),
+                    category = null,
+                    prefillPackageName = appSource.packageName
+                )
+            }
+        )
 
-        channelAdapter = ChannelAdapter { channel ->
-            val action = ArchiveFragmentDirections.actionArchiveToArchiveDetail(
-                packageName = channel.packageName,
-                channelId = channel.channelId,
-                title = channel.channelName ?: channel.channelId
-            )
-            findNavController().navigate(action)
-        }
+        channelAdapter = ChannelAdapter(
+            onItemClick = { channel ->
+                val action = ArchiveFragmentDirections.actionArchiveToArchiveDetail(
+                    packageName = channel.packageName,
+                    channelId = channel.channelId,
+                    title = channel.channelName ?: channel.channelId
+                )
+                findNavController().navigate(action)
+            },
+            onItemLongClick = { channel ->
+                FilterRuleDialogHelper.showAddRuleDialog(
+                    context = requireContext(),
+                    category = null,
+                    prefillPackageName = channel.packageName,
+                    prefillChannelId = channel.channelId
+                )
+            }
+        )
 
         binding.recyclerView.apply {
             layoutManager = LinearLayoutManager(requireContext())

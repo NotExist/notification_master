@@ -7,22 +7,17 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.filter.FilterCategory
 import com.notificationmaster.core.filter.FilterRule
 import com.notificationmaster.core.filter.FilterRuleStore
-import com.notificationmaster.data.db.entity.AppSourceEntity
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.databinding.FragmentFilterSettingsBinding
 import com.notificationmaster.databinding.ItemFilterRuleBinding
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 
 /**
  * 過濾規則管理頁面
@@ -104,151 +99,15 @@ class FilterSettingsFragment : Fragment() {
         }
     }
 
-    // === 新增規則流程 ===
+    // === 新增規則 ===
 
-    /**
-     * 步驟 1：選擇 App
-     */
     private fun startAddRuleFlow() {
-        val database = NotificationMasterApp.getInstance().database
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            val apps = withContext(Dispatchers.IO) {
-                database.appSourceDao().getAll()
-            }
-
-            if (apps.isEmpty()) {
-                context?.let {
-                    Toast.makeText(it, R.string.filter_select_app, Toast.LENGTH_SHORT).show()
-                }
-                return@launch
-            }
-
-            val ctx = context ?: return@launch
-            val names = apps.map { app ->
-                val name = app.appName ?: app.packageName
-                "$name (${app.notificationCount})"
-            }.toTypedArray()
-
-            AlertDialog.Builder(ctx)
-                .setTitle(R.string.filter_select_app)
-                .setItems(names) { _, which ->
-                    selectScope(apps[which])
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
-        }
-    }
-
-    /**
-     * 步驟 2：選擇範圍（整個 App 或指定 Channel）
-     */
-    private fun selectScope(app: AppSourceEntity) {
         val ctx = context ?: return
-        val items = arrayOf(
-            getString(R.string.filter_scope_all_channels),
-            getString(R.string.filter_scope_specific_channel)
+        FilterRuleDialogHelper.showAddRuleDialog(
+            context = ctx,
+            category = category,
+            onRuleAdded = { refreshList() }
         )
-
-        AlertDialog.Builder(ctx)
-            .setTitle(R.string.filter_select_scope)
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> selectEventTypes(app.packageName, null)
-                    1 -> selectChannel(app)
-                }
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
-
-    /**
-     * 步驟 2.5：選擇 Channel（如果選擇了指定 Channel）
-     */
-    private fun selectChannel(app: AppSourceEntity) {
-        val database = NotificationMasterApp.getInstance().database
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            val channels = withContext(Dispatchers.IO) {
-                database.channelDao().getByPackageName(app.packageName)
-            }
-
-            val ctx = context ?: return@launch
-
-            if (channels.isEmpty()) {
-                Toast.makeText(ctx, R.string.channel_not_supported, Toast.LENGTH_SHORT).show()
-                return@launch
-            }
-
-            val names = channels.map { ch ->
-                val name = ch.channelName ?: ch.channelId
-                "$name (${ch.notificationCount})"
-            }.toTypedArray()
-
-            AlertDialog.Builder(ctx)
-                .setTitle(R.string.filter_scope_specific_channel)
-                .setItems(names) { _, which ->
-                    selectEventTypes(app.packageName, channels[which].channelId)
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
-        }
-    }
-
-    /**
-     * 步驟 3：選擇事件類型（多選 + 全選按鈕）
-     */
-    private fun selectEventTypes(packageName: String, channelId: String?) {
-        val ctx = context ?: return
-        val eventTypes = EventType.entries.toTypedArray()
-        val names = eventTypes.map { it.name }.toTypedArray()
-        val checked = BooleanArray(eventTypes.size)
-
-        val dialog = AlertDialog.Builder(ctx)
-            .setTitle(R.string.filter_select_events)
-            .setMultiChoiceItems(names, checked) { _, which, isChecked ->
-                checked[which] = isChecked
-            }
-            .setPositiveButton(R.string.ok) { _, _ ->
-                val selected = eventTypes.filterIndexed { i, _ -> checked[i] }
-                    .map { it.name }
-                    .toSet()
-                if (selected.isNotEmpty()) {
-                    addRule(packageName, channelId, selected)
-                }
-            }
-            .setNeutralButton(R.string.filter_select_all, null) // listener 在 show() 後覆寫以防自動關閉
-            .setNegativeButton(R.string.cancel, null)
-            .create()
-
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setOnClickListener {
-                // 全選切換：若已全選則全取消，否則全選
-                val allChecked = checked.all { c -> c }
-                for (i in checked.indices) {
-                    checked[i] = !allChecked
-                    dialog.listView.setItemChecked(i, !allChecked)
-                }
-            }
-        }
-
-        dialog.show()
-    }
-
-    private fun addRule(
-        packageName: String,
-        channelId: String?,
-        eventTypes: Set<String>
-    ) {
-        val ctx = context ?: return
-        val rule = FilterRule(
-            packageName = packageName,
-            channelId = channelId,
-            eventTypes = eventTypes
-        )
-        FilterRuleStore.addRule(ctx, category, rule)
-        Toast.makeText(ctx, R.string.filter_rule_added, Toast.LENGTH_SHORT).show()
-        refreshList()
     }
 
     private fun confirmDeleteRule(rule: FilterRule) {

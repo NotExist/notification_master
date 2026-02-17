@@ -19,7 +19,8 @@ import java.text.NumberFormat
  * Line 3: groupId · appName (packageName)
  */
 class ChannelAdapter(
-    private val onItemClick: (ChannelEntity) -> Unit
+    private val onItemClick: (ChannelEntity) -> Unit,
+    private val onItemLongClick: (ChannelEntity) -> Unit = {}
 ) : ListAdapter<ChannelEntity, ChannelAdapter.ViewHolder>(DiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -45,6 +46,13 @@ class ChannelAdapter(
                 if (position != RecyclerView.NO_POSITION) {
                     onItemClick(getItem(position))
                 }
+            }
+            binding.root.setOnLongClickListener {
+                val position = bindingAdapterPosition
+                if (position != RecyclerView.NO_POSITION) {
+                    onItemLongClick(getItem(position))
+                }
+                true
             }
         }
 

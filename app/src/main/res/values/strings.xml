@@ -173,6 +173,17 @@
     <string name="calendar_whitelist_empty">尚無白名單規則</string>
     <string name="calendar_whitelist_empty_hint">無白名單規則時將匯出所有通知。\n新增規則後，僅匯出符合條件的通知。</string>
 
+    <!-- Dialog 新增規則 -->
+    <string name="filter_dialog_title">新增規則</string>
+    <string name="filter_dialog_package_name">Package Name</string>
+    <string name="filter_dialog_channel_id">Channel ID（選填）</string>
+    <string name="filter_dialog_event_types">事件類型</string>
+    <string name="filter_dialog_category">規則類別</string>
+    <string name="filter_dialog_category_notification">通知過濾黑名單</string>
+    <string name="filter_dialog_category_calendar">日曆匯出白名單</string>
+    <string name="filter_package_name_required">請輸入 Package Name</string>
+    <string name="filter_event_type_required">請至少選擇一種事件類型</string>
+
     <!-- Audible / Shortcut -->
     <string name="timeline_audible_only">有聲</string>
     <string name="shortcut_audible_short">最近發聲</string>

@@ -24,7 +24,8 @@ import java.util.Locale
  */
 class TimelineAdapter(
     private val onItemClick: (NotificationEntity) -> Unit,
-    private val onSimilarClick: (NotificationEntity) -> Unit = {}
+    private val onSimilarClick: (NotificationEntity) -> Unit = {},
+    private val onItemLongClick: (NotificationEntity) -> Unit = {}
 ) : ListAdapter<TimelineItem, RecyclerView.ViewHolder>(DiffCallback()) {
 
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -113,6 +114,16 @@ class TimelineAdapter(
                         onItemClick(item.notification)
                     }
                 }
+            }
+            binding.root.setOnLongClickListener {
+                val position = bindingAdapterPosition
+                if (position != RecyclerView.NO_POSITION) {
+                    val item = getItem(position)
+                    if (item is TimelineItem.NotificationItem) {
+                        onItemLongClick(item.notification)
+                    }
+                }
+                true
             }
         }
 

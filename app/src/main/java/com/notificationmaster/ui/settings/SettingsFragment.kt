@@ -112,7 +112,7 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupFilterSettings() {
-        binding.cardFilter.setOnClickListener {
+        binding.btnFilter.setOnClickListener {
             findNavController().navigate(
                 R.id.action_settings_to_filter,
                 bundleOf("category" to FilterCategory.NOTIFICATION.name)
