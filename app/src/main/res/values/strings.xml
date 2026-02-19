@@ -184,6 +184,11 @@
     <string name="filter_package_name_required">請輸入 Package Name</string>
     <string name="filter_event_type_required">請至少選擇一種事件類型</string>
 
+    <!-- 事件分組 -->
+    <string name="event_group_header">第 %1$d 次</string>
+    <string name="event_group_current">（目前檢視）</string>
+    <string name="event_group_time_range">%1$s — %2$s</string>
+
     <!-- Audible / Shortcut -->
     <string name="timeline_audible_only">有聲</string>
     <string name="shortcut_audible_short">最近發聲</string>

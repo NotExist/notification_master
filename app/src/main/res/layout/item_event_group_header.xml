@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingVertical="6dp"
+    android:paddingHorizontal="4dp"
+    android:background="?attr/selectableItemBackground">
+
+    <!-- 左側分隔線 -->
+    <View
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_weight="1"
+        android:layout_marginEnd="8dp"
+        android:background="?android:attr/textColorSecondary"
+        android:alpha="0.3" />
+
+    <!-- 第 N 次 + (目前檢視) -->
+    <TextView
+        android:id="@+id/text_group_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="?attr/textAppearanceLabelMedium"
+        tools:text="第 1 次（目前檢視）" />
+
+    <!-- 右側分隔線 -->
+    <View
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_weight="1"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:background="?android:attr/textColorSecondary"
+        android:alpha="0.3" />
+
+    <!-- 時間範圍 -->
+    <TextView
+        android:id="@+id/text_group_time_range"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="?attr/textAppearanceLabelSmall"
+        android:textColor="?android:attr/textColorSecondary"
+        tools:text="14:32 — 14:35" />
+
+</LinearLayout>

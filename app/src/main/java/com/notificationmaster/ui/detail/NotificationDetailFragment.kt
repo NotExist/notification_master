@@ -20,6 +20,7 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.chip.Chip
@@ -83,9 +84,14 @@ class NotificationDetailFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        eventAdapter = NotificationEventAdapter { event ->
-            showEventDetail(event)
-        }
+        eventAdapter = NotificationEventAdapter(
+            onItemClick = { event -> showEventDetail(event) },
+            onGroupClick = { notificationId ->
+                val action = NotificationDetailFragmentDirections
+                    .actionDetailToSelf(notificationId)
+                findNavController().navigate(action)
+            }
+        )
         binding.recyclerEvents.apply {
             adapter = eventAdapter
             layoutManager = LinearLayoutManager(requireContext())
@@ -106,11 +112,36 @@ class NotificationDetailFragment : Fragment() {
             if (notification != null) {
                 displayNotification(notification)
 
-                // 載入事件歷程
+                // 載入同 key 的所有 NotificationEntity 和事件歷程
+                val allEntities = withContext(Dispatchers.IO) {
+                    notificationDao.getByNotificationKey(notification.notificationKey)
+                }
                 val events = withContext(Dispatchers.IO) {
                     eventDao.getEventsByNotificationKey(notification.notificationKey)
                 }
-                eventAdapter.submitList(events)
+
+                // 按 notificationId 分組，建立列表
+                val items = if (allEntities.size <= 1) {
+                    // 單次生命週期：不顯示分組標題
+                    events.map { EventListItem.EventItem(it) }
+                } else {
+                    val grouped = events.groupBy { it.notificationId }
+                    buildList {
+                        for ((index, entity) in allEntities.withIndex()) {
+                            val groupEvents = grouped[entity.id] ?: continue
+                            add(EventListItem.GroupHeader(
+                                notificationId = entity.id,
+                                groupIndex = index + 1,
+                                groupTotal = allEntities.size,
+                                firstEventTime = groupEvents.first().eventTime,
+                                lastEventTime = groupEvents.last().eventTime,
+                                isCurrent = entity.id == args.notificationId
+                            ))
+                            addAll(groupEvents.map { EventListItem.EventItem(it) })
+                        }
+                    }
+                }
+                eventAdapter.submitList(items)
 
                 // 載入媒體附件
                 val attachments = withContext(Dispatchers.IO) {

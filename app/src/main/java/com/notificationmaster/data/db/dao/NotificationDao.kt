@@ -39,6 +39,9 @@ interface NotificationDao {
     @Query("SELECT EXISTS(SELECT 1 FROM notifications WHERE notification_key = :key)")
     suspend fun existsByKey(key: String): Boolean
 
+    @Query("SELECT * FROM notifications WHERE notification_key = :key ORDER BY post_time ASC")
+    suspend fun getByNotificationKey(key: String): List<NotificationEntity>
+
     // === 查詢 - 時間範圍 ===
 
     @Query("""

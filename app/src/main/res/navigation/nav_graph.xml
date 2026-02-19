@@ -115,6 +115,12 @@
             android:name="notificationId"
             app:argType="long" />
 
+        <action
+            android:id="@+id/action_detail_to_self"
+            app:destination="@id/nav_detail"
+            app:popUpTo="@id/nav_detail"
+            app:popUpToInclusive="true" />
+
     </fragment>
 
 </navigation>

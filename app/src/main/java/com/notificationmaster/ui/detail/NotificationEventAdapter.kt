@@ -8,38 +8,139 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import android.service.notification.NotificationListenerService
+import com.google.android.material.color.MaterialColors
 import com.notificationmaster.R
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.NotificationEventEntity
+import com.notificationmaster.databinding.ItemEventGroupHeaderBinding
 import com.notificationmaster.databinding.ItemNotificationEventBinding
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
+ * 事件列表項目 sealed class：分組標題 / 事件項目
+ */
+sealed class EventListItem {
+    /** 分組標題 */
+    data class GroupHeader(
+        val notificationId: Long,
+        val groupIndex: Int,
+        val groupTotal: Int,
+        val firstEventTime: Long,
+        val lastEventTime: Long,
+        val isCurrent: Boolean
+    ) : EventListItem()
+
+    /** 事件項目 */
+    data class EventItem(
+        val event: NotificationEventEntity
+    ) : EventListItem()
+}
+
+/**
  * 通知事件列表 Adapter
+ * 支援分組標題和事件項目兩種 ViewType
  */
 class NotificationEventAdapter(
-    private val onItemClick: (NotificationEventEntity) -> Unit
-) : ListAdapter<NotificationEventEntity, NotificationEventAdapter.ViewHolder>(DiffCallback()) {
+    private val onItemClick: (NotificationEventEntity) -> Unit,
+    private val onGroupClick: (Long) -> Unit = {}
+) : ListAdapter<EventListItem, RecyclerView.ViewHolder>(DiffCallback()) {
 
     private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
+    private val shortTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val binding = ItemNotificationEventBinding.inflate(
-            LayoutInflater.from(parent.context),
-            parent,
-            false
-        )
-        return ViewHolder(binding)
+    companion object {
+        private const val VIEW_TYPE_GROUP_HEADER = 0
+        private const val VIEW_TYPE_EVENT = 1
     }
 
-    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(getItem(position))
+    override fun getItemViewType(position: Int): Int {
+        return when (getItem(position)) {
+            is EventListItem.GroupHeader -> VIEW_TYPE_GROUP_HEADER
+            is EventListItem.EventItem -> VIEW_TYPE_EVENT
+        }
     }
 
-    inner class ViewHolder(
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        return when (viewType) {
+            VIEW_TYPE_GROUP_HEADER -> {
+                val binding = ItemEventGroupHeaderBinding.inflate(
+                    LayoutInflater.from(parent.context),
+                    parent,
+                    false
+                )
+                GroupHeaderViewHolder(binding)
+            }
+            else -> {
+                val binding = ItemNotificationEventBinding.inflate(
+                    LayoutInflater.from(parent.context),
+                    parent,
+                    false
+                )
+                EventViewHolder(binding)
+            }
+        }
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        when (val item = getItem(position)) {
+            is EventListItem.GroupHeader -> (holder as GroupHeaderViewHolder).bind(item)
+            is EventListItem.EventItem -> (holder as EventViewHolder).bind(item.event)
+        }
+    }
+
+    inner class GroupHeaderViewHolder(
+        private val binding: ItemEventGroupHeaderBinding
+    ) : RecyclerView.ViewHolder(binding.root) {
+
+        fun bind(header: EventListItem.GroupHeader) {
+            val context = binding.root.context
+
+            // 標籤文字：「第 N 次」+ 可選「（目前檢視）」
+            val label = buildString {
+                append(context.getString(R.string.event_group_header, header.groupIndex))
+                if (header.isCurrent) {
+                    append(context.getString(R.string.event_group_current))
+                }
+            }
+            binding.textGroupLabel.text = label
+
+            // 時間範圍
+            val timeRange = context.getString(
+                R.string.event_group_time_range,
+                shortTimeFormat.format(Date(header.firstEventTime)),
+                shortTimeFormat.format(Date(header.lastEventTime))
+            )
+            binding.textGroupTimeRange.text = timeRange
+
+            // 目前組別：不可點擊，文字使用次要色
+            // 非目前組別：可點擊，文字使用 primary 色
+            if (header.isCurrent) {
+                binding.root.isClickable = false
+                binding.root.isFocusable = false
+                binding.textGroupLabel.setTextColor(
+                    ContextCompat.getColor(context, R.color.text_secondary)
+                )
+            } else {
+                binding.root.isClickable = true
+                binding.root.isFocusable = true
+                binding.textGroupLabel.setTextColor(
+                    MaterialColors.getColor(
+                        binding.root,
+                        com.google.android.material.R.attr.colorPrimary,
+                        ContextCompat.getColor(context, R.color.event_posted)
+                    )
+                )
+                binding.root.setOnClickListener {
+                    onGroupClick(header.notificationId)
+                }
+            }
+        }
+    }
+
+    inner class EventViewHolder(
         private val binding: ItemNotificationEventBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
@@ -47,7 +148,10 @@ class NotificationEventAdapter(
             binding.root.setOnClickListener {
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {
-                    onItemClick(getItem(position))
+                    val item = getItem(position)
+                    if (item is EventListItem.EventItem) {
+                        onItemClick(item.event)
+                    }
                 }
             }
         }
@@ -107,12 +211,18 @@ class NotificationEventAdapter(
         }
     }
 
-    class DiffCallback : DiffUtil.ItemCallback<NotificationEventEntity>() {
-        override fun areItemsTheSame(oldItem: NotificationEventEntity, newItem: NotificationEventEntity): Boolean {
-            return oldItem.id == newItem.id
+    class DiffCallback : DiffUtil.ItemCallback<EventListItem>() {
+        override fun areItemsTheSame(oldItem: EventListItem, newItem: EventListItem): Boolean {
+            return when {
+                oldItem is EventListItem.GroupHeader && newItem is EventListItem.GroupHeader ->
+                    oldItem.notificationId == newItem.notificationId
+                oldItem is EventListItem.EventItem && newItem is EventListItem.EventItem ->
+                    oldItem.event.id == newItem.event.id
+                else -> false
+            }
         }
 
-        override fun areContentsTheSame(oldItem: NotificationEventEntity, newItem: NotificationEventEntity): Boolean {
+        override fun areContentsTheSame(oldItem: EventListItem, newItem: EventListItem): Boolean {
             return oldItem == newItem
         }
     }
