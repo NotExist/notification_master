@@ -266,7 +266,7 @@ class NotificationCaptureService : NotificationListenerService() {
 
         // 3.5 提取並儲存媒體附件
         try {
-            val mediaAttachments = mediaExtractor.extractMedia(sbn.notification, notificationId, captureTime)
+            val mediaAttachments = mediaExtractor.extractMedia(sbn.notification, notificationId, captureTime, sbn.packageName)
             if (mediaAttachments.isNotEmpty()) {
                 database.mediaAttachmentDao().insertAll(mediaAttachments)
             }

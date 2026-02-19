@@ -24,8 +24,11 @@ import java.security.MessageDigest
  * 從 Notification extras 提取圖片等媒體資源並儲存
  *
  * 支援兩種儲存模式：
- * - 預設模式：getExternalFilesDir(null)/media/，filePath 為相對路徑 "media/{MediaType}_{hash}.png"
+ * - 預設模式：getExternalFilesDir(null)/media/，filePath 為相對路徑 "media/{fileName}"
  * - 自訂模式：使用者透過 SAF 選擇的目錄，filePath 為完整 content URI 字串
+ *
+ * 檔名格式：{packageName}_{MediaType}_{hash}.ext
+ * 提供可對照索引資訊，方便從檔案系統反查對應的通知記錄。
  */
 class MediaExtractor(private val context: Context) {
 
@@ -173,6 +176,31 @@ class MediaExtractor(private val context: Context) {
                 false
             }
         }
+
+        /**
+         * 生成帶索引資訊的媒體檔名
+         */
+        private fun buildMediaFileName(
+            packageName: String,
+            mediaType: MediaType,
+            hash: String,
+            ext: String
+        ): String {
+            val pkgPart = if (packageName.isNotEmpty()) "${packageName}_" else ""
+            return "${pkgPart}${mediaType.name}_$hash.$ext"
+        }
+
+        /**
+         * 生成帶索引資訊的媒體基礎檔名（不含副檔名，用於 SAF createFile）
+         */
+        private fun buildMediaBaseName(
+            packageName: String,
+            mediaType: MediaType,
+            hash: String
+        ): String {
+            val pkgPart = if (packageName.isNotEmpty()) "${packageName}_" else ""
+            return "${pkgPart}${mediaType.name}_$hash"
+        }
     }
 
     private val mediaDir: File by lazy {
@@ -200,34 +228,36 @@ class MediaExtractor(private val context: Context) {
      * @param notification 通知物件
      * @param notificationId 通知記錄 ID
      * @param captureTime 擷取時間
+     * @param packageName 來源 App 的 package name（用於檔名索引）
      * @return 媒體附件清單
      */
     @Suppress("DEPRECATION")
     fun extractMedia(
         notification: Notification,
         notificationId: Long,
-        captureTime: Long
+        captureTime: Long,
+        packageName: String = ""
     ): List<MediaAttachmentEntity> {
         val attachments = mutableListOf<MediaAttachmentEntity>()
         val extras = notification.extras ?: return attachments
 
         // 1. EXTRA_LARGE_ICON
         extractBitmapFromExtras(extras, Notification.EXTRA_LARGE_ICON)?.let { bitmap ->
-            saveBitmap(bitmap, notificationId, MediaType.LARGE_ICON, captureTime)?.let {
+            saveBitmap(bitmap, notificationId, packageName, MediaType.LARGE_ICON, captureTime)?.let {
                 attachments.add(it)
             }
         }
 
         // 2. EXTRA_PICTURE (BigPictureStyle)
         extractBitmapFromExtras(extras, Notification.EXTRA_PICTURE)?.let { bitmap ->
-            saveBitmap(bitmap, notificationId, MediaType.PICTURE, captureTime)?.let {
+            saveBitmap(bitmap, notificationId, packageName, MediaType.PICTURE, captureTime)?.let {
                 attachments.add(it)
             }
         }
 
         // 3. EXTRA_LARGE_ICON_BIG (BigPictureStyle 大圖示)
         extractBitmapFromExtras(extras, Notification.EXTRA_LARGE_ICON_BIG)?.let { bitmap ->
-            saveBitmap(bitmap, notificationId, MediaType.LARGE_ICON_BIG, captureTime)?.let {
+            saveBitmap(bitmap, notificationId, packageName, MediaType.LARGE_ICON_BIG, captureTime)?.let {
                 attachments.add(it)
             }
         }
@@ -235,7 +265,7 @@ class MediaExtractor(private val context: Context) {
         // 4. Small Icon (API 23+ 使用 Icon 類別)
         if (Build.VERSION.SDK_INT >= 23) {
             notification.smallIcon?.let { icon ->
-                saveIcon(icon, notificationId, MediaType.SMALL_ICON, captureTime)?.let {
+                saveIcon(icon, notificationId, packageName, MediaType.SMALL_ICON, captureTime)?.let {
                     attachments.add(it)
                 }
             }
@@ -243,12 +273,12 @@ class MediaExtractor(private val context: Context) {
 
         // 5. MessagingStyle 對話頭像 (API 28+)
         if (Build.VERSION.SDK_INT >= 28) {
-            extractMessagingAvatars(extras, notificationId, captureTime, attachments)
+            extractMessagingAvatars(extras, notificationId, packageName, captureTime, attachments)
         }
 
         // 6. MessagingStyle 訊息中的媒體 (API 24+)
         if (Build.VERSION.SDK_INT >= 24) {
-            extractMessagingMedia(extras, notificationId, captureTime, attachments)
+            extractMessagingMedia(extras, notificationId, packageName, captureTime, attachments)
         }
 
         return attachments
@@ -262,6 +292,7 @@ class MediaExtractor(private val context: Context) {
     private fun extractMessagingAvatars(
         extras: Bundle,
         notificationId: Long,
+        packageName: String,
         captureTime: Long,
         attachments: MutableList<MediaAttachmentEntity>
     ) {
@@ -277,7 +308,7 @@ class MediaExtractor(private val context: Context) {
                 Notification.EXTRA_MESSAGING_PERSON
             )
             messagingPerson?.icon?.let { icon ->
-                saveIconDedup(icon, notificationId, captureTime, processedHashes, attachments)
+                saveIconDedup(icon, notificationId, packageName, captureTime, processedHashes, attachments)
             }
 
             // EXTRA_MESSAGES：每條訊息的 sender_person 頭像
@@ -286,7 +317,7 @@ class MediaExtractor(private val context: Context) {
                 val bundle = msg as? Bundle ?: return@forEach
                 val senderPerson = bundle.getParcelable<android.app.Person>("sender_person")
                 senderPerson?.icon?.let { icon ->
-                    saveIconDedup(icon, notificationId, captureTime, processedHashes, attachments)
+                    saveIconDedup(icon, notificationId, packageName, captureTime, processedHashes, attachments)
                 }
             }
         } catch (e: Exception) {
@@ -304,6 +335,7 @@ class MediaExtractor(private val context: Context) {
     private fun extractMessagingMedia(
         extras: Bundle,
         notificationId: Long,
+        packageName: String,
         captureTime: Long,
         attachments: MutableList<MediaAttachmentEntity>
     ) {
@@ -322,7 +354,7 @@ class MediaExtractor(private val context: Context) {
             if (!mimeType.startsWith("image/")) continue
 
             try {
-                val saved = saveFromUri(uri, mimeType, notificationId, captureTime, processedHashes)
+                val saved = saveFromUri(uri, mimeType, notificationId, packageName, captureTime, processedHashes)
                 if (saved != null) {
                     attachments.add(saved)
                 } else {
@@ -365,6 +397,7 @@ class MediaExtractor(private val context: Context) {
         uri: Uri,
         mimeType: String,
         notificationId: Long,
+        packageName: String,
         captureTime: Long,
         processedHashes: MutableSet<String>
     ): MediaAttachmentEntity? {
@@ -384,7 +417,7 @@ class MediaExtractor(private val context: Context) {
         val uriString = uri.toString()
 
         if (useCustomDir) {
-            saveBytesToCustomDir(bytes, hash, ext, mimeType, notificationId,
+            saveBytesToCustomDir(bytes, hash, ext, mimeType, notificationId, packageName,
                 MediaType.MESSAGE_MEDIA, captureTime,
                 bounds.outWidth, bounds.outHeight)?.let {
                 return it.copy(sourceUri = uriString)
@@ -392,7 +425,7 @@ class MediaExtractor(private val context: Context) {
             Log.w(TAG, "Custom dir write failed for URI media, falling back")
         }
 
-        return saveBytesToDefaultDir(bytes, hash, ext, mimeType, notificationId,
+        return saveBytesToDefaultDir(bytes, hash, ext, mimeType, notificationId, packageName,
             MediaType.MESSAGE_MEDIA, captureTime,
             bounds.outWidth, bounds.outHeight)?.copy(sourceUri = uriString)
     }
@@ -418,10 +451,11 @@ class MediaExtractor(private val context: Context) {
      */
     private fun saveBytesToDefaultDir(
         bytes: ByteArray, hash: String, ext: String, mimeType: String,
-        notificationId: Long, mediaType: MediaType, captureTime: Long, width: Int, height: Int
+        notificationId: Long, packageName: String,
+        mediaType: MediaType, captureTime: Long, width: Int, height: Int
     ): MediaAttachmentEntity? {
         return try {
-            val fileName = "${mediaType.name}_$hash.$ext"
+            val fileName = buildMediaFileName(packageName, mediaType, hash, ext)
             val file = File(mediaDir, fileName)
             val filePath = "$MEDIA_DIR/$fileName"
             if (!file.exists()) {
@@ -448,16 +482,18 @@ class MediaExtractor(private val context: Context) {
      */
     private fun saveBytesToCustomDir(
         bytes: ByteArray, hash: String, ext: String, mimeType: String,
-        notificationId: Long, mediaType: MediaType, captureTime: Long, width: Int, height: Int
+        notificationId: Long, packageName: String,
+        mediaType: MediaType, captureTime: Long, width: Int, height: Int
     ): MediaAttachmentEntity? {
         val docDir = customMediaDocDir ?: return null
         return try {
-            val fileName = "${mediaType.name}_$hash.$ext"
+            val fileName = buildMediaFileName(packageName, mediaType, hash, ext)
             val existing = docDir.findFile(fileName)
             val docFile = if (existing != null && existing.exists()) {
                 existing
             } else {
-                docDir.createFile(mimeType, "${mediaType.name}_$hash") ?: return null
+                val baseName = buildMediaBaseName(packageName, mediaType, hash)
+                docDir.createFile(mimeType, baseName) ?: return null
             }
             if (existing == null) {
                 context.contentResolver.openOutputStream(docFile.uri)?.use { it.write(bytes) }
@@ -485,6 +521,7 @@ class MediaExtractor(private val context: Context) {
     private fun saveIconDedup(
         icon: Icon,
         notificationId: Long,
+        packageName: String,
         captureTime: Long,
         processedHashes: MutableSet<String>,
         attachments: MutableList<MediaAttachmentEntity>
@@ -506,7 +543,7 @@ class MediaExtractor(private val context: Context) {
             if (hash in processedHashes) return
             processedHashes.add(hash)
 
-            saveBitmap(bitmap, notificationId, MediaType.MESSAGING_AVATAR, captureTime)?.let {
+            saveBitmap(bitmap, notificationId, packageName, MediaType.MESSAGING_AVATAR, captureTime)?.let {
                 attachments.add(it)
             }
         } catch (e: Exception) {
@@ -546,20 +583,21 @@ class MediaExtractor(private val context: Context) {
     private fun saveBitmap(
         bitmap: Bitmap,
         notificationId: Long,
+        packageName: String,
         mediaType: MediaType,
         captureTime: Long
     ): MediaAttachmentEntity? {
         val hash = bitmapHash(bitmap)
 
         if (useCustomDir) {
-            saveBitmapToCustomDir(bitmap, hash, notificationId, mediaType, captureTime)?.let {
+            saveBitmapToCustomDir(bitmap, hash, notificationId, packageName, mediaType, captureTime)?.let {
                 return it
             }
             // fallback 到預設目錄
             Log.w(TAG, "Custom dir write failed, falling back to default dir")
         }
 
-        return saveBitmapToDefaultDir(bitmap, hash, notificationId, mediaType, captureTime)
+        return saveBitmapToDefaultDir(bitmap, hash, notificationId, packageName, mediaType, captureTime)
     }
 
     /**
@@ -569,18 +607,19 @@ class MediaExtractor(private val context: Context) {
         bitmap: Bitmap,
         hash: String,
         notificationId: Long,
+        packageName: String,
         mediaType: MediaType,
         captureTime: Long
     ): MediaAttachmentEntity? {
         val docDir = customMediaDocDir ?: return null
         return try {
-            // 去重：檢查同名檔案是否已存在
-            val fileName = "${mediaType.name}_$hash.png"
+            val fileName = buildMediaFileName(packageName, mediaType, hash, "png")
             val existing = docDir.findFile(fileName)
             val docFile = if (existing != null && existing.exists()) {
                 existing
             } else {
-                docDir.createFile("image/png", "${mediaType.name}_$hash") ?: return null
+                val baseName = buildMediaBaseName(packageName, mediaType, hash)
+                docDir.createFile("image/png", baseName) ?: return null
             }
 
             // 僅新建的檔案需要寫入
@@ -615,11 +654,12 @@ class MediaExtractor(private val context: Context) {
         bitmap: Bitmap,
         hash: String,
         notificationId: Long,
+        packageName: String,
         mediaType: MediaType,
         captureTime: Long
     ): MediaAttachmentEntity? {
         return try {
-            val fileName = "${mediaType.name}_$hash.png"
+            val fileName = buildMediaFileName(packageName, mediaType, hash, "png")
             val existingFile = File(mediaDir, fileName)
             val filePath = "${MEDIA_DIR}/$fileName"
 
@@ -652,6 +692,7 @@ class MediaExtractor(private val context: Context) {
     private fun saveIcon(
         icon: Icon,
         notificationId: Long,
+        packageName: String,
         mediaType: MediaType,
         captureTime: Long
     ): MediaAttachmentEntity? {
@@ -668,7 +709,7 @@ class MediaExtractor(private val context: Context) {
             drawable.setBounds(0, 0, canvas.width, canvas.height)
             drawable.draw(canvas)
 
-            saveBitmap(bitmap, notificationId, mediaType, captureTime)
+            saveBitmap(bitmap, notificationId, packageName, mediaType, captureTime)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to save icon", e)
             null
