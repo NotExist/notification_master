@@ -101,20 +101,15 @@ class TimelineFragment : Fragment() {
             "serviceInstance=${NotificationCaptureService.getInstance() != null}")
         updateEmptyStateForPermission()
 
-        // 檢查是否由 shortcut / intent 觸發 audible 模式
-        // shortcuts.xml 的 <extra android:value="true"> 傳入的是 String，不是 boolean
-        val intent = activity?.intent
-        if (intent?.getStringExtra("show_audible") == "true" ||
-            intent?.getBooleanExtra("show_audible", false) == true) {
-            activateAudibleMode()
-            activity?.intent?.removeExtra("show_audible")
-        }
-
+        checkAndConsumeAudibleIntent()
         loadNotifications()
     }
 
     override fun onResume() {
         super.onResume()
+        // warm start (singleTop → onNewIntent) 時 fragment 已存在，
+        // 透過 onResume 重新檢查 intent extra 觸發 audible 模式
+        checkAndConsumeAudibleIntent()
         val isGranted = isNotificationListenerEnabled()
         Log.d(TAG, "onResume: isGranted=$isGranted, wasGranted=$wasPermissionGranted, " +
             "serviceConnected=${NotificationCaptureService.isConnected}")
@@ -505,6 +500,22 @@ class TimelineFragment : Fragment() {
         isAudibleMode = true
         isDeduplicatedMode = false
         binding.chipAudible.isChecked = true
+    }
+
+    /**
+     * 檢查並消費 shortcut intent 的 show_audible extra
+     * shortcuts.xml 的 <extra android:value="true"> 傳入的是 String，不是 boolean
+     */
+    private fun checkAndConsumeAudibleIntent() {
+        val intent = activity?.intent ?: return
+        val hasAudible = intent.getStringExtra("show_audible") == "true" ||
+            intent.getBooleanExtra("show_audible", false)
+        if (hasAudible && !isAudibleMode) {
+            activateAudibleMode()
+        }
+        if (hasAudible) {
+            intent.removeExtra("show_audible")
+        }
     }
 
     private fun showSimilarNotifications(notification: NotificationEntity) {

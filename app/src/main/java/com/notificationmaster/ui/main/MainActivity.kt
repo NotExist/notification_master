@@ -65,11 +65,11 @@ class MainActivity : AppCompatActivity() {
     private fun handleShortcutIntent(intent: Intent?) {
         // shortcuts.xml 的 <extra android:value="true"> 傳入的是 String，不是 boolean
         if (intent?.hasShowAudible() == true) {
-            // 確保導航到 timeline
-            val navHostFragment = supportFragmentManager
-                .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
-            navHostFragment.navController.navigate(R.id.nav_timeline)
-            // TimelineFragment 會在 onViewCreated 中讀取 activity intent extra
+            // 透過 BottomNav 切換到 timeline tab
+            // cold start: nav_timeline 已是 start destination，此行為 no-op
+            // warm start (singleTop → onNewIntent): 會切換回 timeline tab
+            // TimelineFragment 在 onViewCreated / onResume 讀取 intent extra
+            binding.bottomNav.selectedItemId = R.id.nav_timeline
         }
     }
 
