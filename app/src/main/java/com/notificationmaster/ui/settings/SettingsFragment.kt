@@ -67,6 +67,20 @@ class SettingsFragment : Fragment() {
         uri?.let { handleMediaDirSelected(it) }
     }
 
+    // 過濾規則匯出 SAF
+    private val exportFilterLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let { exportFilterRulesToUri(it) }
+    }
+
+    // 過濾規則匯入 SAF
+    private val importFilterLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { confirmAndImportFilterRules(it) }
+    }
+
     // 日曆權限請求
     private val calendarPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -382,6 +396,21 @@ class SettingsFragment : Fragment() {
             importJsonLauncher.launch(arrayOf("application/json"))
         }
 
+        binding.btnExportFilterRules.setOnClickListener {
+            val totalRules = FilterCategory.entries.sumOf {
+                FilterRuleStore.getRules(it).size
+            }
+            if (totalRules == 0) {
+                Toast.makeText(requireContext(), R.string.filter_export_empty, Toast.LENGTH_SHORT).show()
+            } else {
+                exportFilterLauncher.launch("notification_master_filter_rules.json")
+            }
+        }
+
+        binding.btnImportFilterRules.setOnClickListener {
+            importFilterLauncher.launch(arrayOf("application/json"))
+        }
+
         binding.btnClearData.setOnClickListener {
             AlertDialog.Builder(requireContext())
                 .setTitle("清除通知記錄資料庫")
@@ -617,6 +646,64 @@ class SettingsFragment : Fragment() {
 
             Toast.makeText(ctx, "已清除通知記錄資料庫", Toast.LENGTH_SHORT).show()
             updateStorageInfo()
+        }
+    }
+
+    // === 過濾規則匯出匯入 ===
+
+    private fun exportFilterRulesToUri(uri: android.net.Uri) {
+        val ctx = context ?: return
+        try {
+            val json = FilterRuleStore.exportAllToJson()
+            ctx.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+                ?: throw IllegalStateException("無法開啟輸出串流")
+
+            val totalRules = FilterCategory.entries.sumOf {
+                FilterRuleStore.getRules(it).size
+            }
+            Toast.makeText(
+                ctx,
+                getString(R.string.filter_export_success, totalRules),
+                Toast.LENGTH_SHORT
+            ).show()
+        } catch (e: Exception) {
+            Toast.makeText(ctx, "匯出失敗：${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun confirmAndImportFilterRules(uri: android.net.Uri) {
+        val ctx = context ?: return
+        AlertDialog.Builder(ctx)
+            .setTitle(R.string.settings_import_filter_rules)
+            .setMessage(R.string.filter_import_confirm)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                importFilterRulesFromUri(uri)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun importFilterRulesFromUri(uri: android.net.Uri) {
+        val ctx = context ?: return
+        try {
+            val json = ctx.contentResolver.openInputStream(uri)?.use {
+                it.bufferedReader().readText()
+            } ?: throw IllegalStateException("無法開啟輸入串流")
+
+            val result = FilterRuleStore.importAllFromJson(ctx, json)
+            val notifCount = result[FilterCategory.NOTIFICATION] ?: 0
+            val calCount = result[FilterCategory.CALENDAR_EXPORT] ?: 0
+
+            Toast.makeText(
+                ctx,
+                getString(R.string.filter_import_success, notifCount, calCount),
+                Toast.LENGTH_LONG
+            ).show()
+
+            updateFilterSummary()
+            updateCalendarWhitelistSummary()
+        } catch (e: Exception) {
+            Toast.makeText(ctx, "匯入失敗：${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 

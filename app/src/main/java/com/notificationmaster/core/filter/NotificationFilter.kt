@@ -208,4 +208,52 @@ object FilterRuleStore {
      */
     fun getRules(category: FilterCategory): List<FilterRule> =
         (rulesMap[category] ?: emptyList()).toList()
+
+    /**
+     * 匯出所有類別的規則為 JSON 字串
+     */
+    fun exportAllToJson(): String {
+        val root = JSONObject()
+        root.put("version", 1)
+        root.put("exportTime", System.currentTimeMillis())
+
+        val categories = JSONObject()
+        for (category in FilterCategory.entries) {
+            val rules = rulesMap[category] ?: emptyList()
+            val arr = JSONArray()
+            for (rule in rules) {
+                arr.put(rule.toJson())
+            }
+            categories.put(category.name, arr)
+        }
+        root.put("categories", categories)
+
+        return root.toString(2)
+    }
+
+    /**
+     * 從 JSON 字串匯入所有類別的規則（取代現有規則）
+     *
+     * @return 各類別匯入的規則數
+     */
+    fun importAllFromJson(context: Context, json: String): Map<FilterCategory, Int> {
+        val root = JSONObject(json)
+        val categories = root.getJSONObject("categories")
+        val result = mutableMapOf<FilterCategory, Int>()
+
+        for (category in FilterCategory.entries) {
+            val arr = categories.optJSONArray(category.name)
+            if (arr != null) {
+                val rules = (0 until arr.length()).map {
+                    FilterRule.fromJson(arr.getJSONObject(it))
+                }
+                rulesMap[category] = rules
+                save(context, category)
+                result[category] = rules.size
+                Log.d(TAG, "Imported ${rules.size} filter rules for $category")
+            }
+        }
+
+        return result
+    }
 }
