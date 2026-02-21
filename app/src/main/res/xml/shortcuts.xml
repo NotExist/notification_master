@@ -7,10 +7,9 @@
         android:shortcutShortLabel="@string/shortcut_audible_short"
         android:shortcutLongLabel="@string/shortcut_audible_long">
         <intent
-            android:action="android.intent.action.VIEW"
+            android:action="com.notificationmaster.action.SHOW_AUDIBLE"
             android:targetPackage="${applicationId}"
-            android:targetClass="com.notificationmaster.ui.main.MainActivity">
-            <extra android:name="show_audible" android:value="true" />
-        </intent>
+            android:targetClass="com.notificationmaster.ui.main.MainActivity" />
+
     </shortcut>
 </shortcuts>

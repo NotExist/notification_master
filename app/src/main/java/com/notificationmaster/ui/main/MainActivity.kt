@@ -63,21 +63,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleShortcutIntent(intent: Intent?) {
-        // shortcuts.xml 的 <extra android:value="true"> 傳入的是 String，不是 boolean
-        if (intent?.hasShowAudible() == true) {
-            // 透過 BottomNav 切換到 timeline tab
-            // cold start: nav_timeline 已是 start destination，此行為 no-op
-            // warm start (singleTop → onNewIntent): 會切換回 timeline tab
-            // TimelineFragment 在 onViewCreated / onResume 讀取 intent extra
+        if (intent?.action == ACTION_SHOW_AUDIBLE) {
             binding.bottomNav.selectedItemId = R.id.nav_timeline
         }
     }
 
     companion object {
-        /** 檢查 intent 是否帶有 show_audible extra（相容 String 和 Boolean 兩種型別） */
-        fun Intent.hasShowAudible(): Boolean =
-            getStringExtra("show_audible") == "true" ||
-            getBooleanExtra("show_audible", false)
+        const val ACTION_SHOW_AUDIBLE = "com.notificationmaster.action.SHOW_AUDIBLE"
     }
 
     override fun onSupportNavigateUp(): Boolean {

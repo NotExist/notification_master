@@ -26,6 +26,7 @@ import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.databinding.FragmentTimelineBinding
 import com.notificationmaster.service.NotificationCaptureService
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
+import com.notificationmaster.ui.main.MainActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -503,18 +504,17 @@ class TimelineFragment : Fragment() {
     }
 
     /**
-     * 檢查並消費 shortcut intent 的 show_audible extra
-     * shortcuts.xml 的 <extra android:value="true"> 傳入的是 String，不是 boolean
+     * 檢查並消費 shortcut intent 的 audible action
+     * 使用自訂 action 取代 extra，避免 OEM launcher intent-filter 驗證失敗
      */
     private fun checkAndConsumeAudibleIntent() {
         val intent = activity?.intent ?: return
-        val hasAudible = intent.getStringExtra("show_audible") == "true" ||
-            intent.getBooleanExtra("show_audible", false)
-        if (hasAudible && !isAudibleMode) {
-            activateAudibleMode()
-        }
-        if (hasAudible) {
-            intent.removeExtra("show_audible")
+        if (intent.action == MainActivity.ACTION_SHOW_AUDIBLE) {
+            if (!isAudibleMode) {
+                activateAudibleMode()
+            }
+            // 消費 action，防止 onResume 重複觸發
+            intent.action = null
         }
     }
 
