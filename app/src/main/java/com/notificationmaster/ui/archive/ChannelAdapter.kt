@@ -59,9 +59,9 @@ class ChannelAdapter(
         fun bind(item: ChannelEntity) {
             val context = binding.root.context
 
-            // Line 1: channelName (description)，description 有才附加
+            // Line 1: channelName (description)，channelName 缺失時顯示「未設定」
             binding.textChannelName.text = when {
-                item.channelName == null -> item.channelId
+                item.channelName == null -> context.getString(R.string.channel_name_unset)
                 item.description.isNullOrEmpty() -> item.channelName
                 else -> "${item.channelName} (${item.description})"
             }
