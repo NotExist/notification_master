@@ -6,12 +6,11 @@ import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.ArrayAdapter
-import android.widget.AutoCompleteTextView
-import android.widget.CheckBox
 import android.widget.LinearLayout
-import android.widget.RadioGroup
+import com.google.android.material.checkbox.MaterialCheckBox
 import android.widget.Toast
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
@@ -52,20 +51,30 @@ object FilterRuleDialogHelper {
             .inflate(R.layout.dialog_add_filter_rule, null)
 
         // === Views ===
-        val textCategoryLabel = dialogView.findViewById<View>(R.id.text_category_label)
-        val radioGroupCategory = dialogView.findViewById<RadioGroup>(R.id.radio_group_category)
-        val editPackageName = dialogView.findViewById<AutoCompleteTextView>(R.id.edit_package_name)
+        val layoutCategory = dialogView.findViewById<TextInputLayout>(R.id.layout_category)
+        val dropdownCategory = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.dropdown_category)
+        val editPackageName = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.edit_package_name)
         val layoutPackageName = dialogView.findViewById<TextInputLayout>(R.id.layout_package_name)
-        val editChannelId = dialogView.findViewById<AutoCompleteTextView>(R.id.edit_channel_id)
+        val editChannelId = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.edit_channel_id)
         val btnSelectAll = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_select_all)
         val containerEventTypes = dialogView.findViewById<LinearLayout>(R.id.container_event_types)
 
-        // === Category 選擇 ===
+        // === Category 下拉選單 ===
+        val categoryLabels = arrayOf(
+            context.getString(R.string.filter_dialog_category_notification),
+            context.getString(R.string.filter_dialog_category_calendar)
+        )
+        val categoryValues = arrayOf(FilterCategory.NOTIFICATION, FilterCategory.CALENDAR_EXPORT)
+        var selectedCategoryIndex = 0
+
         if (category == null) {
-            textCategoryLabel.visibility = View.VISIBLE
-            radioGroupCategory.visibility = View.VISIBLE
-            dialogView.findViewById<View>(R.id.radio_notification).isSelected = true
-            radioGroupCategory.check(R.id.radio_notification)
+            layoutCategory.visibility = View.VISIBLE
+            val categoryAdapter = ArrayAdapter(context, android.R.layout.simple_dropdown_item_1line, categoryLabels)
+            dropdownCategory.setAdapter(categoryAdapter)
+            dropdownCategory.setText(categoryLabels[0], false)
+            dropdownCategory.setOnItemClickListener { _, _, position, _ ->
+                selectedCategoryIndex = position
+            }
         }
 
         // === 預填值 ===
@@ -74,9 +83,9 @@ object FilterRuleDialogHelper {
 
         // === EventType CheckBox 動態生成 ===
         val eventTypes = EventType.entries
-        val checkBoxes = mutableListOf<CheckBox>()
+        val checkBoxes = mutableListOf<MaterialCheckBox>()
         for (et in eventTypes) {
-            val cb = CheckBox(context).apply {
+            val cb = MaterialCheckBox(context).apply {
                 text = et.name
                 isChecked = false
                 layoutParams = LinearLayout.LayoutParams(
@@ -174,10 +183,7 @@ object FilterRuleDialogHelper {
                 val channelId = editChannelId.text.toString().trim().ifEmpty { null }
 
                 // 決定 category
-                val resolvedCategory = category ?: when (radioGroupCategory.checkedRadioButtonId) {
-                    R.id.radio_calendar -> FilterCategory.CALENDAR_EXPORT
-                    else -> FilterCategory.NOTIFICATION
-                }
+                val resolvedCategory = category ?: categoryValues[selectedCategoryIndex]
 
                 val rule = FilterRule(
                     packageName = packageName,
@@ -201,7 +207,7 @@ object FilterRuleDialogHelper {
         scope: CoroutineScope,
         database: com.notificationmaster.data.db.NotificationDatabase,
         packageName: String,
-        editChannelId: AutoCompleteTextView
+        editChannelId: MaterialAutoCompleteTextView
     ) {
         scope.launch {
             val channels = withContext(Dispatchers.IO) {

@@ -11,48 +11,35 @@
         android:orientation="vertical">
 
         <!-- Category 選擇（僅在 category 未指定時顯示） -->
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/text_category_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/filter_dialog_category"
-            android:textAppearance="?attr/textAppearanceBodyMedium"
-            android:layout_marginBottom="4dp"
-            android:visibility="gone" />
-
-        <RadioGroup
-            android:id="@+id/radio_group_category"
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/layout_category"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginBottom="12dp"
+            android:hint="@string/filter_dialog_category"
+            android:layout_marginBottom="8dp"
             android:visibility="gone">
 
-            <com.google.android.material.radiobutton.MaterialRadioButton
-                android:id="@+id/radio_notification"
-                android:layout_width="0dp"
+            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                android:id="@+id/dropdown_category"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/filter_dialog_category_notification" />
+                android:inputType="none"
+                android:editable="false" />
 
-            <com.google.android.material.radiobutton.MaterialRadioButton
-                android:id="@+id/radio_calendar"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/filter_dialog_category_calendar" />
-        </RadioGroup>
+        </com.google.android.material.textfield.TextInputLayout>
 
         <!-- Package Name -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/layout_package_name"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="@string/filter_dialog_package_name"
             app:endIconMode="dropdown_menu"
             android:layout_marginBottom="8dp">
 
-            <AutoCompleteTextView
+            <com.google.android.material.textfield.MaterialAutoCompleteTextView
                 android:id="@+id/edit_package_name"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -63,13 +50,14 @@
         <!-- Channel ID -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/layout_channel_id"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="@string/filter_dialog_channel_id"
             app:endIconMode="dropdown_menu"
             android:layout_marginBottom="12dp">
 
-            <AutoCompleteTextView
+            <com.google.android.material.textfield.MaterialAutoCompleteTextView
                 android:id="@+id/edit_channel_id"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
