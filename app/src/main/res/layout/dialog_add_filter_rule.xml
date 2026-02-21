@@ -32,11 +32,10 @@
         <!-- Package Name -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/layout_package_name"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="@string/filter_dialog_package_name"
-            app:endIconMode="dropdown_menu"
             android:layout_marginBottom="8dp">
 
             <com.google.android.material.textfield.MaterialAutoCompleteTextView
@@ -50,11 +49,10 @@
         <!-- Channel ID -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/layout_channel_id"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="@string/filter_dialog_channel_id"
-            app:endIconMode="dropdown_menu"
             android:layout_marginBottom="12dp">
 
             <com.google.android.material.textfield.MaterialAutoCompleteTextView
