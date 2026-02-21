@@ -121,7 +121,7 @@ class NotificationDetailFragment : Fragment() {
                 }
 
                 // 按 notificationId 分組，建立列表
-                val items = if (allEntities.size <= 1) {
+                val items: List<EventListItem> = if (allEntities.size <= 1) {
                     // 單次生命週期：不顯示分組標題
                     events.map { EventListItem.EventItem(it) }
                 } else {
