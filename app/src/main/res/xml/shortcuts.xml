@@ -1,15 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
-    <shortcut
-        android:shortcutId="recent_audible"
-        android:enabled="true"
-        android:icon="@drawable/ic_shortcut_audible"
-        android:shortcutShortLabel="@string/shortcut_audible_short"
-        android:shortcutLongLabel="@string/shortcut_audible_long">
-        <intent
-            android:action="com.notificationmaster.action.SHOW_AUDIBLE"
-            android:targetPackage="${applicationId}"
-            android:targetClass="com.notificationmaster.ui.main.MainActivity" />
-
-    </shortcut>
+    <!-- 動態 Shortcut 由 NotificationMasterApp.setupShortcuts() 註冊 -->
 </shortcuts>
