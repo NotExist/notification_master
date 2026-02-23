@@ -65,6 +65,7 @@
             android:exported="true"
             android:excludeFromRecents="true"
             android:noHistory="true"
+            android:taskAffinity=""
             android:theme="@style/Theme.NotificationMaster.Dialog">
             <intent-filter>
                 <action android:name="com.notificationmaster.action.SHORTCUT_AUDIBLE" />
@@ -78,6 +79,7 @@
             android:exported="true"
             android:excludeFromRecents="true"
             android:noHistory="true"
+            android:taskAffinity=""
             android:theme="@style/Theme.NotificationMaster.Transparent">
             <intent-filter>
                 <action android:name="com.notificationmaster.action.SHORTCUT_HEADSUP" />
