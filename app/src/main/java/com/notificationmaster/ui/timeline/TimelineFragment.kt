@@ -26,7 +26,6 @@ import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.databinding.FragmentTimelineBinding
 import com.notificationmaster.service.NotificationCaptureService
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
-import com.notificationmaster.ui.main.MainActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -102,15 +101,11 @@ class TimelineFragment : Fragment() {
             "serviceInstance=${NotificationCaptureService.getInstance() != null}")
         updateEmptyStateForPermission()
 
-        checkAndConsumeAudibleIntent()
         loadNotifications()
     }
 
     override fun onResume() {
         super.onResume()
-        // warm start (singleTop → onNewIntent) 時 fragment 已存在，
-        // 透過 onResume 重新檢查 intent extra 觸發 audible 模式
-        checkAndConsumeAudibleIntent()
         val isGranted = isNotificationListenerEnabled()
         Log.d(TAG, "onResume: isGranted=$isGranted, wasGranted=$wasPermissionGranted, " +
             "serviceConnected=${NotificationCaptureService.isConnected}")
@@ -501,21 +496,6 @@ class TimelineFragment : Fragment() {
         isAudibleMode = true
         isDeduplicatedMode = false
         binding.chipAudible.isChecked = true
-    }
-
-    /**
-     * 檢查並消費 shortcut intent 的 audible action
-     * 使用自訂 action 取代 extra，避免 OEM launcher intent-filter 驗證失敗
-     */
-    private fun checkAndConsumeAudibleIntent() {
-        val intent = activity?.intent ?: return
-        if (intent.action == MainActivity.ACTION_SHOW_AUDIBLE) {
-            if (!isAudibleMode) {
-                activateAudibleMode()
-            }
-            // 消費 action，防止 onResume 重複觸發
-            intent.action = null
-        }
     }
 
     private fun showSimilarNotifications(notification: NotificationEntity) {

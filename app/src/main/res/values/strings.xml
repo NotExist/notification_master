@@ -201,6 +201,12 @@
     <string name="timeline_audible_only">有聲</string>
     <string name="shortcut_audible_short">最近發聲</string>
     <string name="shortcut_audible_long">最近發出聲音的通知</string>
+    <string name="shortcut_headsup_short">最近彈出</string>
+    <string name="shortcut_headsup_long">最近以 Heads-up 彈出的通知</string>
+    <string name="shortcut_audible_title">最近有聲通知</string>
+    <string name="shortcut_headsup_title">最近 Heads-up 通知</string>
+    <string name="shortcut_empty_audible">尚無有聲通知記錄</string>
+    <string name="shortcut_empty_headsup">尚無 Heads-up 通知記錄</string>
     <!-- Channel -->
     <string name="channel_name_unset">Channel Name 未設定</string>
 </resources>

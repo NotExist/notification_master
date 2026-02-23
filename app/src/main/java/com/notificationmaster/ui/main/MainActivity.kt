@@ -12,6 +12,7 @@ import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
 import com.notificationmaster.R
 import com.notificationmaster.databinding.ActivityMainBinding
+import com.notificationmaster.ui.detail.NotificationDetailFragmentArgs
 
 /**
  * 主 Activity
@@ -63,13 +64,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleShortcutIntent(intent: Intent?) {
-        if (intent?.action == ACTION_SHOW_AUDIBLE) {
-            binding.bottomNav.selectedItemId = R.id.nav_timeline
+        if (intent?.action == ACTION_SHOW_DETAIL) {
+            val notificationId = intent.getLongExtra(EXTRA_NOTIFICATION_ID, -1L)
+            if (notificationId != -1L) {
+                val navHostFragment = supportFragmentManager
+                    .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
+                val navController = navHostFragment.navController
+                val args = NotificationDetailFragmentArgs(notificationId).toBundle()
+                navController.navigate(R.id.nav_detail, args)
+            }
+            intent.action = null
         }
     }
 
     companion object {
-        const val ACTION_SHOW_AUDIBLE = "com.notificationmaster.action.SHOW_AUDIBLE"
+        const val ACTION_SHOW_DETAIL = "com.notificationmaster.action.SHOW_DETAIL"
+        const val EXTRA_NOTIFICATION_ID = "notification_id"
     }
 
     override fun onSupportNavigateUp(): Boolean {

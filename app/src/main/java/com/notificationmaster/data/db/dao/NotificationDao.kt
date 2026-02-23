@@ -146,6 +146,23 @@ interface NotificationDao {
     """)
     fun getRecentAudibleNotifications(limit: Int = 20): Flow<List<NotificationEntity>>
 
+    // === 查詢 - Heads-up ===
+
+    /**
+     * 取得最近 Heads-up 通知（每個 notification_key 取最新一筆）
+     */
+    @Query("""
+        SELECT * FROM notifications
+        WHERE id IN (
+            SELECT MAX(id) FROM notifications
+            WHERE likely_headsup = 1
+            GROUP BY notification_key
+        )
+        ORDER BY post_time DESC
+        LIMIT :limit
+    """)
+    fun getRecentHeadsupNotifications(limit: Int = 20): Flow<List<NotificationEntity>>
+
     // === 查詢 - 按來源 ===
 
     @Query("""

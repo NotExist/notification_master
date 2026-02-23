@@ -51,12 +51,38 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             <intent-filter>
-                <action android:name="com.notificationmaster.action.SHOW_AUDIBLE" />
+                <action android:name="com.notificationmaster.action.SHOW_DETAIL" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
+        </activity>
+
+        <!-- Audible Shortcut Activity (Dialog 風格) -->
+        <activity
+            android:name=".ui.shortcut.AudibleShortcutActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.NotificationMaster.Dialog">
+            <intent-filter>
+                <action android:name="com.notificationmaster.action.SHORTCUT_AUDIBLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Heads-up Shortcut Activity (BottomSheet 風格) -->
+        <activity
+            android:name=".ui.shortcut.HeadsupShortcutActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.NotificationMaster.Transparent">
+            <intent-filter>
+                <action android:name="com.notificationmaster.action.SHORTCUT_HEADSUP" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
 
         <!-- NotificationListenerService -->
