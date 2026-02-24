@@ -30,7 +30,7 @@ class NotificationExtractor(private val context: Context) {
 
     companion object {
         /** JSON 欄位大小上限（64 KB），超過則截斷並附帶標記 */
-        private const val MAX_JSON_SIZE = 64 * 1024
+        internal const val MAX_JSON_SIZE = 64 * 1024
 
         /** 已知會由 MediaExtractor 另存的 Bitmap extras key → 媒體類型名稱 */
         @SuppressLint("InlinedApi")
@@ -41,7 +41,7 @@ class NotificationExtractor(private val context: Context) {
         )
 
         /** 截斷過長 JSON 字串，附帶截斷標記 */
-        private fun truncateJson(json: String): String {
+        internal fun truncateJson(json: String): String {
             if (json.length <= MAX_JSON_SIZE) return json
             return json.substring(0, MAX_JSON_SIZE) + "…[truncated, original ${json.length} chars]"
         }
