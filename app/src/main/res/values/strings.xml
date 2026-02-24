@@ -207,6 +207,21 @@
     <string name="shortcut_headsup_title">最近 Heads-up 通知</string>
     <string name="shortcut_empty_audible">尚無有聲通知記錄</string>
     <string name="shortcut_empty_headsup">尚無 Heads-up 通知記錄</string>
+    <!-- 過濾規則自動備份 -->
+    <string name="settings_filter_backup_dir">過濾規則自動備份</string>
+    <string name="settings_filter_backup_dir_not_set">未設定備份目錄</string>
+    <string name="settings_filter_backup_dir_set">備份目錄：%s</string>
+    <string name="settings_filter_backup_dir_choose">設定備份目錄</string>
+    <string name="settings_filter_backup_dir_reset">重設</string>
+    <string name="settings_filter_backup_dir_success">已設定備份目錄</string>
+    <string name="settings_filter_backup_dir_invalid">無法存取所選目錄</string>
+    <string name="settings_filter_backup_dir_reset_confirm">確定要清除備份目錄設定嗎？\n\n已備份的檔案不會被刪除。</string>
+    <string name="settings_filter_backup_dir_reset_done">已清除備份目錄設定</string>
+    <string name="filter_backup_found_title">偵測到過濾規則備份</string>
+    <string name="filter_backup_found_message">在備份目錄發現過濾規則備份檔案，是否匯入？</string>
+    <string name="filter_backup_setup_title">設定過濾規則備份</string>
+    <string name="filter_backup_setup_message">目前尚無過濾規則。\n是否選擇一個目錄作為自動備份位置？\n設定後，規則異動會自動備份到該目錄。</string>
+
     <!-- Channel -->
     <string name="channel_name_unset">Channel Name 未設定</string>
 </resources>

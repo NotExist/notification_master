@@ -13,6 +13,9 @@ object AppPreferences {
     private const val PREFS_NAME = "notification_master_prefs"
     private const val KEY_CUSTOM_MEDIA_DIR_URI = "custom_media_dir_uri"
     private const val KEY_CUSTOM_MEDIA_DIR_DISPLAY = "custom_media_dir_display"
+    private const val KEY_BACKUP_DIR_URI = "backup_dir_uri"
+    private const val KEY_BACKUP_DIR_DISPLAY = "backup_dir_display"
+    private const val KEY_BACKUP_SETUP_DECLINED = "backup_setup_declined"
     /** 舊版單一 key，僅用於遷移 */
     private const val KEY_FILTER_RULES_LEGACY = "filter_rules"
     private const val KEY_FILTER_RULES_PREFIX = "filter_rules_"
@@ -59,6 +62,40 @@ object AppPreferences {
      */
     fun getCustomMediaDirDisplay(context: Context): String? =
         prefs(context).getString(KEY_CUSTOM_MEDIA_DIR_DISPLAY, null)
+
+    // === 過濾規則備份目錄 ===
+
+    fun getBackupDirUri(context: Context): Uri? =
+        prefs(context).getString(KEY_BACKUP_DIR_URI, null)?.let { Uri.parse(it) }
+
+    fun setBackupDir(context: Context, uri: Uri, displayName: String) {
+        prefs(context).edit()
+            .putString(KEY_BACKUP_DIR_URI, uri.toString())
+            .putString(KEY_BACKUP_DIR_DISPLAY, displayName)
+            .apply()
+    }
+
+    fun clearBackupDir(context: Context) {
+        prefs(context).edit()
+            .remove(KEY_BACKUP_DIR_URI)
+            .remove(KEY_BACKUP_DIR_DISPLAY)
+            .apply()
+    }
+
+    fun isBackupDirEnabled(context: Context): Boolean =
+        prefs(context).getString(KEY_BACKUP_DIR_URI, null) != null
+
+    fun getBackupDirDisplay(context: Context): String? =
+        prefs(context).getString(KEY_BACKUP_DIR_DISPLAY, null)
+
+    fun isBackupSetupDeclined(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_BACKUP_SETUP_DECLINED, false)
+
+    fun setBackupSetupDeclined(context: Context, declined: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_BACKUP_SETUP_DECLINED, declined)
+            .apply()
+    }
 
     // === 過濾規則 ===
 

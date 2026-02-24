@@ -2,6 +2,7 @@ package com.notificationmaster.core.filter
 
 import android.content.Context
 import android.util.Log
+import androidx.documentfile.provider.DocumentFile
 import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.data.db.entity.EventType
 import org.json.JSONArray
@@ -81,6 +82,7 @@ data class FilterRule(
 object FilterRuleStore {
 
     private const val TAG = "FilterRuleStore"
+    private const val BACKUP_FILENAME = "notification_master_filter_rules.json"
 
     private val rulesMap = mutableMapOf<FilterCategory, List<FilterRule>>()
     private val loadedCategories = mutableSetOf<FilterCategory>()
@@ -107,7 +109,7 @@ object FilterRuleStore {
     }
 
     /**
-     * 儲存到 SharedPreferences
+     * 儲存到 SharedPreferences，並觸發自動備份
      */
     private fun save(context: Context, category: FilterCategory) {
         val rules = rulesMap[category] ?: emptyList()
@@ -116,6 +118,7 @@ object FilterRuleStore {
             arr.put(rule.toJson())
         }
         AppPreferences.setFilterRulesJson(context, category, arr.toString())
+        autoBackup(context)
     }
 
     /**
@@ -256,4 +259,53 @@ object FilterRuleStore {
 
         return result
     }
+
+    /**
+     * 自動備份所有規則到已設定的 SAF 備份目錄
+     * 備份目錄未設定時靜默不執行
+     */
+    fun autoBackup(context: Context) {
+        val treeUri = AppPreferences.getBackupDirUri(context) ?: return
+        try {
+            val dir = DocumentFile.fromTreeUri(context, treeUri) ?: return
+            val existing = dir.findFile(BACKUP_FILENAME)
+            val file = existing ?: dir.createFile("application/json", BACKUP_FILENAME)
+            if (file == null) {
+                Log.w(TAG, "Failed to create backup file")
+                return
+            }
+            val json = exportAllToJson()
+            context.contentResolver.openOutputStream(file.uri, "wt")?.use {
+                it.write(json.toByteArray())
+            }
+            Log.d(TAG, "Auto backup completed")
+        } catch (e: Exception) {
+            Log.w(TAG, "Auto backup failed", e)
+        }
+    }
+
+    /**
+     * 從備份目錄讀取備份檔案內容
+     * @return JSON 字串，或 null（備份目錄未設定、檔案不存在、無法讀取）
+     */
+    fun readBackupFromDir(context: Context): String? {
+        val treeUri = AppPreferences.getBackupDirUri(context) ?: return null
+        return try {
+            val dir = DocumentFile.fromTreeUri(context, treeUri) ?: return null
+            val file = dir.findFile(BACKUP_FILENAME) ?: return null
+            if (!file.canRead()) return null
+            context.contentResolver.openInputStream(file.uri)?.use {
+                it.bufferedReader().readText()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read backup file", e)
+            null
+        }
+    }
+
+    /**
+     * 所有類別的規則是否都為空
+     */
+    fun isAllEmpty(): Boolean =
+        FilterCategory.entries.all { (rulesMap[it] ?: emptyList()).isEmpty() }
 }

@@ -81,6 +81,13 @@ class SettingsFragment : Fragment() {
         uri?.let { confirmAndImportFilterRules(it) }
     }
 
+    // 備份目錄選擇 SAF
+    private val backupDirPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        uri?.let { handleBackupDirSelected(it) }
+    }
+
     // 日曆權限請求
     private val calendarPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -117,6 +124,8 @@ class SettingsFragment : Fragment() {
         setupDebugSettings()
         setupCalendarIntegration()
         setupDataManagement()
+
+        checkBackupAndSuggestImport()
     }
 
     private fun setupEnvironmentCard() {
@@ -153,6 +162,7 @@ class SettingsFragment : Fragment() {
         validateCustomMediaDir()
         updateFilterSummary()
         updateCalendarWhitelistSummary()
+        updateBackupDirDisplay()
     }
 
     override fun onDestroyView() {
@@ -410,6 +420,15 @@ class SettingsFragment : Fragment() {
         binding.btnImportFilterRules.setOnClickListener {
             importFilterLauncher.launch(arrayOf("application/json"))
         }
+
+        // 備份目錄
+        binding.btnChooseBackupDir.setOnClickListener {
+            backupDirPickerLauncher.launch(null)
+        }
+        binding.btnResetBackupDir.setOnClickListener {
+            resetBackupDir()
+        }
+        updateBackupDirDisplay()
 
         binding.btnClearData.setOnClickListener {
             AlertDialog.Builder(requireContext())
@@ -707,7 +726,138 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    // === 過濾規則備份 ===
+
+    private fun checkBackupAndSuggestImport() {
+        if (hasPromptedThisSession) return
+        if (!FilterRuleStore.isAllEmpty()) return
+        hasPromptedThisSession = true
+
+        val ctx = context ?: return
+        if (AppPreferences.isBackupDirEnabled(ctx)) {
+            val json = FilterRuleStore.readBackupFromDir(ctx) ?: return
+            AlertDialog.Builder(ctx)
+                .setTitle(R.string.filter_backup_found_title)
+                .setMessage(R.string.filter_backup_found_message)
+                .setPositiveButton(R.string.ok) { _, _ ->
+                    importBackupJson(json)
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        } else if (!AppPreferences.isBackupSetupDeclined(ctx)) {
+            AlertDialog.Builder(ctx)
+                .setTitle(R.string.filter_backup_setup_title)
+                .setMessage(R.string.filter_backup_setup_message)
+                .setPositiveButton(R.string.ok) { _, _ ->
+                    backupDirPickerLauncher.launch(null)
+                }
+                .setNegativeButton(R.string.cancel) { _, _ ->
+                    AppPreferences.setBackupSetupDeclined(ctx, true)
+                }
+                .show()
+        }
+    }
+
+    private fun importBackupJson(json: String) {
+        val ctx = context ?: return
+        try {
+            val result = FilterRuleStore.importAllFromJson(ctx, json)
+            val notifCount = result[FilterCategory.NOTIFICATION] ?: 0
+            val calCount = result[FilterCategory.CALENDAR_EXPORT] ?: 0
+            Toast.makeText(
+                ctx,
+                getString(R.string.filter_import_success, notifCount, calCount),
+                Toast.LENGTH_LONG
+            ).show()
+            updateFilterSummary()
+            updateCalendarWhitelistSummary()
+        } catch (e: Exception) {
+            Toast.makeText(ctx, "匯入失敗：${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun handleBackupDirSelected(treeUri: android.net.Uri) {
+        val ctx = context ?: return
+        try {
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            ctx.contentResolver.takePersistableUriPermission(treeUri, flags)
+
+            val docFile = DocumentFile.fromTreeUri(ctx, treeUri)
+            if (docFile == null || !docFile.canWrite()) {
+                Toast.makeText(ctx, R.string.settings_filter_backup_dir_invalid, Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            val displayName = docFile.name ?: treeUri.lastPathSegment ?: treeUri.toString()
+            AppPreferences.setBackupDir(ctx, treeUri, displayName)
+
+            Toast.makeText(ctx, R.string.settings_filter_backup_dir_success, Toast.LENGTH_SHORT).show()
+            updateBackupDirDisplay()
+
+            // 規則為空且備份檔案存在 → 建議匯入
+            if (FilterRuleStore.isAllEmpty()) {
+                val json = FilterRuleStore.readBackupFromDir(ctx)
+                if (json != null) {
+                    AlertDialog.Builder(ctx)
+                        .setTitle(R.string.filter_backup_found_title)
+                        .setMessage(R.string.filter_backup_found_message)
+                        .setPositiveButton(R.string.ok) { _, _ ->
+                            importBackupJson(json)
+                        }
+                        .setNegativeButton(R.string.cancel, null)
+                        .show()
+                }
+            } else {
+                // 規則非空 → 立即執行一次自動備份
+                FilterRuleStore.autoBackup(ctx)
+            }
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Failed to take persistable URI permission for backup dir", e)
+            Toast.makeText(ctx, R.string.settings_filter_backup_dir_invalid, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun resetBackupDir() {
+        val ctx = context ?: return
+        AlertDialog.Builder(ctx)
+            .setTitle(R.string.settings_filter_backup_dir_reset)
+            .setMessage(R.string.settings_filter_backup_dir_reset_confirm)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                val oldUri = AppPreferences.getBackupDirUri(ctx)
+                if (oldUri != null) {
+                    try {
+                        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        ctx.contentResolver.releasePersistableUriPermission(oldUri, flags)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to release persistable URI permission for backup dir", e)
+                    }
+                }
+                AppPreferences.clearBackupDir(ctx)
+                Toast.makeText(ctx, R.string.settings_filter_backup_dir_reset_done, Toast.LENGTH_SHORT).show()
+                updateBackupDirDisplay()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun updateBackupDirDisplay() {
+        val ctx = context ?: return
+        val b = _binding ?: return
+
+        if (AppPreferences.isBackupDirEnabled(ctx)) {
+            val displayName = AppPreferences.getBackupDirDisplay(ctx) ?: "..."
+            b.textBackupDirPath.text = getString(R.string.settings_filter_backup_dir_set, displayName)
+            b.btnResetBackupDir.visibility = View.VISIBLE
+        } else {
+            b.textBackupDirPath.text = getString(R.string.settings_filter_backup_dir_not_set)
+            b.btnResetBackupDir.visibility = View.GONE
+        }
+    }
+
     companion object {
         private const val TAG = "SettingsFragment"
+        private var hasPromptedThisSession = false
     }
 }
