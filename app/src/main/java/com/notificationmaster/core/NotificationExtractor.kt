@@ -29,6 +29,9 @@ import java.security.MessageDigest
 class NotificationExtractor(private val context: Context) {
 
     companion object {
+        /** JSON 欄位大小上限（64 KB），超過則截斷並附帶標記 */
+        private const val MAX_JSON_SIZE = 64 * 1024
+
         /** 已知會由 MediaExtractor 另存的 Bitmap extras key → 媒體類型名稱 */
         @SuppressLint("InlinedApi")
         private val EXTRAS_MEDIA_MAPPING = mapOf(
@@ -36,6 +39,12 @@ class NotificationExtractor(private val context: Context) {
             Notification.EXTRA_PICTURE to "PICTURE",
             Notification.EXTRA_LARGE_ICON_BIG to "LARGE_ICON_BIG"
         )
+
+        /** 截斷過長 JSON 字串，附帶截斷標記 */
+        private fun truncateJson(json: String): String {
+            if (json.length <= MAX_JSON_SIZE) return json
+            return json.substring(0, MAX_JSON_SIZE) + "…[truncated, original ${json.length} chars]"
+        }
     }
 
     /**
@@ -206,11 +215,11 @@ class NotificationExtractor(private val context: Context) {
             hasCustomBigContentView = notification.bigContentView != null,
             hasCustomHeadsUpContentView = notification.headsUpContentView != null,
 
-            // 完整 Extras
-            extrasJson = bundleToJson(extras),
+            // 完整 Extras（截斷過長內容）
+            extrasJson = truncateJson(bundleToJson(extras)),
 
-            // 完整原始 dump
-            rawDataJson = buildRawDataJson(sbn, notification, ranking),
+            // 完整原始 dump（截斷過長內容）
+            rawDataJson = truncateJson(buildRawDataJson(sbn, notification, ranking)),
 
             // 持久性類型
             persistenceType = inferPersistenceType(flags),

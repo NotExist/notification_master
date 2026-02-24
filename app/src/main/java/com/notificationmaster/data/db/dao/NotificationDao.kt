@@ -52,8 +52,9 @@ interface NotificationDao {
             GROUP BY notification_key
         )
         ORDER BY post_time DESC
+        LIMIT :limit
     """)
-    fun getNotificationsByTimeRange(startTime: Long, endTime: Long): Flow<List<NotificationEntity>>
+    fun getNotificationsByTimeRange(startTime: Long, endTime: Long, limit: Int = 500): Flow<List<NotificationEntity>>
 
     @Query("""
         SELECT * FROM notifications
@@ -87,8 +88,9 @@ interface NotificationDao {
             GROUP BY content_hash
         )
         ORDER BY post_time DESC
+        LIMIT :limit
     """)
-    fun getDeduplicatedNotifications(startTime: Long, endTime: Long): Flow<List<NotificationEntity>>
+    fun getDeduplicatedNotifications(startTime: Long, endTime: Long, limit: Int = 500): Flow<List<NotificationEntity>>
 
     /**
      * 取得同 content_hash 的所有去重後通知（用於展開相似列表）
