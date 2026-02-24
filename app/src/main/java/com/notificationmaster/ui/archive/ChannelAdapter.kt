@@ -7,6 +7,7 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import androidx.core.content.ContextCompat
 import com.notificationmaster.R
+import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.data.db.entity.ChannelEntity
 import com.notificationmaster.databinding.ItemChannelBinding
 import java.text.NumberFormat
@@ -75,7 +76,7 @@ class ChannelAdapter(
 
             // Line 3: groupId · appName (packageName)
             val appLabel = resolveAppName(item.packageName)
-            val appPart = if (appLabel != null && appLabel != item.packageName) {
+            val appPart = if (appLabel != item.packageName) {
                 "$appLabel (${item.packageName})"
             } else {
                 item.packageName
@@ -99,16 +100,10 @@ class ChannelAdapter(
         }
 
         /**
-         * 解析 App 顯示名稱，App 已移除時回傳 null
+         * 解析 App 顯示名稱，App 已移除時回傳 packageName
          */
-        private fun resolveAppName(packageName: String): String? {
-            return try {
-                val pm = binding.root.context.packageManager
-                val appInfo = pm.getApplicationInfo(packageName, 0)
-                pm.getApplicationLabel(appInfo).toString()
-            } catch (_: Exception) {
-                null
-            }
+        private fun resolveAppName(packageName: String): String {
+            return AppLabelCache.getLabel(binding.root.context, packageName)
         }
 
         private fun importanceColor(importance: Int): Int = when (importance) {

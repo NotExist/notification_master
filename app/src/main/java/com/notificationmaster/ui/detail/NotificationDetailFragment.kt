@@ -27,6 +27,7 @@ import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.core.cache.PendingIntentCache
 import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.core.compat.ApiVersionHelper
@@ -172,13 +173,12 @@ class NotificationDetailFragment : Fragment() {
         val context = requireContext()
 
         // App 資訊
+        binding.textAppName.text = AppLabelCache.getLabel(context, notification.packageName)
         try {
             val pm = context.packageManager
             val appInfo = pm.getApplicationInfo(notification.packageName, 0)
-            binding.textAppName.text = pm.getApplicationLabel(appInfo)
             binding.imgAppIcon.setImageDrawable(pm.getApplicationIcon(appInfo))
         } catch (e: Exception) {
-            binding.textAppName.text = context.getString(R.string.unknown_app)
             binding.imgAppIcon.setImageResource(android.R.drawable.sym_def_app_icon)
         }
 

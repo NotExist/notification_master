@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notificationmaster.R
+import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.databinding.ItemNotificationBinding
 import java.text.SimpleDateFormat
@@ -65,14 +66,13 @@ class NotificationAdapter(
             binding.textContent.text = content ?: context.getString(R.string.no_content)
             binding.textContent.visibility = if (content != null) View.VISIBLE else View.GONE
 
-            // App 名稱
+            // App 名稱與圖示
+            binding.textAppName.text = AppLabelCache.getLabel(context, item.packageName)
             try {
                 val pm = context.packageManager
                 val appInfo = pm.getApplicationInfo(item.packageName, 0)
-                binding.textAppName.text = pm.getApplicationLabel(appInfo)
                 binding.imgAppIcon.setImageDrawable(pm.getApplicationIcon(appInfo))
             } catch (e: Exception) {
-                binding.textAppName.text = item.packageName
                 binding.imgAppIcon.setImageResource(android.R.drawable.sym_def_app_icon)
             }
 

@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.notificationmaster.R
+import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.core.filter.FilterCategory
 import com.notificationmaster.core.filter.FilterRule
 import com.notificationmaster.core.filter.FilterRuleStore
@@ -145,13 +146,12 @@ class FilterSettingsFragment : Fragment() {
                 val ctx = binding.root.context
 
                 // App 圖示
+                binding.textAppName.text = AppLabelCache.getLabel(ctx, rule.packageName)
                 try {
                     val appInfo = ctx.packageManager.getApplicationInfo(rule.packageName, 0)
                     binding.imgAppIcon.setImageDrawable(ctx.packageManager.getApplicationIcon(appInfo))
-                    binding.textAppName.text = ctx.packageManager.getApplicationLabel(appInfo)
                 } catch (e: Exception) {
                     binding.imgAppIcon.setImageResource(android.R.drawable.sym_def_app_icon)
-                    binding.textAppName.text = rule.packageName
                 }
 
                 binding.textPackageName.text = rule.packageName

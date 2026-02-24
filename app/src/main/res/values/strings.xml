@@ -123,6 +123,7 @@
     <string name="content_desc_app_icon">App 圖示</string>
     <string name="content_desc_no_notifications">無通知</string>
     <string name="content_desc_navigate">導覽</string>
+    <string name="content_desc_environment_info">環境資訊</string>
 
     <!-- 欄位標籤 -->
     <string name="label_title">標題</string>

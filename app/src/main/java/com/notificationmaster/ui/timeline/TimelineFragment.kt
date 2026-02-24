@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notificationmaster.NotificationMasterApp
+import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.R
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.databinding.FragmentTimelineBinding
@@ -53,8 +54,7 @@ class TimelineFragment : Fragment() {
     private var currentFilterText = ""
     private var allNotifications: List<NotificationEntity> = emptyList()
     private var loadJob: Job? = null
-    // 快取 App 名稱：packageName → appLabel
-    private val appLabelCache = mutableMapOf<String, String>()
+    // App 名稱快取委派給 AppLabelCache（共用、帶 TTL）
     private val dateFormat = SimpleDateFormat("yyyy年M月d日 EEEE", Locale.getDefault())
     private var bubbleHideRunnable: Runnable? = null
     private var wasPermissionGranted = false
@@ -62,10 +62,12 @@ class TimelineFragment : Fragment() {
 
     companion object {
         private const val TAG = "TimelineFragment"
-        /** 每次檢查服務連線狀態的間隔 (ms) */
-        private const val REBIND_CHECK_INTERVAL_MS = 2000L
+        /** 首次檢查間隔 (ms) */
+        private const val REBIND_INITIAL_DELAY_MS = 1000L
+        /** 最大間隔 (ms) */
+        private const val REBIND_MAX_DELAY_MS = 16000L
         /** 最多嘗試幾次 */
-        private const val MAX_REBIND_ATTEMPTS = 5
+        private const val MAX_REBIND_ATTEMPTS = 6
     }
 
     // 查詢時間範圍（預設過去 7 天）
@@ -294,16 +296,8 @@ class TimelineFragment : Fragment() {
      * 取得 App 顯示名稱（帶快取）
      */
     private fun getAppLabel(packageName: String): String {
-        return appLabelCache.getOrPut(packageName) {
-            try {
-                val ctx = context ?: return@getOrPut packageName
-                val pm = ctx.packageManager
-                val appInfo = pm.getApplicationInfo(packageName, 0)
-                pm.getApplicationLabel(appInfo).toString()
-            } catch (_: Exception) {
-                packageName
-            }
-        }
+        val ctx = context ?: return packageName
+        return AppLabelCache.getLabel(ctx, packageName)
     }
 
     /**
@@ -423,17 +417,18 @@ class TimelineFragment : Fragment() {
      */
     private fun ensureServiceConnected() {
         rebindJob?.cancel()
-        Log.d(TAG, "ensureServiceConnected: starting checks (interval=${REBIND_CHECK_INTERVAL_MS}ms, " +
+        Log.d(TAG, "ensureServiceConnected: starting checks (exponential backoff, " +
             "max=$MAX_REBIND_ATTEMPTS)")
         rebindJob = viewLifecycleOwner.lifecycleScope.launch {
+            var delayMs = REBIND_INITIAL_DELAY_MS
             for (attempt in 0 until MAX_REBIND_ATTEMPTS) {
-                delay(REBIND_CHECK_INTERVAL_MS)
+                delay(delayMs)
                 if (_binding == null) return@launch
 
                 val connected = NotificationCaptureService.isConnected
                 val instanceExists = NotificationCaptureService.getInstance() != null
-                Log.d(TAG, "ensureServiceConnected check #${attempt + 1}: " +
-                    "connected=$connected, instance=$instanceExists")
+                Log.d(TAG, "ensureServiceConnected check #${attempt + 1} " +
+                    "(delay=${delayMs}ms): connected=$connected, instance=$instanceExists")
 
                 if (connected) {
                     // 服務已連線，手動觸發一次擷取確保有資料
@@ -446,11 +441,14 @@ class TimelineFragment : Fragment() {
                         val ctx = context ?: return@launch
                         val cn = ComponentName(ctx, NotificationCaptureService::class.java)
                         NotificationListenerService.requestRebind(cn)
-                        Log.d(TAG, "requestRebind sent")
+                        Log.d(TAG, "requestRebind sent (attempt ${attempt + 1})")
                     } catch (e: Exception) {
                         Log.w(TAG, "requestRebind failed", e)
                     }
                 }
+
+                // Exponential backoff: 1s → 2s → 4s → 8s → 16s → 16s
+                delayMs = (delayMs * 2).coerceAtMost(REBIND_MAX_DELAY_MS)
             }
 
             Log.w(TAG, "Service not connected after $MAX_REBIND_ATTEMPTS attempts. " +
