@@ -45,8 +45,17 @@ object ApiVersionHelper {
     /** Authentication Required 引入 */
     const val API_AUTH_REQUIRED = 31
 
+    /** Person API 引入（與 SemanticAction 同級） */
+    const val API_PERSON = 28
+
+    /** Bubble 自動展開/抑制 */
+    const val API_BUBBLE_AUTO_EXPAND = 30
+
     /** POST_NOTIFICATIONS 權限引入 */
     const val API_POST_NOTIFICATIONS = 33
+
+    /** PendingIntent 型別屬性 */
+    const val API_PENDING_INTENT_TYPE = 34
 
     // === 裝置狀態 API 常數 ===
 
@@ -77,7 +86,11 @@ object ApiVersionHelper {
     fun supportsSemanticAction(): Boolean = Build.VERSION.SDK_INT >= API_SEMANTIC_ACTION
     fun supportsBubbles(): Boolean = Build.VERSION.SDK_INT >= API_BUBBLES
     fun supportsAuthRequired(): Boolean = Build.VERSION.SDK_INT >= API_AUTH_REQUIRED
+    fun supportsPerson(): Boolean = Build.VERSION.SDK_INT >= API_PERSON
+    fun supportsBubbleAutoExpand(): Boolean = Build.VERSION.SDK_INT >= API_BUBBLE_AUTO_EXPAND
     fun supportsPostNotificationsPermission(): Boolean = Build.VERSION.SDK_INT >= API_POST_NOTIFICATIONS
+    fun supportsLastAudiblyAlerted(): Boolean = Build.VERSION.SDK_INT >= API_AUDIBLE_ALERTED
+    fun supportsNetworkCapabilities(): Boolean = Build.VERSION.SDK_INT >= API_NETWORK_CAPABILITIES
 
     // === Key 產生 ===
 

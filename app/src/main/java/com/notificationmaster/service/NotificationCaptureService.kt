@@ -1,6 +1,8 @@
 package com.notificationmaster.service
 
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.os.Build
 import android.os.IBinder
 import android.service.notification.NotificationListenerService
@@ -22,6 +24,9 @@ import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.core.capture.DeviceStateCapture
 import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.debug.DebugDumper
+import java.io.File
+import java.io.FileOutputStream
+import java.security.MessageDigest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -238,7 +243,7 @@ class NotificationCaptureService : NotificationListenerService() {
         val captureTime = System.currentTimeMillis()
 
         // 0. 過濾檢查（在 extraction 之前，避免不必要的 IO）
-        val filterChannelId = if (Build.VERSION.SDK_INT >= 26) sbn.notification.channelId else null
+        val filterChannelId = if (ApiVersionHelper.supportsNotificationChannel()) sbn.notification.channelId else null
         if (FilterRuleStore.matches(FilterCategory.NOTIFICATION, sbn.packageName, filterChannelId, eventType)) {
             Log.d(TAG, "Filtered: ${sbn.packageName}/$filterChannelId event=$eventType")
             return
@@ -308,10 +313,10 @@ class NotificationCaptureService : NotificationListenerService() {
         updateAppSource(sbn.packageName, captureTime)
 
         // 6. 更新 Channel (API 26+)
-        if (Build.VERSION.SDK_INT >= 26 && entity.channelId != null) {
+        if (ApiVersionHelper.supportsNotificationChannel() && entity.channelId != null) {
             // API 28+: 從 Ranking 取得完整 NotificationChannel（正確途徑）
             val notificationChannel: android.app.NotificationChannel? =
-                if (Build.VERSION.SDK_INT >= 28) {
+                if (ApiVersionHelper.supportsPerson()) {
                     val ranking = Ranking()
                     val key = ApiVersionHelper.getNotificationKey(sbn)
                     if (rankingMap?.getRanking(key, ranking) == true) {
@@ -336,7 +341,7 @@ class NotificationCaptureService : NotificationListenerService() {
         val key = ApiVersionHelper.getNotificationKey(sbn)
 
         // 過濾檢查（被過濾的通知仍需清理 PendingIntentCache）
-        val filterChannelId: String? = if (Build.VERSION.SDK_INT >= 26) sbn.notification.channelId else null
+        val filterChannelId: String? = if (ApiVersionHelper.supportsNotificationChannel()) sbn.notification.channelId else null
         if (FilterRuleStore.matches(FilterCategory.NOTIFICATION, sbn.packageName, filterChannelId, EventType.REMOVED)) {
             PendingIntentCache.remove(key)
             return
@@ -376,7 +381,7 @@ class NotificationCaptureService : NotificationListenerService() {
      */
     private suspend fun processRankingUpdate(rankingMap: RankingMap) {
         // Ranking 詳細資訊（rank, importance, isAmbient）需要 API 24+
-        if (Build.VERSION.SDK_INT < 24) return
+        if (!ApiVersionHelper.supportsDirectReply()) return  // Ranking 需要 API 24+
 
         val captureTime = System.currentTimeMillis()
 
@@ -399,7 +404,7 @@ class NotificationCaptureService : NotificationListenerService() {
                     val newRank = ranking.rank
                     val newImportance = ranking.importance
                     val newIsAmbient = ranking.isAmbient
-                    val newIsSuspended = if (Build.VERSION.SDK_INT >= 28) ranking.isSuspended else false
+                    val newIsSuspended = if (ApiVersionHelper.supportsPerson()) ranking.isSuspended else false
                     val newSuppressedVisualEffects = ranking.suppressedVisualEffects
 
                     // 計算 ranking diff
@@ -470,13 +475,13 @@ class NotificationCaptureService : NotificationListenerService() {
                 packageName = packageName,
                 appName = appInfo?.let { packageManager.getApplicationLabel(it).toString() },
                 versionName = packageInfo?.versionName,
-                versionCode = if (Build.VERSION.SDK_INT >= 28) {
+                versionCode = if (ApiVersionHelper.supportsPerson()) {  // longVersionCode API 28+
                     packageInfo?.longVersionCode
                 } else {
                     @Suppress("DEPRECATION")
                     packageInfo?.versionCode?.toLong()
                 },
-                iconPath = null, // TODO: 儲存圖示
+                iconPath = saveAppIcon(packageName),
                 firstSeen = captureTime,
                 lastUpdated = captureTime,
                 notificationCount = 1,
@@ -487,6 +492,50 @@ class NotificationCaptureService : NotificationListenerService() {
                 isUninstalled = false
             )
             database.appSourceDao().insert(appSource)
+        }
+    }
+
+    /**
+     * 儲存 App 圖示到媒體目錄
+     *
+     * 以 Bitmap hash 去重：相同圖示不重複寫入。
+     * @return 相對路徑（media/xxx.png）或 null
+     */
+    private fun saveAppIcon(packageName: String): String? {
+        return try {
+            val drawable = packageManager.getApplicationIcon(packageName)
+            val width = drawable.intrinsicWidth.coerceAtLeast(48)
+            val height = drawable.intrinsicHeight.coerceAtLeast(48)
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, width, height)
+            drawable.draw(canvas)
+
+            // Hash 去重
+            val bytes = bitmap.rowBytes * bitmap.height
+            val buffer = java.nio.ByteBuffer.allocate(bytes)
+            bitmap.copyPixelsToBuffer(buffer)
+            val digest = MessageDigest.getInstance("SHA-256")
+            val hash = digest.digest(buffer.array())
+                .joinToString("") { "%02x".format(it) }
+                .substring(0, 16)
+
+            val fileName = "${packageName}_APP_ICON_${hash}.png"
+            val mediaDir = File(MediaExtractor.getMediaBaseDir(this), "media").apply { mkdirs() }
+            val file = File(mediaDir, fileName)
+            val relativePath = "media/$fileName"
+
+            if (!file.exists()) {
+                FileOutputStream(file).use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                }
+            }
+            bitmap.recycle()
+
+            relativePath
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to save app icon for $packageName", e)
+            null
         }
     }
 
@@ -502,7 +551,7 @@ class NotificationCaptureService : NotificationListenerService() {
         captureTime: Long,
         notificationChannel: android.app.NotificationChannel? = null
     ) {
-        if (Build.VERSION.SDK_INT < 26) return
+        if (!ApiVersionHelper.supportsNotificationChannel()) return
 
         val existing = database.channelDao().getByPackageAndChannelId(packageName, channelId)
 
@@ -517,7 +566,7 @@ class NotificationCaptureService : NotificationListenerService() {
                     importance = notificationChannel.importance,
                     groupId = notificationChannel.group,
                     showBadge = notificationChannel.canShowBadge(),
-                    canBubble = if (Build.VERSION.SDK_INT >= 29) notificationChannel.canBubble() else false,
+                    canBubble = if (ApiVersionHelper.supportsBubbles()) notificationChannel.canBubble() else false,
                     soundUri = notificationChannel.sound?.toString(),
                     vibratePattern = notificationChannel.vibrationPattern?.let {
                         org.json.JSONArray(it.toList()).toString()
@@ -545,7 +594,7 @@ class NotificationCaptureService : NotificationListenerService() {
                     ?: android.app.NotificationManager.IMPORTANCE_DEFAULT,
                 groupId = notificationChannel?.group,
                 showBadge = notificationChannel?.canShowBadge() ?: true,
-                canBubble = if (Build.VERSION.SDK_INT >= 29) {
+                canBubble = if (ApiVersionHelper.supportsBubbles()) {
                     notificationChannel?.canBubble() ?: false
                 } else false,
                 soundUri = notificationChannel?.sound?.toString(),
