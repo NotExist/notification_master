@@ -52,9 +52,20 @@ interface NotificationDao {
             GROUP BY notification_key
         )
         ORDER BY post_time DESC
-        LIMIT :limit
     """)
-    fun getNotificationsByTimeRange(startTime: Long, endTime: Long, limit: Int = 500): Flow<List<NotificationEntity>>
+    fun getNotificationsByTimeRange(startTime: Long, endTime: Long): Flow<List<NotificationEntity>>
+
+    /** 取得指定時間範圍的通知（每個 key 最新一筆），suspend 版本 */
+    @Query("""
+        SELECT * FROM notifications
+        WHERE id IN (
+            SELECT MAX(id) FROM notifications
+            WHERE post_time BETWEEN :startTime AND :endTime
+            GROUP BY notification_key
+        )
+        ORDER BY post_time DESC
+    """)
+    suspend fun getNotificationsByDayRange(startTime: Long, endTime: Long): List<NotificationEntity>
 
     @Query("""
         SELECT * FROM notifications
@@ -88,9 +99,24 @@ interface NotificationDao {
             GROUP BY content_hash
         )
         ORDER BY post_time DESC
-        LIMIT :limit
     """)
-    fun getDeduplicatedNotifications(startTime: Long, endTime: Long, limit: Int = 500): Flow<List<NotificationEntity>>
+    fun getDeduplicatedNotifications(startTime: Long, endTime: Long): Flow<List<NotificationEntity>>
+
+    /** 去重版本 suspend 查詢 */
+    @Query("""
+        SELECT * FROM notifications
+        WHERE id IN (
+            SELECT MAX(id) FROM notifications
+            WHERE id IN (
+                SELECT MAX(id) FROM notifications
+                WHERE post_time BETWEEN :startTime AND :endTime
+                GROUP BY notification_key
+            )
+            GROUP BY content_hash
+        )
+        ORDER BY post_time DESC
+    """)
+    suspend fun getDeduplicatedByDayRange(startTime: Long, endTime: Long): List<NotificationEntity>
 
     /**
      * 取得同 content_hash 的所有去重後通知（用於展開相似列表）
@@ -193,6 +219,11 @@ interface NotificationDao {
         LIMIT :limit
     """)
     suspend fun searchNotifications(query: String, limit: Int = 100): List<NotificationEntity>
+
+    // === 查詢 - 最早記錄 ===
+
+    @Query("SELECT MIN(post_time) FROM notifications")
+    suspend fun getEarliestPostTime(): Long?
 
     // === 統計 ===
 

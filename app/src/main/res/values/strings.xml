@@ -46,6 +46,8 @@
     <string name="similar_notifications_title">相似通知</string>
     <string name="timeline_today">今天</string>
     <string name="timeline_yesterday">昨天</string>
+    <string name="timeline_loading_more">載入中…</string>
+    <string name="timeline_end_of_data">已無更多記錄</string>
 
     <!-- 通知詳情 -->
     <string name="detail_title">通知詳情</string>

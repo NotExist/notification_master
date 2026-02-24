@@ -60,7 +60,22 @@ class TimelineFragment : Fragment() {
     private var wasPermissionGranted = false
     private var rebindJob: Job? = null
 
-    companion object {
+    // === 天分頁漸進載入 ===
+    /** 今天的資料（Flow 即時更新） */
+    private var todayNotifications: List<NotificationEntity> = emptyList()
+    /** 歷史天資料，按日期倒序排列（dayStart to data） */
+    private val historicalDays = mutableListOf<Pair<Long, List<NotificationEntity>>>()
+    /** 往回載入的下一個日期（dayStart timestamp） */
+    private var nextDayToLoad: Long = 0L
+    /** 正在載入更多 */
+    private var isLoadingMore = false
+    /** 已到達最早記錄 */
+    private var hasReachedEnd = false
+    /** 資料庫最早記錄時間（一次性查詢） */
+    private var earliestPostTime: Long? = null
+
+
+    private companion object {
         private const val TAG = "TimelineFragment"
         /** 首次檢查間隔 (ms) */
         private const val REBIND_INITIAL_DELAY_MS = 1000L
@@ -68,17 +83,9 @@ class TimelineFragment : Fragment() {
         private const val REBIND_MAX_DELAY_MS = 16000L
         /** 最多嘗試幾次 */
         private const val MAX_REBIND_ATTEMPTS = 6
+        /** 一天的毫秒數 */
+        private const val ONE_DAY_MS = 24 * 60 * 60 * 1000L
     }
-
-    // 查詢時間範圍（預設過去 7 天）
-    private val endTime: Long
-        get() = System.currentTimeMillis()
-    private val startTime: Long
-        get() {
-            val cal = Calendar.getInstance()
-            cal.add(Calendar.DAY_OF_YEAR, -7)
-            return cal.timeInMillis
-        }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -149,11 +156,20 @@ class TimelineFragment : Fragment() {
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
 
-        // 捲動時更新時間索引氣泡
+        // 捲動時更新時間索引氣泡 + load-more 觸發
         binding.recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 updateTimeBubble()
                 showAndScheduleHideBubble()
+
+                // 接近底部時觸發載入下一天
+                val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return
+                val totalItemCount = layoutManager.itemCount
+                val lastVisible = layoutManager.findLastVisibleItemPosition()
+                if (totalItemCount - lastVisible <= 5 &&
+                    !isLoadingMore && !hasReachedEnd && !isAudibleMode) {
+                    loadNextDay()
+                }
             }
         })
     }
@@ -221,23 +237,131 @@ class TimelineFragment : Fragment() {
         // 取消先前的 Flow 收集，避免同時存在多個 collector
         loadJob?.cancel()
 
+        // 重設天分頁狀態
+        todayNotifications = emptyList()
+        historicalDays.clear()
+        isLoadingMore = false
+        hasReachedEnd = false
+
         val database = NotificationMasterApp.getInstance().database
-        val notificationDao = database.notificationDao()
+        val dao = database.notificationDao()
 
         loadJob = viewLifecycleOwner.lifecycleScope.launch {
-            val flow = when {
-                isAudibleMode -> notificationDao.getRecentAudibleNotifications()
-                isDeduplicatedMode -> notificationDao.getDeduplicatedNotifications(startTime, endTime)
-                else -> notificationDao.getNotificationsByTimeRange(startTime, endTime)
-            }
+            if (isAudibleMode) {
+                // Audible / Heads-up 模式維持現有邏輯（全域查詢，不分天）
+                dao.getRecentAudibleNotifications().collectLatest { notifications ->
+                    if (_binding == null) return@collectLatest
+                    _binding?.swipeRefresh?.isRefreshing = false
+                    allNotifications = notifications
+                    applyFilterAndDisplay()
+                }
+            } else {
+                // === 天分頁漸進載入 ===
+                val todayStart = getStartOfDay(System.currentTimeMillis())
+                val yesterdayStart = todayStart - ONE_DAY_MS
+                nextDayToLoad = yesterdayStart - ONE_DAY_MS
 
-            flow.collectLatest { notifications ->
-                if (_binding == null) return@collectLatest
-                _binding?.swipeRefresh?.isRefreshing = false
-                allNotifications = notifications
-                applyFilterAndDisplay()
+                // 一次性查詢最早記錄時間
+                earliestPostTime = withContext(Dispatchers.IO) { dao.getEarliestPostTime() }
+
+                // 載入昨天（suspend 查詢）
+                val yesterdayData = withContext(Dispatchers.IO) {
+                    if (isDeduplicatedMode)
+                        dao.getDeduplicatedByDayRange(yesterdayStart, todayStart)
+                    else
+                        dao.getNotificationsByDayRange(yesterdayStart, todayStart)
+                }
+                if (yesterdayData.isNotEmpty()) {
+                    historicalDays.add(yesterdayStart to yesterdayData)
+                }
+
+                // 判斷昨天後是否已到底
+                checkReachedEnd()
+
+                // 訂閱今天的 Flow（即時更新）
+                val todayFlow = if (isDeduplicatedMode)
+                    dao.getDeduplicatedNotifications(todayStart, Long.MAX_VALUE)
+                else
+                    dao.getNotificationsByTimeRange(todayStart, Long.MAX_VALUE)
+
+                todayFlow.collectLatest { liveNotifications ->
+                    if (_binding == null) return@collectLatest
+                    _binding?.swipeRefresh?.isRefreshing = false
+                    todayNotifications = liveNotifications
+                    combineAndDisplay()
+                }
             }
         }
+    }
+
+    /**
+     * 載入下一天的歷史資料
+     */
+    private fun loadNextDay() {
+        if (isLoadingMore || hasReachedEnd || isAudibleMode) return
+        isLoadingMore = true
+        updateFooterInList()
+
+        val dao = NotificationMasterApp.getInstance().database.notificationDao()
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val dayStart = nextDayToLoad
+            val dayEnd = dayStart + ONE_DAY_MS
+
+            val data = withContext(Dispatchers.IO) {
+                if (isDeduplicatedMode)
+                    dao.getDeduplicatedByDayRange(dayStart, dayEnd)
+                else
+                    dao.getNotificationsByDayRange(dayStart, dayEnd)
+            }
+
+            if (data.isNotEmpty()) {
+                historicalDays.add(dayStart to data)
+            }
+
+            // 前移到上一天
+            nextDayToLoad = dayStart - ONE_DAY_MS
+
+            // 判斷到底
+            checkReachedEnd()
+
+            isLoadingMore = false
+            combineAndDisplay()
+        }
+    }
+
+    /**
+     * 檢查是否已到達資料庫最早記錄
+     */
+    private fun checkReachedEnd() {
+        val earliest = earliestPostTime ?: run {
+            hasReachedEnd = true
+            return
+        }
+        // 下一天的結尾已早於最早記錄 → 到底
+        if (nextDayToLoad + ONE_DAY_MS <= earliest) {
+            hasReachedEnd = true
+        }
+    }
+
+    /**
+     * 合併今天 + 歷史天資料
+     */
+    private fun combineAndDisplay() {
+        allNotifications = todayNotifications + historicalDays.flatMap { it.second }
+        applyFilterAndDisplay()
+    }
+
+    /**
+     * 更新列表末尾的 footer 項目（LoadingMore 指示器）
+     */
+    private fun updateFooterInList() {
+        val currentList = adapter?.currentList ?: return
+        // 移除舊 footer，加入新 footer
+        val withoutFooter = currentList.filter {
+            it !is TimelineItem.LoadingMore && it !is TimelineItem.EndOfTimeline
+        }
+        adapter?.submitList(withoutFooter + TimelineItem.LoadingMore)
     }
 
     /**
@@ -258,11 +382,24 @@ class TimelineFragment : Fragment() {
             val notificationDao = database.notificationDao()
 
             viewLifecycleOwner.lifecycleScope.launch {
-                val timelineItems = if (isDeduplicatedMode) {
+                var timelineItems: List<TimelineItem> = if (isDeduplicatedMode) {
                     buildTimelineItemsWithSimilarCount(filtered, notificationDao)
                 } else {
                     buildTimelineItems(filtered)
                 }
+
+                // 非 Audible 模式加入 footer 指示器
+                if (!isAudibleMode) {
+                    val footer = when {
+                        isLoadingMore -> TimelineItem.LoadingMore
+                        hasReachedEnd -> TimelineItem.EndOfTimeline
+                        else -> null
+                    }
+                    if (footer != null) {
+                        timelineItems = timelineItems + footer
+                    }
+                }
+
                 adapter?.submitList(timelineItems) {
                     layoutManagerState?.let { state ->
                         _binding?.recyclerView?.layoutManager?.onRestoreInstanceState(state)
@@ -323,6 +460,7 @@ class TimelineFragment : Fragment() {
 
     /**
      * 建立時間軸項目並計算相似通知數量（去重模式）
+     * 每天獨立計算去重數量
      */
     private suspend fun buildTimelineItemsWithSimilarCount(
         notifications: List<NotificationEntity>,
@@ -339,9 +477,11 @@ class TimelineFragment : Fragment() {
                 lastDate = notificationDate
             }
 
-            // 統計被合併的不同通知數
+            // 統計被合併的不同通知數（以該天為範圍）
+            val dayStart = notificationDate
+            val dayEnd = dayStart + ONE_DAY_MS
             val similarCount = withContext(Dispatchers.IO) {
-                dao.getDeduplicatedCount(notification.contentHash, startTime, endTime)
+                dao.getDeduplicatedCount(notification.contentHash, dayStart, dayEnd)
             }
 
             items.add(TimelineItem.NotificationItem(notification, similarCount))
@@ -375,6 +515,7 @@ class TimelineFragment : Fragment() {
         val dateText = when (item) {
             is TimelineItem.DateHeader -> dateFormat.format(Date(item.date))
             is TimelineItem.NotificationItem -> dateFormat.format(Date(item.notification.postTime))
+            is TimelineItem.LoadingMore, is TimelineItem.EndOfTimeline -> return
         }
         binding.timeBubble.text = dateText
 
@@ -499,9 +640,11 @@ class TimelineFragment : Fragment() {
     private fun showSimilarNotifications(notification: NotificationEntity) {
         val dao = NotificationMasterApp.getInstance().database.notificationDao()
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        val dayStart = getStartOfDay(notification.postTime)
+        val dayEnd = dayStart + ONE_DAY_MS
         viewLifecycleOwner.lifecycleScope.launch {
             val similar = withContext(Dispatchers.IO) {
-                dao.getSimilarNotifications(notification.contentHash, startTime, endTime)
+                dao.getSimilarNotifications(notification.contentHash, dayStart, dayEnd)
             }
             if (_binding == null) return@launch
             if (similar.size <= 1) return@launch

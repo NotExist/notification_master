@@ -35,31 +35,36 @@ class TimelineAdapter(
     companion object {
         private const val VIEW_TYPE_DATE_HEADER = 0
         private const val VIEW_TYPE_NOTIFICATION = 1
+        private const val VIEW_TYPE_LOADING = 2
+        private const val VIEW_TYPE_END = 3
     }
 
     override fun getItemViewType(position: Int): Int {
         return when (getItem(position)) {
             is TimelineItem.DateHeader -> VIEW_TYPE_DATE_HEADER
             is TimelineItem.NotificationItem -> VIEW_TYPE_NOTIFICATION
+            is TimelineItem.LoadingMore -> VIEW_TYPE_LOADING
+            is TimelineItem.EndOfTimeline -> VIEW_TYPE_END
         }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val inflater = LayoutInflater.from(parent.context)
         return when (viewType) {
             VIEW_TYPE_DATE_HEADER -> {
-                val binding = ItemTimelineDateHeaderBinding.inflate(
-                    LayoutInflater.from(parent.context),
-                    parent,
-                    false
-                )
+                val binding = ItemTimelineDateHeaderBinding.inflate(inflater, parent, false)
                 DateHeaderViewHolder(binding)
             }
+            VIEW_TYPE_LOADING -> {
+                val view = inflater.inflate(R.layout.item_timeline_loading, parent, false)
+                SimpleViewHolder(view)
+            }
+            VIEW_TYPE_END -> {
+                val view = inflater.inflate(R.layout.item_timeline_end, parent, false)
+                SimpleViewHolder(view)
+            }
             else -> {
-                val binding = ItemTimelineNotificationBinding.inflate(
-                    LayoutInflater.from(parent.context),
-                    parent,
-                    false
-                )
+                val binding = ItemTimelineNotificationBinding.inflate(inflater, parent, false)
                 NotificationViewHolder(binding)
             }
         }
@@ -69,8 +74,11 @@ class TimelineAdapter(
         when (val item = getItem(position)) {
             is TimelineItem.DateHeader -> (holder as DateHeaderViewHolder).bind(item)
             is TimelineItem.NotificationItem -> (holder as NotificationViewHolder).bind(item)
+            is TimelineItem.LoadingMore, is TimelineItem.EndOfTimeline -> { /* 靜態佈局，無需綁定 */ }
         }
     }
+
+    class SimpleViewHolder(view: View) : RecyclerView.ViewHolder(view)
 
     inner class DateHeaderViewHolder(
         private val binding: ItemTimelineDateHeaderBinding
@@ -268,6 +276,8 @@ class TimelineAdapter(
                     oldItem.date == newItem.date
                 oldItem is TimelineItem.NotificationItem && newItem is TimelineItem.NotificationItem ->
                     oldItem.notification.id == newItem.notification.id
+                oldItem is TimelineItem.LoadingMore && newItem is TimelineItem.LoadingMore -> true
+                oldItem is TimelineItem.EndOfTimeline && newItem is TimelineItem.EndOfTimeline -> true
                 else -> false
             }
         }
@@ -287,4 +297,6 @@ sealed class TimelineItem {
         val notification: NotificationEntity,
         val similarCount: Int = 1
     ) : TimelineItem()
+    object LoadingMore : TimelineItem()
+    object EndOfTimeline : TimelineItem()
 }
