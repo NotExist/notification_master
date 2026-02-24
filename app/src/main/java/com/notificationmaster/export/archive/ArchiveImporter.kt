@@ -120,10 +120,18 @@ class ArchiveImporter(private val context: Context) {
     }
 
     private fun parseNotification(json: JSONObject): NotificationEntity {
+        val packageName = json.getString("packageName")
+        val notificationKey = json.getString("notificationKey")
+        require(packageName.isNotBlank()) { "packageName must not be blank" }
+        require(notificationKey.isNotBlank()) { "notificationKey must not be blank" }
+        require(packageName.matches(Regex("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)*$"))) {
+            "Invalid packageName format: $packageName"
+        }
+
         return NotificationEntity(
             id = json.optLong("id", 0),
-            notificationKey = json.getString("notificationKey"),
-            packageName = json.getString("packageName"),
+            notificationKey = notificationKey,
+            packageName = packageName,
             notificationId = json.optInt("notificationId", 0),
             tag = json.optString("tag").takeIf { it != "null" && it.isNotEmpty() },
             postTime = json.getLong("postTime"),
@@ -195,10 +203,13 @@ class ArchiveImporter(private val context: Context) {
     }
 
     private fun parseEvent(json: JSONObject): NotificationEventEntity {
+        val notificationKey = json.getString("notificationKey")
+        require(notificationKey.isNotBlank()) { "Event notificationKey must not be blank" }
+
         return NotificationEventEntity(
             id = json.optLong("id", 0),
             notificationId = json.getLong("notificationId"),
-            notificationKey = json.getString("notificationKey"),
+            notificationKey = notificationKey,
             eventType = EventType.valueOf(json.getString("eventType")),
             eventTime = json.getLong("eventTime"),
             removalReason = json.optInt("removalReason", -1).takeIf { it >= 0 },

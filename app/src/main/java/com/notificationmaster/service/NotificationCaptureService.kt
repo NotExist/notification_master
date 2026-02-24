@@ -6,6 +6,7 @@ import android.os.IBinder
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import androidx.room.withTransaction
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.core.NotificationExtractor
 import com.notificationmaster.core.cache.PendingIntentCache
@@ -252,52 +253,56 @@ class NotificationCaptureService : NotificationListenerService() {
             previous?.let { generateContentDiff(it, entity) }
         } else null
 
-        // 2. 儲存通知記錄
-        val notificationId = database.notificationDao().insert(entity)
-
-        // 3. 提取並儲存 Actions
-        val actions = extractor.extractActions(sbn.notification, notificationId, captureTime)
-        if (actions.isNotEmpty()) {
-            database.actionDao().insertAll(actions)
-        }
-
-        // 3.1 快取 PendingIntent 參照
-        cachePendingIntents(sbn)
-
-        // 3.5 提取並儲存媒體附件
-        try {
-            val mediaAttachments = mediaExtractor.extractMedia(sbn.notification, notificationId, captureTime, sbn.packageName)
-            if (mediaAttachments.isNotEmpty()) {
-                database.mediaAttachmentDao().insertAll(mediaAttachments)
-            }
+        // 2. 提取 Actions 和媒體（在 transaction 外準備資料）
+        val actions = extractor.extractActions(sbn.notification, 0, captureTime)
+        val mediaAttachments = try {
+            mediaExtractor.extractMedia(sbn.notification, 0, captureTime, sbn.packageName)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to extract media", e)
+            emptyList()
         }
-
-        // 3.6 記錄裝置狀態快照
-        try {
-            val deviceState = deviceStateCapture.capture(notificationId, captureTime)
-            database.deviceStateDao().insert(deviceState)
+        val deviceState = try {
+            deviceStateCapture.capture(0, captureTime)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to capture device state", e)
+            null
         }
 
-        // 4. 記錄事件
-        val event = NotificationEventEntity(
-            notificationId = notificationId,
-            notificationKey = entity.notificationKey,
-            eventType = eventType,
-            eventTime = captureTime,
-            removalReason = null,
-            removalReasonCategory = null,
-            rankingRank = entity.rankingRank.takeIf { it >= 0 },
-            rankingImportance = entity.importance.takeIf { it >= 0 },
-            isAmbient = entity.isAmbient,
-            isSuspended = entity.isSuspended,
-            suppressedVisualEffects = entity.suppressedVisualEffects,
-            contentDiff = contentDiff
-        )
-        database.notificationEventDao().insert(event)
+        // 3. 以 Transaction 寫入核心資料
+        val notificationId = database.withTransaction {
+            val nId = database.notificationDao().insert(entity)
+
+            if (actions.isNotEmpty()) {
+                database.actionDao().insertAll(actions.map { it.copy(notificationId = nId) })
+            }
+            if (mediaAttachments.isNotEmpty()) {
+                database.mediaAttachmentDao().insertAll(mediaAttachments.map { it.copy(notificationId = nId) })
+            }
+            if (deviceState != null) {
+                database.deviceStateDao().insert(deviceState.copy(notificationId = nId))
+            }
+
+            val event = NotificationEventEntity(
+                notificationId = nId,
+                notificationKey = entity.notificationKey,
+                eventType = eventType,
+                eventTime = captureTime,
+                removalReason = null,
+                removalReasonCategory = null,
+                rankingRank = entity.rankingRank.takeIf { it >= 0 },
+                rankingImportance = entity.importance.takeIf { it >= 0 },
+                isAmbient = entity.isAmbient,
+                isSuspended = entity.isSuspended,
+                suppressedVisualEffects = entity.suppressedVisualEffects,
+                contentDiff = contentDiff
+            )
+            database.notificationEventDao().insert(event)
+
+            nId
+        }
+
+        // 3.1 快取 PendingIntent 參照（不需 transaction）
+        cachePendingIntents(sbn)
 
         // 5. 更新 App 來源
         updateAppSource(sbn.packageName, captureTime)

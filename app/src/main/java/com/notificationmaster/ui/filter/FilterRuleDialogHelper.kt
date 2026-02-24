@@ -20,7 +20,7 @@ import com.notificationmaster.core.filter.FilterRuleStore
 import com.notificationmaster.data.db.entity.EventType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -105,7 +105,8 @@ object FilterRuleDialogHelper {
 
         // === AutoComplete 資料載入 ===
         val database = NotificationMasterApp.getInstance().database
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        val scopeJob = Job()
+        val scope = CoroutineScope(scopeJob + Dispatchers.Main)
 
         // 載入 packageName 建議
         scope.launch {
@@ -160,6 +161,8 @@ object FilterRuleDialogHelper {
             .setPositiveButton(R.string.ok, null) // listener 在 show() 後覆寫以防自動關閉
             .setNegativeButton(R.string.cancel, null)
             .create()
+
+        dialog.setOnDismissListener { scopeJob.cancel() }
 
         dialog.setOnShowListener {
             dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {

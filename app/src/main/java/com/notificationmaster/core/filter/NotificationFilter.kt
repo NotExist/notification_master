@@ -61,9 +61,12 @@ data class FilterRule(
                 eventTypes
             }
 
+            val packageName = json.getString("packageName")
+            require(packageName.isNotBlank()) { "FilterRule packageName must not be blank" }
+
             return FilterRule(
                 id = json.getString("id"),
-                packageName = json.getString("packageName"),
+                packageName = packageName,
                 channelId = json.optString("channelId").takeIf { it.isNotEmpty() && it != "null" },
                 eventTypes = resolvedEventTypes,
                 createdAt = json.optLong("createdAt", 0L)
