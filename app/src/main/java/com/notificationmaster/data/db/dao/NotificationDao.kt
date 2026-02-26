@@ -42,6 +42,10 @@ interface NotificationDao {
     @Query("SELECT * FROM notifications WHERE notification_key = :key ORDER BY post_time ASC")
     suspend fun getByNotificationKey(key: String): List<NotificationEntity>
 
+    /** 取得同 notification_key 的所有 Entity ID，按 post_time ASC 排列 */
+    @Query("SELECT id FROM notifications WHERE notification_key = :key ORDER BY post_time ASC")
+    suspend fun getEntityIdsByKey(key: String): List<Long>
+
     // === 查詢 - 時間範圍 ===
 
     @Query("""
@@ -206,6 +210,30 @@ interface NotificationDao {
         ORDER BY post_time DESC
     """)
     fun getNotificationsByChannel(packageName: String, channelId: String): Flow<List<NotificationEntity>>
+
+    /** 依 App 查詢，每個 notification_key 取最新一筆 */
+    @Query("""
+        SELECT * FROM notifications
+        WHERE id IN (
+            SELECT MAX(id) FROM notifications
+            WHERE package_name = :packageName
+            GROUP BY notification_key
+        )
+        ORDER BY post_time DESC
+    """)
+    fun getLatestNotificationsByPackage(packageName: String): Flow<List<NotificationEntity>>
+
+    /** 依 Channel 查詢，每個 notification_key 取最新一筆 */
+    @Query("""
+        SELECT * FROM notifications
+        WHERE id IN (
+            SELECT MAX(id) FROM notifications
+            WHERE package_name = :packageName AND channel_id = :channelId
+            GROUP BY notification_key
+        )
+        ORDER BY post_time DESC
+    """)
+    fun getLatestNotificationsByChannel(packageName: String, channelId: String): Flow<List<NotificationEntity>>
 
     // === 查詢 - 搜尋 ===
 

@@ -20,9 +20,8 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
-import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notificationmaster.NotificationMasterApp
@@ -61,7 +60,7 @@ class NotificationDetailFragment : Fragment() {
     private val dateTimeFormat = SimpleDateFormat("yyyy年M月d日 HH:mm:ss", Locale.getDefault())
     private val preciseTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
 
-    private lateinit var eventAdapter: NotificationEventAdapter
+    private lateinit var pagerAdapter: EventGroupPagerAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -75,7 +74,7 @@ class NotificationDetailFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        setupRecyclerView()
+        setupEventPager()
         loadNotificationDetail()
     }
 
@@ -84,25 +83,42 @@ class NotificationDetailFragment : Fragment() {
         _binding = null
     }
 
-    private fun setupRecyclerView() {
-        eventAdapter = NotificationEventAdapter(
-            onItemClick = { event -> showEventDetail(event) },
-            onGroupClick = { notificationId ->
-                val action = NotificationDetailFragmentDirections
-                    .actionDetailToSelf(notificationId)
-                findNavController().navigate(action)
-            }
+    private fun setupEventPager() {
+        val database = NotificationMasterApp.getInstance().database
+        val eventDao = database.notificationEventDao()
+
+        pagerAdapter = EventGroupPagerAdapter(
+            eventDao = eventDao,
+            lifecycleScope = viewLifecycleOwner.lifecycleScope,
+            onEventClick = { event -> showEventDetail(event) }
         )
-        binding.recyclerEvents.apply {
-            adapter = eventAdapter
-            layoutManager = LinearLayoutManager(requireContext())
+        binding.pagerEvents.adapter = pagerAdapter
+
+        // 頁面切換時更新分頁指示器
+        binding.pagerEvents.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                updatePagerIndicator(position)
+            }
+        })
+    }
+
+    private fun updatePagerIndicator(position: Int) {
+        val binding = _binding ?: return
+        val total = pagerAdapter.itemCount
+        if (total <= 1) {
+            binding.textEventPagerIndicator.text = getString(R.string.event_pager_single)
+        } else {
+            binding.textEventPagerIndicator.text = buildString {
+                append(getString(R.string.event_pager_indicator, position + 1, total))
+                append("  ")
+                append(getString(R.string.event_pager_hint))
+            }
         }
     }
 
     private fun loadNotificationDetail() {
         val database = NotificationMasterApp.getInstance().database
         val notificationDao = database.notificationDao()
-        val eventDao = database.notificationEventDao()
         val mediaDao = database.mediaAttachmentDao()
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -113,36 +129,20 @@ class NotificationDetailFragment : Fragment() {
             if (notification != null) {
                 displayNotification(notification)
 
-                // 載入同 key 的所有 NotificationEntity 和事件歷程
-                val allEntities = withContext(Dispatchers.IO) {
-                    notificationDao.getByNotificationKey(notification.notificationKey)
-                }
-                val events = withContext(Dispatchers.IO) {
-                    eventDao.getEventsByNotificationKey(notification.notificationKey)
+                // 取得同 key 的所有 Entity ID
+                val entityIds = withContext(Dispatchers.IO) {
+                    notificationDao.getEntityIdsByKey(notification.notificationKey)
                 }
 
-                // 按 notificationId 分組，建立列表
-                val items: List<EventListItem> = if (allEntities.size <= 1) {
-                    // 單次生命週期：不顯示分組標題
-                    events.map { EventListItem.EventItem(it) }
-                } else {
-                    val grouped = events.groupBy { it.notificationId }
-                    buildList {
-                        for ((index, entity) in allEntities.withIndex()) {
-                            val groupEvents = grouped[entity.id] ?: continue
-                            add(EventListItem.GroupHeader(
-                                notificationId = entity.id,
-                                groupIndex = index + 1,
-                                groupTotal = allEntities.size,
-                                firstEventTime = groupEvents.first().eventTime,
-                                lastEventTime = groupEvents.last().eventTime,
-                                isCurrent = entity.id == args.notificationId
-                            ))
-                            addAll(groupEvents.map { EventListItem.EventItem(it) })
-                        }
-                    }
+                // 提交給 pager adapter
+                pagerAdapter.submitEntityIds(entityIds)
+
+                // 定位到當前瀏覽的 entity
+                val currentIndex = entityIds.indexOf(args.notificationId)
+                if (currentIndex >= 0) {
+                    binding.pagerEvents.setCurrentItem(currentIndex, false)
                 }
-                eventAdapter.submitList(items)
+                updatePagerIndicator(if (currentIndex >= 0) currentIndex else 0)
 
                 // 載入媒體附件
                 val attachments = withContext(Dispatchers.IO) {

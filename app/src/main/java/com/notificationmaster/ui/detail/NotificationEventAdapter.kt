@@ -8,7 +8,6 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import android.service.notification.NotificationListenerService
-import com.google.android.material.color.MaterialColors
 import com.notificationmaster.R
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.data.db.entity.EventType
@@ -44,8 +43,7 @@ sealed class EventListItem {
  * 支援分組標題和事件項目兩種 ViewType
  */
 class NotificationEventAdapter(
-    private val onItemClick: (NotificationEventEntity) -> Unit,
-    private val onGroupClick: (Long) -> Unit = {}
+    private val onItemClick: (NotificationEventEntity) -> Unit
 ) : ListAdapter<EventListItem, RecyclerView.ViewHolder>(DiffCallback()) {
 
     private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
@@ -98,14 +96,10 @@ class NotificationEventAdapter(
         fun bind(header: EventListItem.GroupHeader) {
             val context = binding.root.context
 
-            // 標籤文字：「第 N 次」+ 可選「（目前檢視）」
-            val label = buildString {
-                append(context.getString(R.string.event_group_header, header.groupIndex))
-                if (header.isCurrent) {
-                    append(context.getString(R.string.event_group_current))
-                }
-            }
-            binding.textGroupLabel.text = label
+            // 標籤文字：「第 N 次」
+            binding.textGroupLabel.text = context.getString(
+                R.string.event_group_header, header.groupIndex
+            )
 
             // 時間範圍
             val timeRange = context.getString(
@@ -115,28 +109,12 @@ class NotificationEventAdapter(
             )
             binding.textGroupTimeRange.text = timeRange
 
-            // 目前組別：不可點擊，文字使用次要色
-            // 非目前組別：可點擊，文字使用 primary 色
-            if (header.isCurrent) {
-                binding.root.isClickable = false
-                binding.root.isFocusable = false
-                binding.textGroupLabel.setTextColor(
-                    ContextCompat.getColor(context, R.color.text_secondary)
-                )
-            } else {
-                binding.root.isClickable = true
-                binding.root.isFocusable = true
-                binding.textGroupLabel.setTextColor(
-                    MaterialColors.getColor(
-                        binding.root,
-                        com.google.android.material.R.attr.colorPrimary,
-                        ContextCompat.getColor(context, R.color.event_posted)
-                    )
-                )
-                binding.root.setOnClickListener {
-                    onGroupClick(header.notificationId)
-                }
-            }
+            // 靜態顯示，不可點擊
+            binding.root.isClickable = false
+            binding.root.isFocusable = false
+            binding.textGroupLabel.setTextColor(
+                ContextCompat.getColor(context, R.color.text_secondary)
+            )
         }
     }
 

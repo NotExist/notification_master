@@ -166,6 +166,7 @@
     <string name="filter_delete_confirm">確定要刪除此過濾規則嗎？</string>
     <string name="filter_rule_added">已新增過濾規則</string>
     <string name="filter_rule_deleted">已刪除過濾規則</string>
+    <string name="filter_rule_updated">已更新過濾規則</string>
     <string name="filter_all_channels">所有 Channel</string>
 
     <!-- 日曆匯出白名單 -->
@@ -178,6 +179,7 @@
 
     <!-- Dialog 新增規則 -->
     <string name="filter_dialog_title">新增規則</string>
+    <string name="filter_dialog_edit_title">編輯規則</string>
     <string name="filter_dialog_package_name">Package Name</string>
     <string name="filter_dialog_channel_id">Channel ID（選填）</string>
     <string name="filter_dialog_event_types">事件類型</string>
@@ -191,6 +193,11 @@
     <string name="event_group_header">第 %1$d 次</string>
     <string name="event_group_current">（目前檢視）</string>
     <string name="event_group_time_range">%1$s — %2$s</string>
+
+    <!-- 事件分頁 -->
+    <string name="event_pager_indicator">第 %1$d 次（共 %2$d 次）</string>
+    <string name="event_pager_single">單次生命週期</string>
+    <string name="event_pager_hint">← 左右滑動切換組別 →</string>
 
     <!-- 過濾規則匯出匯入 -->
     <string name="settings_export_filter_rules">匯出過濾規則</string>

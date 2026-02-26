@@ -183,14 +183,21 @@
                     android:textAppearance="?attr/textAppearanceTitleSmall"
                     android:textStyle="bold" />
 
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/recycler_events"
+                <!-- 分頁指示器 -->
+                <TextView
+                    android:id="@+id/text_event_pager_indicator"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:nestedScrollingEnabled="false"
-                    tools:itemCount="3"
-                    tools:listitem="@layout/item_notification_event" />
+                    android:layout_marginTop="4dp"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?android:attr/textColorSecondary" />
+
+                <!-- 固定高度 ViewPager2，水平滑動 -->
+                <androidx.viewpager2.widget.ViewPager2
+                    android:id="@+id/pager_events"
+                    android:layout_width="match_parent"
+                    android:layout_height="320dp"
+                    android:layout_marginTop="8dp" />
 
             </LinearLayout>
 

@@ -27,6 +27,10 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE notification_id = :notificationId ORDER BY event_time ASC")
     fun getEventsByNotificationId(notificationId: Long): Flow<List<NotificationEventEntity>>
 
+    /** 取得指定 notificationId 的所有事件（suspend 版本） */
+    @Query("SELECT * FROM notification_events WHERE notification_id = :notificationId ORDER BY event_time ASC")
+    suspend fun getEventsByNotificationIdSync(notificationId: Long): List<NotificationEventEntity>
+
     @Query("SELECT * FROM notification_events WHERE notification_key = :key ORDER BY event_time ASC")
     fun getEventsByKey(key: String): Flow<List<NotificationEventEntity>>
 
