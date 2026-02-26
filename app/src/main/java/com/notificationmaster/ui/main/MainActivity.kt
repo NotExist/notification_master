@@ -55,6 +55,21 @@ class MainActivity : AppCompatActivity() {
 
         setupActionBarWithNavController(navController, appBarConfiguration)
         binding.bottomNav.setupWithNavController(navController)
+
+        // 子目的地 → 所屬 tab 的對應表
+        // setupWithNavController 的 matchDestination 只匹配頂層 destination ID，
+        // 非巢狀子目的地（如 nav_archive_detail）還原 back stack 後 tab 不會跟著選中。
+        val childToTabMap = mapOf(
+            R.id.nav_archive_detail to R.id.nav_archive,
+            R.id.nav_home to R.id.nav_settings,
+            R.id.nav_filter_settings to R.id.nav_settings
+        )
+        navController.addOnDestinationChangedListener { _, destination, _ ->
+            val tabId = childToTabMap[destination.id] ?: return@addOnDestinationChangedListener
+            if (binding.bottomNav.selectedItemId != tabId) {
+                binding.bottomNav.menu.findItem(tabId)?.isChecked = true
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
