@@ -243,6 +243,9 @@ class TimelineFragment : Fragment() {
         isLoadingMore = false
         hasReachedEnd = false
 
+        // 顯示載入指示器
+        binding.swipeRefresh.isRefreshing = true
+
         val database = NotificationMasterApp.getInstance().database
         val dao = database.notificationDao()
 
