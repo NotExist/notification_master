@@ -34,6 +34,7 @@ class FilterSettingsFragment : Fragment() {
     private lateinit var category: FilterCategory
 
     private val adapter = FilterRuleAdapter(
+        onItemClick = { rule -> startEditRuleFlow(rule) },
         onDeleteClick = { rule -> confirmDeleteRule(rule) }
     )
 
@@ -111,6 +112,16 @@ class FilterSettingsFragment : Fragment() {
         )
     }
 
+    private fun startEditRuleFlow(rule: FilterRule) {
+        val ctx = context ?: return
+        FilterRuleDialogHelper.showAddRuleDialog(
+            context = ctx,
+            category = category,
+            existingRule = rule,
+            onRuleAdded = { refreshList() }
+        )
+    }
+
     private fun confirmDeleteRule(rule: FilterRule) {
         val ctx = context ?: return
         AlertDialog.Builder(ctx)
@@ -135,6 +146,7 @@ class FilterSettingsFragment : Fragment() {
     }
 
     private class FilterRuleAdapter(
+        private val onItemClick: (FilterRule) -> Unit,
         private val onDeleteClick: (FilterRule) -> Unit
     ) : ListAdapter<FilterRule, FilterRuleAdapter.ViewHolder>(FilterRuleDiffCallback()) {
 
@@ -143,6 +155,7 @@ class FilterSettingsFragment : Fragment() {
         ) : RecyclerView.ViewHolder(binding.root) {
 
             fun bind(rule: FilterRule) {
+                binding.root.setOnClickListener { onItemClick(rule) }
                 val ctx = binding.root.context
 
                 // App 圖示

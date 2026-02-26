@@ -200,6 +200,16 @@ object FilterRuleStore {
     }
 
     /**
+     * 更新規則（依 ID 取代）
+     */
+    fun updateRule(context: Context, category: FilterCategory, rule: FilterRule) {
+        val current = rulesMap[category] ?: emptyList()
+        rulesMap[category] = current.map { if (it.id == rule.id) rule else it }
+        save(context, category)
+        Log.d(TAG, "Updated rule in $category: ${rule.packageName}/${rule.channelId}")
+    }
+
+    /**
      * 移除規則
      */
     fun removeRule(context: Context, category: FilterCategory, ruleId: String) {

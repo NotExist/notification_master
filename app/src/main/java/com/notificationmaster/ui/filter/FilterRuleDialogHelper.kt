@@ -32,21 +32,24 @@ import kotlinx.coroutines.withContext
 object FilterRuleDialogHelper {
 
     /**
-     * 顯示新增規則 Dialog
+     * 顯示新增或編輯規則 Dialog
      *
      * @param context Activity/Fragment context
      * @param category 固定 category；null 則讓使用者在 Dialog 中選擇
-     * @param prefillPackageName 預填 packageName
-     * @param prefillChannelId 預填 channelId
-     * @param onRuleAdded 規則新增完成後的 callback（用於 refresh UI）
+     * @param prefillPackageName 預填 packageName（新增模式）
+     * @param prefillChannelId 預填 channelId（新增模式）
+     * @param existingRule 既有規則（編輯模式），非 null 時為編輯
+     * @param onRuleAdded 規則新增/更新完成後的 callback（用於 refresh UI）
      */
     fun showAddRuleDialog(
         context: Context,
         category: FilterCategory? = null,
         prefillPackageName: String? = null,
         prefillChannelId: String? = null,
+        existingRule: FilterRule? = null,
         onRuleAdded: (() -> Unit)? = null
     ) {
+        val isEditMode = existingRule != null
         val dialogView = LayoutInflater.from(context)
             .inflate(R.layout.dialog_add_filter_rule, null)
 
@@ -67,7 +70,10 @@ object FilterRuleDialogHelper {
         val categoryValues = arrayOf(FilterCategory.NOTIFICATION, FilterCategory.CALENDAR_EXPORT)
         var selectedCategoryIndex = 0
 
-        if (category == null) {
+        if (isEditMode) {
+            // 編輯模式：不顯示 category 選擇
+            layoutCategory.visibility = View.GONE
+        } else if (category == null) {
             layoutCategory.visibility = View.VISIBLE
             val categoryAdapter = ArrayAdapter(context, android.R.layout.simple_dropdown_item_1line, categoryLabels)
             dropdownCategory.setAdapter(categoryAdapter)
@@ -78,8 +84,13 @@ object FilterRuleDialogHelper {
         }
 
         // === 預填值 ===
-        prefillPackageName?.let { editPackageName.setText(it) }
-        prefillChannelId?.let { editChannelId.setText(it) }
+        if (isEditMode) {
+            editPackageName.setText(existingRule!!.packageName)
+            existingRule.channelId?.let { editChannelId.setText(it) }
+        } else {
+            prefillPackageName?.let { editPackageName.setText(it) }
+            prefillChannelId?.let { editChannelId.setText(it) }
+        }
 
         // === EventType CheckBox 動態生成 ===
         val eventTypes = EventType.entries
@@ -87,7 +98,7 @@ object FilterRuleDialogHelper {
         for (et in eventTypes) {
             val cb = MaterialCheckBox(context).apply {
                 text = et.name
-                isChecked = false
+                isChecked = isEditMode && et.name in existingRule!!.eventTypes
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
@@ -142,8 +153,9 @@ object FilterRuleDialogHelper {
         })
 
         // 預填 packageName 時立即載入 channel 建議
-        if (!prefillPackageName.isNullOrEmpty()) {
-            loadChannelSuggestions(scope, database, prefillPackageName, editChannelId)
+        val initPackageName = if (isEditMode) existingRule!!.packageName else prefillPackageName
+        if (!initPackageName.isNullOrEmpty()) {
+            loadChannelSuggestions(scope, database, initPackageName, editChannelId)
         }
 
         // === 建立 Dialog ===
@@ -155,8 +167,9 @@ object FilterRuleDialogHelper {
             FilterRuleStore.load(context, FilterCategory.CALENDAR_EXPORT)
         }
 
+        val dialogTitle = if (isEditMode) R.string.filter_dialog_edit_title else R.string.filter_dialog_title
         val dialog = MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.filter_dialog_title)
+            .setTitle(dialogTitle)
             .setView(dialogView)
             .setPositiveButton(R.string.ok, null) // listener 在 show() 後覆寫以防自動關閉
             .setNegativeButton(R.string.cancel, null)
@@ -188,13 +201,23 @@ object FilterRuleDialogHelper {
                 // 決定 category
                 val resolvedCategory = category ?: categoryValues[selectedCategoryIndex]
 
-                val rule = FilterRule(
-                    packageName = packageName,
-                    channelId = channelId,
-                    eventTypes = selectedEventTypes
-                )
-                FilterRuleStore.addRule(context, resolvedCategory, rule)
-                Toast.makeText(context, R.string.filter_rule_added, Toast.LENGTH_SHORT).show()
+                if (isEditMode) {
+                    val updatedRule = existingRule!!.copy(
+                        packageName = packageName,
+                        channelId = channelId,
+                        eventTypes = selectedEventTypes
+                    )
+                    FilterRuleStore.updateRule(context, resolvedCategory, updatedRule)
+                    Toast.makeText(context, R.string.filter_rule_updated, Toast.LENGTH_SHORT).show()
+                } else {
+                    val rule = FilterRule(
+                        packageName = packageName,
+                        channelId = channelId,
+                        eventTypes = selectedEventTypes
+                    )
+                    FilterRuleStore.addRule(context, resolvedCategory, rule)
+                    Toast.makeText(context, R.string.filter_rule_added, Toast.LENGTH_SHORT).show()
+                }
                 onRuleAdded?.invoke()
                 dialog.dismiss()
             }
