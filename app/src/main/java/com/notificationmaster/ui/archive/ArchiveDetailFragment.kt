@@ -68,9 +68,9 @@ class ArchiveDetailFragment : Fragment() {
         val notificationDao = database.notificationDao()
 
         val flow = if (args.channelId.isNotEmpty()) {
-            notificationDao.getNotificationsByChannel(args.packageName, args.channelId)
+            notificationDao.getLatestNotificationsByChannel(args.packageName, args.channelId)
         } else {
-            notificationDao.getNotificationsByPackage(args.packageName)
+            notificationDao.getLatestNotificationsByPackage(args.packageName)
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
