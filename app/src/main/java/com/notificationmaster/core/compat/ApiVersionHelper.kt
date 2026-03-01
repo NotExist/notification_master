@@ -73,6 +73,9 @@ object ApiVersionHelper {
     /** REASON_PACKAGE_CHANGED (@SystemApi, 非公開) */
     const val REASON_PACKAGE_CHANGED_INT = 5
 
+    /** REASON_UNINSTALLED (非公開 API) */
+    const val REASON_UNINSTALLED_INT = 16
+
     /** REASON_CHANNEL_REMOVED (API 30+) */
     const val REASON_CHANNEL_REMOVED_INT = 20
 
@@ -143,7 +146,7 @@ object ApiVersionHelper {
             NotificationListenerService.REASON_GROUP_OPTIMIZATION -> "GROUP_OPTIMIZATION"    // 13
             NotificationListenerService.REASON_PACKAGE_SUSPENDED -> "PACKAGE_SUSPENDED"      // 14
             NotificationListenerService.REASON_PROFILE_TURNED_OFF -> "PROFILE_TURNED_OFF"   // 15
-            NotificationListenerService.REASON_UNINSTALLED -> "UNINSTALLED"                  // 16
+            REASON_UNINSTALLED_INT -> "UNINSTALLED"                  // 16
             NotificationListenerService.REASON_CHANNEL_BANNED -> "CHANNEL_BANNED"            // 17
             NotificationListenerService.REASON_TIMEOUT -> "TIMEOUT"                          // 19
             REASON_CHANNEL_REMOVED_INT -> "CHANNEL_REMOVED"                                  // 20
@@ -172,7 +175,7 @@ object ApiVersionHelper {
             NotificationListenerService.REASON_GROUP_OPTIMIZATION -> "群組最佳化"
             NotificationListenerService.REASON_PACKAGE_SUSPENDED -> "App 被暫停"
             NotificationListenerService.REASON_PROFILE_TURNED_OFF -> "工作設定檔關閉"
-            NotificationListenerService.REASON_UNINSTALLED -> "App 已解除安裝"
+            REASON_UNINSTALLED_INT -> "App 已解除安裝"
             NotificationListenerService.REASON_CHANNEL_BANNED -> "Channel 被禁用"
             NotificationListenerService.REASON_SNOOZED -> "使用者暫停通知"
             NotificationListenerService.REASON_TIMEOUT -> "超時自動移除"

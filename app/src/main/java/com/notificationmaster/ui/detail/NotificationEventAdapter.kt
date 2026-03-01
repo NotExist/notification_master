@@ -213,7 +213,7 @@ class NotificationEventAdapter(
                     context.getString(R.string.removal_package_suspended)
                 NotificationListenerService.REASON_PROFILE_TURNED_OFF ->
                     context.getString(R.string.removal_profile_turned_off)
-                NotificationListenerService.REASON_UNINSTALLED ->
+                ApiVersionHelper.REASON_UNINSTALLED_INT ->
                     context.getString(R.string.removal_uninstalled)
                 NotificationListenerService.REASON_CHANNEL_BANNED ->
                     context.getString(R.string.removal_channel_banned)
