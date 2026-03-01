@@ -90,6 +90,6 @@ class ApiVersionHelperTest {
         val description = ApiVersionHelper.getRemovalReasonDescription(
             NotificationListenerService.REASON_CLICK
         )
-        assertEquals("使用者點擊", description)
+        assertEquals("使用者點擊通知", description)
     }
 }
