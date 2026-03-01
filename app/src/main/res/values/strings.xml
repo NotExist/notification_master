@@ -9,6 +9,8 @@
     <string name="today_notifications">今日通知</string>
     <string name="total_notifications">總計</string>
 
+    <string name="signing_info">簽章資訊 (Debug)</string>
+
     <!-- 權限相關 -->
     <string name="permission_status">權限狀態</string>
     <string name="go_to_settings">前往設定</string>
@@ -56,15 +58,33 @@
     <string name="detail_media">媒體附件</string>
     <string name="detail_style_info">樣式資訊</string>
 
-    <!-- 移除原因 -->
-    <string name="removal_user_click">使用者點擊</string>
-    <string name="removal_user_snooze">使用者暫停</string>
-    <string name="removal_app_cancel">App 取消</string>
-    <string name="removal_listener_cancel">監聽器取消/滑動</string>
-    <string name="removal_timeout">超時</string>
-    <string name="removal_channel_banned">Channel 被禁用</string>
+    <!-- 移除原因：使用者操作 -->
+    <string name="removal_user_click">使用者點擊通知</string>
+    <string name="removal_user_dismiss">使用者滑動清除</string>
+    <string name="removal_user_clear_all">使用者全部清除</string>
+    <string name="removal_user_stopped">使用者強制停止</string>
+    <string name="removal_user_snooze">使用者暫停通知</string>
+    <string name="removal_clear_data">使用者清除 App 資料</string>
+    <!-- 移除原因：App 操作 -->
+    <string name="removal_app_cancel">App 程式取消</string>
+    <string name="removal_app_cancel_all">App 程式取消全部</string>
+    <!-- 移除原因：監聽器操作 -->
+    <string name="removal_listener_cancel">監聽器取消</string>
+    <string name="removal_listener_cancel_all">監聽器取消全部</string>
+    <string name="removal_assistant_cancel">數位助理取消</string>
+    <!-- 移除原因：系統操作 -->
+    <string name="removal_error">系統錯誤</string>
+    <string name="removal_package_changed">App 更新</string>
+    <string name="removal_package_banned">App 通知被封鎖</string>
+    <string name="removal_group_summary_canceled">群組摘要取消</string>
+    <string name="removal_group_optimization">群組最佳化</string>
+    <string name="removal_package_suspended">App 被暫停</string>
+    <string name="removal_profile_turned_off">工作設定檔關閉</string>
     <string name="removal_uninstalled">App 已解除安裝</string>
-    <string name="removal_other">其他</string>
+    <string name="removal_channel_banned">Channel 被禁用</string>
+    <string name="removal_timeout">超時自動移除</string>
+    <string name="removal_channel_removed">Channel 已移除</string>
+    <string name="removal_other">未知 #%1$d</string>
 
     <!-- 搜尋 -->
     <string name="search_hint">搜尋通知內容…</string>
@@ -147,7 +167,7 @@
     <string name="format_device_model">%1$s %2$s</string>
     <string name="format_app_version">App 版本: %1$s (%2$d)</string>
     <string name="format_hash_truncated">%1$s…</string>
-    <string name="format_removal_reason">(%1$s)</string>
+    <string name="format_removal_reason">%1$s (#%2$d)</string>
 
     <!-- 過濾設定 -->
     <string name="settings_filter_title">通知過濾</string>
