@@ -158,7 +158,11 @@ class NotificationEventAdapter(
             // 移除原因（僅 REMOVED 事件顯示）
             if (event.eventType == EventType.REMOVED && event.removalReason != null) {
                 binding.textRemovalReason.visibility = View.VISIBLE
-                binding.textRemovalReason.text = context.getString(R.string.format_removal_reason, getRemovalReasonText(context, event.removalReason))
+                binding.textRemovalReason.text = context.getString(
+                    R.string.format_removal_reason,
+                    getRemovalReasonText(context, event.removalReason),
+                    event.removalReason
+                )
             } else {
                 binding.textRemovalReason.visibility = View.GONE
             }
@@ -166,25 +170,59 @@ class NotificationEventAdapter(
 
         private fun getRemovalReasonText(context: android.content.Context, reason: Int): String {
             return when (reason) {
+                // 使用者操作
                 NotificationListenerService.REASON_CLICK ->
                     context.getString(R.string.removal_user_click)
-                NotificationListenerService.REASON_CANCEL,
-                NotificationListenerService.REASON_APP_CANCEL ->
-                    context.getString(R.string.removal_app_cancel)
-                NotificationListenerService.REASON_CANCEL_ALL,
-                NotificationListenerService.REASON_APP_CANCEL_ALL ->
-                    context.getString(R.string.removal_app_cancel)
-                NotificationListenerService.REASON_LISTENER_CANCEL ->
-                    context.getString(R.string.removal_listener_cancel)
+                NotificationListenerService.REASON_CANCEL ->
+                    context.getString(R.string.removal_user_dismiss)
+                NotificationListenerService.REASON_CANCEL_ALL ->
+                    context.getString(R.string.removal_user_clear_all)
+                NotificationListenerService.REASON_USER_STOPPED ->
+                    context.getString(R.string.removal_user_stopped)
                 NotificationListenerService.REASON_SNOOZED ->
                     context.getString(R.string.removal_user_snooze)
-                NotificationListenerService.REASON_TIMEOUT ->
-                    context.getString(R.string.removal_timeout)
+                ApiVersionHelper.REASON_CLEAR_DATA_INT ->
+                    context.getString(R.string.removal_clear_data)
+
+                // App 操作
+                NotificationListenerService.REASON_APP_CANCEL ->
+                    context.getString(R.string.removal_app_cancel)
+                NotificationListenerService.REASON_APP_CANCEL_ALL ->
+                    context.getString(R.string.removal_app_cancel_all)
+
+                // 監聽器操作
+                NotificationListenerService.REASON_LISTENER_CANCEL ->
+                    context.getString(R.string.removal_listener_cancel)
+                NotificationListenerService.REASON_LISTENER_CANCEL_ALL ->
+                    context.getString(R.string.removal_listener_cancel_all)
+                ApiVersionHelper.REASON_ASSISTANT_CANCEL_INT ->
+                    context.getString(R.string.removal_assistant_cancel)
+
+                // 系統操作
+                NotificationListenerService.REASON_ERROR ->
+                    context.getString(R.string.removal_error)
+                ApiVersionHelper.REASON_PACKAGE_CHANGED_INT ->
+                    context.getString(R.string.removal_package_changed)
+                NotificationListenerService.REASON_PACKAGE_BANNED ->
+                    context.getString(R.string.removal_package_banned)
+                NotificationListenerService.REASON_GROUP_SUMMARY_CANCELED ->
+                    context.getString(R.string.removal_group_summary_canceled)
+                NotificationListenerService.REASON_GROUP_OPTIMIZATION ->
+                    context.getString(R.string.removal_group_optimization)
+                NotificationListenerService.REASON_PACKAGE_SUSPENDED ->
+                    context.getString(R.string.removal_package_suspended)
+                NotificationListenerService.REASON_PROFILE_TURNED_OFF ->
+                    context.getString(R.string.removal_profile_turned_off)
+                NotificationListenerService.REASON_UNINSTALLED ->
+                    context.getString(R.string.removal_uninstalled)
                 NotificationListenerService.REASON_CHANNEL_BANNED ->
                     context.getString(R.string.removal_channel_banned)
-                ApiVersionHelper.REASON_UNINSTALLED_INT ->
-                    context.getString(R.string.removal_uninstalled)
-                else -> context.getString(R.string.removal_other)
+                NotificationListenerService.REASON_TIMEOUT ->
+                    context.getString(R.string.removal_timeout)
+                ApiVersionHelper.REASON_CHANNEL_REMOVED_INT ->
+                    context.getString(R.string.removal_channel_removed)
+
+                else -> context.getString(R.string.removal_other, reason)
             }
         }
     }

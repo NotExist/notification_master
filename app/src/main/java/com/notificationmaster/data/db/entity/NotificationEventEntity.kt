@@ -24,16 +24,41 @@ enum class EventType {
 
 /**
  * 移除原因分類
+ *
+ * 涵蓋 Android SDK 定義的所有 REASON_* 常數（API 26–33）。
+ * 每個常數對應一個獨立的分類值，確保完整反映系統回報的移除原因。
  */
 object RemovalReasonCategory {
-    const val USER_CLICK = "USER_CLICK"
-    const val USER_SNOOZE = "USER_SNOOZE"
-    const val APP_CANCEL = "APP_CANCEL"
-    const val APP_CANCEL_ALL = "APP_CANCEL_ALL"
-    const val LISTENER_OR_SWIPE = "LISTENER_OR_SWIPE"
-    const val TIMEOUT = "TIMEOUT"
-    const val CHANNEL_BANNED = "CHANNEL_BANNED"
-    const val UNINSTALLED = "UNINSTALLED"
+    // 使用者操作
+    const val USER_CLICK = "USER_CLICK"                 // 1: 使用者點擊通知
+    const val USER_DISMISS = "USER_DISMISS"             // 2: 使用者滑動清除
+    const val USER_CLEAR_ALL = "USER_CLEAR_ALL"         // 3: 使用者全部清除
+    const val USER_STOPPED = "USER_STOPPED"             // 6: 使用者強制停止 App
+    const val USER_SNOOZE = "USER_SNOOZE"               // 18: 使用者暫停通知
+    const val CLEAR_DATA = "CLEAR_DATA"                 // 21: 使用者清除 App 資料
+
+    // App 操作
+    const val APP_CANCEL = "APP_CANCEL"                 // 8: App 程式取消
+    const val APP_CANCEL_ALL = "APP_CANCEL_ALL"         // 9: App 程式取消全部
+
+    // 監聽器操作
+    const val LISTENER_CANCEL = "LISTENER_CANCEL"       // 10: 監聽器取消
+    const val LISTENER_CANCEL_ALL = "LISTENER_CANCEL_ALL" // 11: 監聽器取消全部
+    const val ASSISTANT_CANCEL = "ASSISTANT_CANCEL"     // 22: 數位助理取消
+
+    // 系統操作
+    const val ERROR = "ERROR"                           // 4: 系統錯誤
+    const val PACKAGE_CHANGED = "PACKAGE_CHANGED"       // 5: App 更新
+    const val PACKAGE_BANNED = "PACKAGE_BANNED"         // 7: App 通知被封鎖
+    const val GROUP_SUMMARY_CANCELED = "GROUP_SUMMARY_CANCELED" // 12: 群組摘要取消
+    const val GROUP_OPTIMIZATION = "GROUP_OPTIMIZATION" // 13: 群組最佳化
+    const val PACKAGE_SUSPENDED = "PACKAGE_SUSPENDED"   // 14: App 被暫停
+    const val PROFILE_TURNED_OFF = "PROFILE_TURNED_OFF" // 15: 工作設定檔關閉
+    const val UNINSTALLED = "UNINSTALLED"               // 16: App 已解除安裝
+    const val CHANNEL_BANNED = "CHANNEL_BANNED"         // 17: Channel 被禁用
+    const val TIMEOUT = "TIMEOUT"                       // 19: 超時自動移除
+    const val CHANNEL_REMOVED = "CHANNEL_REMOVED"       // 20: Channel 已移除
+
     const val OTHER = "OTHER"
 }
 

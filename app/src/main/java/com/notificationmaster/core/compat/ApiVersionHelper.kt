@@ -68,12 +68,19 @@ object ApiVersionHelper {
     /** NetworkCapabilities 引入 (替代已棄用的 getActiveNetworkInfo) */
     const val API_NETWORK_CAPABILITIES = 29
 
-    /**
-     * REASON_UNINSTALLED 的 int 值
-     * 此常數未包含在公開 SDK 中，但系統可能傳入此值
-     * 對應 AOSP NotificationListenerService 內部定義
-     */
-    const val REASON_UNINSTALLED_INT = 15
+    // === 非公開或高版本 API 的移除原因常數 ===
+
+    /** REASON_PACKAGE_CHANGED (@SystemApi, 非公開) */
+    const val REASON_PACKAGE_CHANGED_INT = 5
+
+    /** REASON_CHANNEL_REMOVED (API 30+) */
+    const val REASON_CHANNEL_REMOVED_INT = 20
+
+    /** REASON_CLEAR_DATA (API 30+) */
+    const val REASON_CLEAR_DATA_INT = 21
+
+    /** REASON_ASSISTANT_CANCEL (API 33+) */
+    const val REASON_ASSISTANT_CANCEL_INT = 22
 
     // === 功能檢查 ===
 
@@ -105,42 +112,74 @@ object ApiVersionHelper {
 
     /**
      * 分類移除原因
+     *
+     * 涵蓋 Android SDK 定義的所有 REASON_* 常數（API 26–33）。
+     * 參考：NotificationListenerService.onNotificationRemoved()
      */
     fun categorizeRemovalReason(reason: Int): String {
         return when (reason) {
-            NotificationListenerService.REASON_CLICK -> "USER_CLICK"
-            NotificationListenerService.REASON_SNOOZED -> "USER_SNOOZE"
-            NotificationListenerService.REASON_APP_CANCEL,
-            NotificationListenerService.REASON_CANCEL -> "APP_CANCEL"
-            NotificationListenerService.REASON_APP_CANCEL_ALL,
-            NotificationListenerService.REASON_CANCEL_ALL -> "APP_CANCEL_ALL"
-            NotificationListenerService.REASON_LISTENER_CANCEL -> "LISTENER_OR_SWIPE"
-            NotificationListenerService.REASON_TIMEOUT -> "TIMEOUT"
-            NotificationListenerService.REASON_CHANNEL_BANNED -> "CHANNEL_BANNED"
-            REASON_UNINSTALLED_INT -> "UNINSTALLED"  // 非公開 API 常數
+            // 使用者操作
+            NotificationListenerService.REASON_CLICK -> "USER_CLICK"              // 1
+            NotificationListenerService.REASON_CANCEL -> "USER_DISMISS"           // 2
+            NotificationListenerService.REASON_CANCEL_ALL -> "USER_CLEAR_ALL"     // 3
+            NotificationListenerService.REASON_USER_STOPPED -> "USER_STOPPED"     // 6
+            NotificationListenerService.REASON_SNOOZED -> "USER_SNOOZE"           // 18
+            REASON_CLEAR_DATA_INT -> "CLEAR_DATA"                                 // 21
+
+            // App 操作
+            NotificationListenerService.REASON_APP_CANCEL -> "APP_CANCEL"         // 8
+            NotificationListenerService.REASON_APP_CANCEL_ALL -> "APP_CANCEL_ALL" // 9
+
+            // 監聽器操作
+            NotificationListenerService.REASON_LISTENER_CANCEL -> "LISTENER_CANCEL"         // 10
+            NotificationListenerService.REASON_LISTENER_CANCEL_ALL -> "LISTENER_CANCEL_ALL" // 11
+            REASON_ASSISTANT_CANCEL_INT -> "ASSISTANT_CANCEL"                                // 22
+
+            // 系統操作
+            NotificationListenerService.REASON_ERROR -> "ERROR"                              // 4
+            REASON_PACKAGE_CHANGED_INT -> "PACKAGE_CHANGED"                                  // 5
+            NotificationListenerService.REASON_PACKAGE_BANNED -> "PACKAGE_BANNED"            // 7
+            NotificationListenerService.REASON_GROUP_SUMMARY_CANCELED -> "GROUP_SUMMARY_CANCELED" // 12
+            NotificationListenerService.REASON_GROUP_OPTIMIZATION -> "GROUP_OPTIMIZATION"    // 13
+            NotificationListenerService.REASON_PACKAGE_SUSPENDED -> "PACKAGE_SUSPENDED"      // 14
+            NotificationListenerService.REASON_PROFILE_TURNED_OFF -> "PROFILE_TURNED_OFF"   // 15
+            NotificationListenerService.REASON_UNINSTALLED -> "UNINSTALLED"                  // 16
+            NotificationListenerService.REASON_CHANNEL_BANNED -> "CHANNEL_BANNED"            // 17
+            NotificationListenerService.REASON_TIMEOUT -> "TIMEOUT"                          // 19
+            REASON_CHANNEL_REMOVED_INT -> "CHANNEL_REMOVED"                                  // 20
+
             else -> "OTHER"
         }
     }
 
     /**
-     * 移除原因的人類可讀描述
+     * 移除原因的人類可讀描述（用於 debug log）
      */
     fun getRemovalReasonDescription(reason: Int): String {
         return when (reason) {
-            NotificationListenerService.REASON_CLICK -> "使用者點擊"
-            NotificationListenerService.REASON_SNOOZED -> "使用者暫停"
-            NotificationListenerService.REASON_APP_CANCEL -> "App 取消"
-            NotificationListenerService.REASON_CANCEL -> "取消"
-            NotificationListenerService.REASON_APP_CANCEL_ALL -> "App 取消全部"
-            NotificationListenerService.REASON_CANCEL_ALL -> "取消全部"
-            NotificationListenerService.REASON_LISTENER_CANCEL -> "監聽器取消/滑動"
-            NotificationListenerService.REASON_TIMEOUT -> "超時"
-            NotificationListenerService.REASON_CHANNEL_BANNED -> "Channel 被禁用"
-            NotificationListenerService.REASON_ERROR -> "錯誤"
-            NotificationListenerService.REASON_GROUP_OPTIMIZATION -> "群組最佳化"
+            NotificationListenerService.REASON_CLICK -> "使用者點擊通知"
+            NotificationListenerService.REASON_CANCEL -> "使用者滑動清除"
+            NotificationListenerService.REASON_CANCEL_ALL -> "使用者全部清除"
+            NotificationListenerService.REASON_ERROR -> "系統錯誤"
+            REASON_PACKAGE_CHANGED_INT -> "App 更新"
+            NotificationListenerService.REASON_USER_STOPPED -> "使用者強制停止"
+            NotificationListenerService.REASON_PACKAGE_BANNED -> "App 通知被封鎖"
+            NotificationListenerService.REASON_APP_CANCEL -> "App 程式取消"
+            NotificationListenerService.REASON_APP_CANCEL_ALL -> "App 程式取消全部"
+            NotificationListenerService.REASON_LISTENER_CANCEL -> "監聽器取消"
+            NotificationListenerService.REASON_LISTENER_CANCEL_ALL -> "監聽器取消全部"
             NotificationListenerService.REASON_GROUP_SUMMARY_CANCELED -> "群組摘要取消"
-            REASON_UNINSTALLED_INT -> "App 已解除安裝"  // 非公開 API 常數
-            else -> "未知 ($reason)"
+            NotificationListenerService.REASON_GROUP_OPTIMIZATION -> "群組最佳化"
+            NotificationListenerService.REASON_PACKAGE_SUSPENDED -> "App 被暫停"
+            NotificationListenerService.REASON_PROFILE_TURNED_OFF -> "工作設定檔關閉"
+            NotificationListenerService.REASON_UNINSTALLED -> "App 已解除安裝"
+            NotificationListenerService.REASON_CHANNEL_BANNED -> "Channel 被禁用"
+            NotificationListenerService.REASON_SNOOZED -> "使用者暫停通知"
+            NotificationListenerService.REASON_TIMEOUT -> "超時自動移除"
+            REASON_CHANNEL_REMOVED_INT -> "Channel 已移除"
+            REASON_CLEAR_DATA_INT -> "使用者清除 App 資料"
+            REASON_ASSISTANT_CANCEL_INT -> "數位助理取消"
+            else -> "未知 (#$reason)"
         }
     }
 
