@@ -55,6 +55,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:textAppearance="?attr/textAppearanceTitleMedium"
+                            android:textIsSelectable="true"
                             tools:text="App 名稱" />
 
                         <TextView
@@ -63,6 +64,7 @@
                             android:layout_height="wrap_content"
                             android:textAppearance="?attr/textAppearanceBodySmall"
                             android:textColor="?android:attr/textColorSecondary"
+                            android:textIsSelectable="true"
                             tools:text="com.example.app" />
 
                     </LinearLayout>
@@ -89,6 +91,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:textAppearance="?attr/textAppearanceBodyLarge"
+                    android:textIsSelectable="true"
                     tools:text="通知標題" />
 
                 <!-- 內文 -->
@@ -106,6 +109,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textIsSelectable="true"
                     tools:text="通知內文內容，可能會很長..." />
 
                 <!-- 時間 -->
@@ -123,6 +127,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textIsSelectable="true"
                     tools:text="2026年1月29日 12:34:56" />
 
             </LinearLayout>
@@ -353,6 +358,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:textAppearance="?attr/textAppearanceBodyMedium"
+                        android:textIsSelectable="true"
                         tools:text="messages" />
 
                 </LinearLayout>
@@ -379,6 +385,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:textAppearance="?attr/textAppearanceBodyMedium"
+                        android:textIsSelectable="true"
                         tools:text="group_messages" />
 
                 </LinearLayout>
@@ -403,6 +410,7 @@
                         android:layout_height="wrap_content"
                         android:textAppearance="?attr/textAppearanceBodySmall"
                         android:fontFamily="monospace"
+                        android:textIsSelectable="true"
                         tools:text="0|com.example.app|123|null|10001" />
 
                 </LinearLayout>
@@ -427,6 +435,7 @@
                         android:layout_height="wrap_content"
                         android:textAppearance="?attr/textAppearanceBodySmall"
                         android:fontFamily="monospace"
+                        android:textIsSelectable="true"
                         tools:text="a1b2c3d4e5f6..." />
 
                 </LinearLayout>
