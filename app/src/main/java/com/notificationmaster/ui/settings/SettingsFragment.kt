@@ -1,6 +1,7 @@
 package com.notificationmaster.ui.settings
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
@@ -17,6 +18,7 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import com.notificationmaster.BuildConfig
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.filter.FilterCategory
@@ -33,8 +35,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.security.MessageDigest
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
 import java.text.DecimalFormat
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 
 /**
  * 設定頁面 Fragment
@@ -198,6 +205,8 @@ class SettingsFragment : Fragment() {
                 .setNegativeButton(R.string.cancel, null)
                 .show()
         }
+
+        displaySigningInfo()
     }
 
     private fun updateDebugInfo() {
@@ -208,6 +217,68 @@ class SettingsFragment : Fragment() {
         binding.textDebugInfo.text = buildString {
             append("路徑: ${debugDumper.dumpDir.absolutePath}\n")
             append("檔案數: $fileCount, 大小: $sizeStr")
+        }
+    }
+
+    /**
+     * 顯示簽章資訊（僅 debug build）
+     */
+    @SuppressLint("PackageManagerGetSignatures")
+    private fun displaySigningInfo() {
+        if (!BuildConfig.DEBUG) return
+
+        val ctx = requireContext()
+        binding.textSigningInfo.visibility = View.VISIBLE
+
+        try {
+            val signatures = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                val info = ctx.packageManager.getPackageInfo(
+                    ctx.packageName,
+                    android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+                )
+                info.signingInfo?.apkContentsSigners
+            } else {
+                @Suppress("DEPRECATION")
+                val info = ctx.packageManager.getPackageInfo(
+                    ctx.packageName,
+                    android.content.pm.PackageManager.GET_SIGNATURES
+                )
+                @Suppress("DEPRECATION")
+                info.signatures
+            }
+
+            if (signatures.isNullOrEmpty()) {
+                binding.textSigningInfo.text = "No signing certificates found"
+                return
+            }
+
+            val sb = StringBuilder()
+            for ((index, sig) in signatures.withIndex()) {
+                if (index > 0) sb.append("\n\n")
+
+                val certFactory = CertificateFactory.getInstance("X.509")
+                val cert = certFactory.generateCertificate(sig.toByteArray().inputStream()) as X509Certificate
+
+                val sha256 = MessageDigest.getInstance("SHA-256")
+                    .digest(cert.encoded)
+                    .joinToString(":") { "%02X".format(it) }
+
+                val sha1 = MessageDigest.getInstance("SHA-1")
+                    .digest(cert.encoded)
+                    .joinToString(":") { "%02X".format(it) }
+
+                val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+                sb.append("SHA-256:\n$sha256\n\n")
+                sb.append("SHA-1:\n$sha1\n\n")
+                sb.append("Issuer: ${cert.issuerX500Principal.name}\n")
+                sb.append("Subject: ${cert.subjectX500Principal.name}\n")
+                sb.append("Valid: ${dateFormat.format(cert.notBefore)} ~ ${dateFormat.format(cert.notAfter)}")
+            }
+
+            binding.textSigningInfo.text = sb.toString()
+        } catch (e: Exception) {
+            binding.textSigningInfo.text = "Error: ${e.message}"
         }
     }
 

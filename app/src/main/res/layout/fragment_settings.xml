@@ -214,6 +214,18 @@
                     android:text="@string/settings_debug_clear"
                     style="@style/Widget.Material3.Button.OutlinedButton" />
 
+                <!-- 簽章資訊（僅 debug build 顯示） -->
+                <TextView
+                    android:id="@+id/text_signing_info"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:fontFamily="monospace"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textIsSelectable="true"
+                    android:visibility="gone"
+                    tools:text="SHA-256: AB:CD:EF:..." />
+
             </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>

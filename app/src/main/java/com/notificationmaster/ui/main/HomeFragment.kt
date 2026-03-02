@@ -25,13 +25,8 @@ import com.notificationmaster.databinding.ItemPermissionInfoBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.security.MessageDigest
-import java.security.cert.CertificateFactory
-import java.security.cert.X509Certificate
 import java.text.NumberFormat
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Locale
 
 /**
  * 主畫面 Fragment
@@ -60,7 +55,6 @@ class HomeFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         displayEnvironmentInfo()
-        displaySigningInfo()
         displaySupportedFeatures()
     }
 
@@ -152,70 +146,6 @@ class HomeFragment : Fragment() {
         binding.textAndroidVersion.text = getString(R.string.format_android_version, envInfo.androidVersion, envInfo.apiLevel)
         binding.textDeviceModel.text = getString(R.string.format_device_model, envInfo.deviceManufacturer, envInfo.deviceModel)
         binding.textAppVersion.text = getString(R.string.format_app_version, envInfo.appVersion, envInfo.appVersionCode)
-    }
-
-    /**
-     * 顯示簽章資訊（僅 debug build）
-     */
-    @SuppressLint("PackageManagerGetSignatures")
-    private fun displaySigningInfo() {
-        if (!BuildConfig.DEBUG) return
-
-        val ctx = requireContext()
-        binding.cardSigningInfo.visibility = View.VISIBLE
-
-        try {
-            val signatures = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                val info = ctx.packageManager.getPackageInfo(
-                    ctx.packageName,
-                    android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
-                )
-                info.signingInfo?.apkContentsSigners
-            } else {
-                @Suppress("DEPRECATION")
-                val info = ctx.packageManager.getPackageInfo(
-                    ctx.packageName,
-                    android.content.pm.PackageManager.GET_SIGNATURES
-                )
-                @Suppress("DEPRECATION")
-                info.signatures
-            }
-
-            if (signatures.isNullOrEmpty()) {
-                binding.textSigningInfo.text = "No signing certificates found"
-                return
-            }
-
-            val sb = StringBuilder()
-            for ((index, sig) in signatures.withIndex()) {
-                if (index > 0) sb.append("\n\n")
-
-                val certFactory = CertificateFactory.getInstance("X.509")
-                val cert = certFactory.generateCertificate(sig.toByteArray().inputStream()) as X509Certificate
-
-                // SHA-256 指紋
-                val sha256 = MessageDigest.getInstance("SHA-256")
-                    .digest(cert.encoded)
-                    .joinToString(":") { "%02X".format(it) }
-
-                // SHA-1 指紋
-                val sha1 = MessageDigest.getInstance("SHA-1")
-                    .digest(cert.encoded)
-                    .joinToString(":") { "%02X".format(it) }
-
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-
-                sb.append("SHA-256:\n$sha256\n\n")
-                sb.append("SHA-1:\n$sha1\n\n")
-                sb.append("Issuer: ${cert.issuerX500Principal.name}\n")
-                sb.append("Subject: ${cert.subjectX500Principal.name}\n")
-                sb.append("Valid: ${dateFormat.format(cert.notBefore)} ~ ${dateFormat.format(cert.notAfter)}")
-            }
-
-            binding.textSigningInfo.text = sb.toString()
-        } catch (e: Exception) {
-            binding.textSigningInfo.text = "Error: ${e.message}"
-        }
     }
 
     /**
