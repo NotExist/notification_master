@@ -1,6 +1,5 @@
 package com.notificationmaster.core.permission
 
-import android.annotation.SuppressLint
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -35,7 +34,6 @@ data class PermissionInfo(
 
 object PermissionDescriptions {
 
-    @SuppressLint("InlinedApi")
     fun getAllPermissions(): List<PermissionInfo> = listOf(
         PermissionInfo(
             permission = "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE",
@@ -47,43 +45,14 @@ object PermissionDescriptions {
             isRequired = true
         ),
         PermissionInfo(
-            permission = Manifest.permission.POST_NOTIFICATIONS,
-            displayName = "發送通知",
-            type = "危險權限",
-            relatedFeature = "App 自身狀態通知",
-            rationale = "用於顯示服務運行狀態的前景通知（Android 13+ 要求）。",
-            deniedImpact = "無法顯示服務運行狀態通知，但核心功能不受影響。",
-            isRequired = false,
-            minApi = 33
-        ),
-        PermissionInfo(
             permission = Manifest.permission.WRITE_EXTERNAL_STORAGE,
             displayName = "寫入外部儲存",
             type = "危險權限",
-            relatedFeature = "Debug dump 和匯出",
+            relatedFeature = "Debug dump",
             rationale = "用於將 Debug 資料寫入外部儲存，讓其他工具可以存取分析。",
             deniedImpact = "Debug dump 將使用 App 內部儲存（其他工具無法直接存取）。",
             isRequired = false,
             maxApi = 28
-        ),
-        PermissionInfo(
-            permission = Manifest.permission.READ_EXTERNAL_STORAGE,
-            displayName = "讀取外部儲存",
-            type = "危險權限",
-            relatedFeature = "封存匯入",
-            rationale = "用於讀取外部儲存中的封存檔案。",
-            deniedImpact = "無法從外部儲存匯入封存檔案。",
-            isRequired = false,
-            maxApi = 32
-        ),
-        PermissionInfo(
-            permission = "android.permission.FOREGROUND_SERVICE",
-            displayName = "前景服務",
-            type = "普通權限",
-            relatedFeature = "保持服務持續運行",
-            rationale = "確保通知監聽服務不會被系統殺死，持續記錄通知。",
-            deniedImpact = "服務可能被系統殺死，導致部分通知未被記錄。",
-            isRequired = true
         ),
         PermissionInfo(
             permission = "android.permission.QUERY_ALL_PACKAGES",

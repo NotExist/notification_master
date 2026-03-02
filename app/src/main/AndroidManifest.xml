@@ -6,18 +6,9 @@
     <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
         tools:ignore="ProtectedPermissions" />
 
-    <!-- POST_NOTIFICATIONS 權限 (API 33+) - 用於顯示自身通知 -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- 外部儲存權限 (用於 Debug dump 和匯出) -->
+    <!-- 外部儲存權限 (用於 Debug dump) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-
-    <!-- 前景服務權限 -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- 查詢已安裝 App 資訊 -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
