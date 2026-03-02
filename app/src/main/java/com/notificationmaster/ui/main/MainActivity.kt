@@ -64,9 +64,18 @@ class MainActivity : AppCompatActivity() {
             R.id.nav_home to R.id.nav_settings,
             R.id.nav_filter_settings to R.id.nav_settings
         )
-        navController.addOnDestinationChangedListener { _, destination, _ ->
-            val tabId = childToTabMap[destination.id] ?: return@addOnDestinationChangedListener
-            if (binding.bottomNav.selectedItemId != tabId) {
+        navController.addOnDestinationChangedListener { controller, destination, _ ->
+            // 先查靜態對應表
+            val tabId = childToTabMap[destination.id]
+                ?: run {
+                    // 未映射的共用目的地（如 nav_detail 可從 Timeline 或 Archive 進入），
+                    // 從 back stack 的上一層推斷所屬 tab
+                    controller.previousBackStackEntry?.destination?.id?.let { prevId ->
+                        childToTabMap[prevId]
+                            ?: prevId.takeIf { binding.bottomNav.menu.findItem(it) != null }
+                    }
+                }
+            if (tabId != null && binding.bottomNav.selectedItemId != tabId) {
                 binding.bottomNav.menu.findItem(tabId)?.isChecked = true
             }
         }

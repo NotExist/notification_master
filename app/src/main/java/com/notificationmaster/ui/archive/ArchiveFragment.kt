@@ -38,6 +38,15 @@ class ArchiveFragment : Fragment() {
 
     enum class Tab { BY_APP, BY_CHANNEL }
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (savedInstanceState != null) {
+            @Suppress("DEPRECATION")
+            layoutManagerState = savedInstanceState.getParcelable(KEY_LAYOUT_STATE)
+            currentTab = Tab.values()[savedInstanceState.getInt(KEY_CURRENT_TAB, 0)]
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -61,6 +70,16 @@ class ArchiveFragment : Fragment() {
         } else {
             loadData()
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        val state = _binding?.recyclerView?.layoutManager?.onSaveInstanceState()
+            ?: layoutManagerState
+        if (state != null) {
+            outState.putParcelable(KEY_LAYOUT_STATE, state)
+        }
+        outState.putInt(KEY_CURRENT_TAB, currentTab.ordinal)
     }
 
     override fun onDestroyView() {
@@ -187,5 +206,10 @@ class ArchiveFragment : Fragment() {
                 }
             }
         }
+    }
+
+    companion object {
+        private const val KEY_LAYOUT_STATE = "layout_manager_state"
+        private const val KEY_CURRENT_TAB = "current_tab"
     }
 }

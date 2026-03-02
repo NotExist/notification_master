@@ -32,6 +32,14 @@ class ArchiveDetailFragment : Fragment() {
     private lateinit var adapter: TimelineAdapter
     private var layoutManagerState: Parcelable? = null
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (savedInstanceState != null) {
+            @Suppress("DEPRECATION")
+            layoutManagerState = savedInstanceState.getParcelable(KEY_LAYOUT_STATE)
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -46,6 +54,15 @@ class ArchiveDetailFragment : Fragment() {
 
         setupRecyclerView()
         loadNotifications()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        val state = _binding?.recyclerView?.layoutManager?.onSaveInstanceState()
+            ?: layoutManagerState
+        if (state != null) {
+            outState.putParcelable(KEY_LAYOUT_STATE, state)
+        }
     }
 
     override fun onDestroyView() {
@@ -118,5 +135,9 @@ class ArchiveDetailFragment : Fragment() {
         cal.set(Calendar.SECOND, 0)
         cal.set(Calendar.MILLISECOND, 0)
         return cal.timeInMillis
+    }
+
+    companion object {
+        private const val KEY_LAYOUT_STATE = "layout_manager_state"
     }
 }
