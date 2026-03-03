@@ -13,6 +13,8 @@ import androidx.recyclerview.widget.RecyclerView
 import com.notificationmaster.R
 import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.core.filter.ActionType
+import com.notificationmaster.core.filter.KeywordField
+import com.notificationmaster.core.filter.Matcher
 import com.notificationmaster.core.filter.Rule
 import com.notificationmaster.core.filter.RuleAction
 import com.notificationmaster.core.filter.RuleEngine
@@ -202,6 +204,38 @@ class FilterSettingsFragment : Fragment() {
                     eventText
                 }
 
+                // Keyword 資訊
+                val keyword = rule.matchers.filterIsInstance<Matcher.Keyword>().firstOrNull()
+                if (keyword != null) {
+                    binding.textKeywordInfo.visibility = View.VISIBLE
+                    val fieldNames = keyword.fields.joinToString(", ") { field ->
+                        when (field) {
+                            KeywordField.TITLE -> ctx.getString(R.string.filter_keyword_field_title)
+                            KeywordField.TEXT -> ctx.getString(R.string.filter_keyword_field_text)
+                            KeywordField.BIG_TEXT -> ctx.getString(R.string.filter_keyword_field_big_text)
+                            KeywordField.SUB_TEXT -> ctx.getString(R.string.filter_keyword_field_sub_text)
+                        }
+                    }
+                    val patternDisplay = if (keyword.isRegex) "/${keyword.pattern}/" else "\"${keyword.pattern}\""
+                    binding.textKeywordInfo.text = ctx.getString(R.string.filter_keyword_display, patternDisplay, fieldNames)
+                } else {
+                    binding.textKeywordInfo.visibility = View.GONE
+                }
+
+                // ChannelProperty 資訊
+                val channelProp = rule.matchers.filterIsInstance<Matcher.ChannelProperty>().firstOrNull()
+                if (channelProp != null) {
+                    binding.textChannelPropertyInfo.visibility = View.VISIBLE
+                    val parts = mutableListOf<String>()
+                    channelProp.minImportance?.let { imp ->
+                        parts.add(ctx.getString(R.string.filter_importance_display, importanceLabel(ctx, imp)))
+                    }
+                    channelProp.groupId?.let { parts.add("group: $it") }
+                    binding.textChannelPropertyInfo.text = parts.joinToString(", ")
+                } else {
+                    binding.textChannelPropertyInfo.visibility = View.GONE
+                }
+
                 binding.btnDelete.setOnClickListener {
                     onDeleteClick(rule)
                 }
@@ -221,6 +255,16 @@ class FilterSettingsFragment : Fragment() {
     }
 
     companion object {
+        /** 將 importance 值轉為人可讀標籤 */
+        fun importanceLabel(ctx: Context, importance: Int): String = when (importance) {
+            1 -> ctx.getString(R.string.filter_importance_min)
+            2 -> ctx.getString(R.string.filter_importance_low)
+            3 -> ctx.getString(R.string.filter_importance_default)
+            4 -> ctx.getString(R.string.filter_importance_high)
+            5 -> ctx.getString(R.string.filter_importance_max)
+            else -> importance.toString()
+        }
+
         /** 將延遲毫秒數格式化為人可讀的時間文字 */
         fun formatDismissDelay(ctx: Context, delayMs: Long): String = when (delayMs) {
             0L -> ctx.getString(R.string.filter_dismiss_delay_immediate)

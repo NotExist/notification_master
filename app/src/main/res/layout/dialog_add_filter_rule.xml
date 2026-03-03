@@ -94,6 +94,88 @@
             android:layout_height="wrap_content"
             android:orientation="vertical" />
 
+        <!-- 關鍵字匹配（選填） -->
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/label_keyword"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/filter_keyword_title"
+            android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/layout_keyword_pattern"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:hint="@string/filter_keyword_pattern_hint">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/edit_keyword_pattern"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- 搜尋欄位 CheckBox 容器 -->
+        <LinearLayout
+            android:id="@+id/container_keyword_fields"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal" />
+
+        <!-- Regex 開關 -->
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switch_keyword_regex"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/filter_keyword_regex" />
+
+        <!-- Channel 屬性匹配（選填，API 26+） -->
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/label_channel_property"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/filter_channel_property_title"
+            android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/layout_min_importance"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:hint="@string/filter_min_importance">
+
+            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                android:id="@+id/dropdown_min_importance"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="none"
+                android:editable="false" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/layout_group_id"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:hint="@string/filter_group_id">
+
+            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                android:id="@+id/edit_group_id"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textNoSuggestions"
+                android:completionThreshold="1" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
         <!-- 清除延遲（僅 AUTO_DISMISS 時顯示） -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/layout_dismiss_delay"

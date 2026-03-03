@@ -311,6 +311,286 @@ class RuleEngineMatchTest {
         )
     }
 
+    @Test
+    fun `keyword matcher matches bigText and subText fields`() {
+        RuleEngine.setRulesForTesting(listOf(
+            Rule(
+                matchers = listOf(
+                    Matcher.Package("com.example.app"),
+                    Matcher.Keyword("優惠", setOf(KeywordField.BIG_TEXT, KeywordField.SUB_TEXT))
+                ),
+                action = RuleAction.SkipRecord
+            )
+        ))
+
+        // bigText 含關鍵字 → 匹配
+        assertTrue(
+            RuleEngine.matches(
+                ActionType.SKIP_RECORD,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    title = "普通標題",
+                    text = "普通內容",
+                    bigText = "超級優惠活動詳情"
+                )
+            )
+        )
+
+        // subText 含關鍵字 → 匹配
+        assertTrue(
+            RuleEngine.matches(
+                ActionType.SKIP_RECORD,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    subText = "限時優惠"
+                )
+            )
+        )
+
+        // 關鍵字僅在 title（未列入搜尋欄位）→ 不匹配
+        assertFalse(
+            RuleEngine.matches(
+                ActionType.SKIP_RECORD,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    title = "優惠通知",
+                    text = "一般內容"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `keyword regex matcher with content fields`() {
+        RuleEngine.setRulesForTesting(listOf(
+            Rule(
+                matchers = listOf(
+                    Matcher.Package("com.example.app"),
+                    Matcher.Keyword("\\d{4}-\\d{2}-\\d{2}", setOf(KeywordField.TEXT), isRegex = true)
+                ),
+                action = RuleAction.SkipRecord
+            )
+        ))
+
+        // 含日期格式 → 匹配
+        assertTrue(
+            RuleEngine.matches(
+                ActionType.SKIP_RECORD,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    text = "活動日期 2024-01-15 開始"
+                )
+            )
+        )
+
+        // 不含日期格式 → 不匹配
+        assertFalse(
+            RuleEngine.matches(
+                ActionType.SKIP_RECORD,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    text = "沒有日期的文字"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `keyword matcher with null content fields does not match`() {
+        RuleEngine.setRulesForTesting(listOf(
+            Rule(
+                matchers = listOf(
+                    Matcher.Package("com.example.app"),
+                    Matcher.Keyword("test", setOf(KeywordField.TITLE, KeywordField.TEXT))
+                ),
+                action = RuleAction.SkipRecord
+            )
+        ))
+
+        // content 欄位為 null → keyword 不匹配 → rule 不匹配
+        assertFalse(
+            RuleEngine.matches(
+                ActionType.SKIP_RECORD,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    title = null,
+                    text = null
+                )
+            )
+        )
+    }
+
+    // ========== ChannelProperty 整合匹配 ==========
+
+    @Test
+    fun `rule with channelProperty minImportance filters by importance`() {
+        RuleEngine.setRulesForTesting(listOf(
+            Rule(
+                matchers = listOf(
+                    Matcher.Package("com.example.app"),
+                    Matcher.ChannelProperty(minImportance = 4)
+                ),
+                action = RuleAction.AutoDismiss(delayMs = 0)
+            )
+        ))
+
+        // importance=4 (HIGH) → 匹配
+        assertTrue(
+            RuleEngine.matches(
+                ActionType.AUTO_DISMISS,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    channelImportance = 4
+                )
+            )
+        )
+
+        // importance=5 (MAX) → 匹配
+        assertTrue(
+            RuleEngine.matches(
+                ActionType.AUTO_DISMISS,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    channelImportance = 5
+                )
+            )
+        )
+
+        // importance=3 (DEFAULT) → 不匹配
+        assertFalse(
+            RuleEngine.matches(
+                ActionType.AUTO_DISMISS,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    channelImportance = 3
+                )
+            )
+        )
+
+        // importance 為 null → 不匹配
+        assertFalse(
+            RuleEngine.matches(
+                ActionType.AUTO_DISMISS,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    channelImportance = null
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `rule with channelProperty groupId filters by group`() {
+        RuleEngine.setRulesForTesting(listOf(
+            Rule(
+                matchers = listOf(
+                    Matcher.Package("com.example.app"),
+                    Matcher.ChannelProperty(groupId = "social")
+                ),
+                action = RuleAction.SkipRecord
+            )
+        ))
+
+        // groupId="social" → 匹配
+        assertTrue(
+            RuleEngine.matches(
+                ActionType.SKIP_RECORD,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    channelGroupId = "social"
+                )
+            )
+        )
+
+        // groupId="work" → 不匹配
+        assertFalse(
+            RuleEngine.matches(
+                ActionType.SKIP_RECORD,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    channelGroupId = "work"
+                )
+            )
+        )
+
+        // groupId 為 null → 不匹配
+        assertFalse(
+            RuleEngine.matches(
+                ActionType.SKIP_RECORD,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    channelGroupId = null
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `rule with keyword and channelProperty requires both to match`() {
+        RuleEngine.setRulesForTesting(listOf(
+            Rule(
+                matchers = listOf(
+                    Matcher.Package("com.example.app"),
+                    Matcher.Keyword("廣告", setOf(KeywordField.TITLE)),
+                    Matcher.ChannelProperty(minImportance = 3)
+                ),
+                action = RuleAction.SkipRecord
+            )
+        ))
+
+        // 兩者都符合 → 匹配
+        assertTrue(
+            RuleEngine.matches(
+                ActionType.SKIP_RECORD,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    title = "廣告推送",
+                    channelImportance = 4
+                )
+            )
+        )
+
+        // keyword 符合但 importance 不足 → 不匹配
+        assertFalse(
+            RuleEngine.matches(
+                ActionType.SKIP_RECORD,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    title = "廣告推送",
+                    channelImportance = 2
+                )
+            )
+        )
+
+        // importance 符合但 keyword 不符 → 不匹配
+        assertFalse(
+            RuleEngine.matches(
+                ActionType.SKIP_RECORD,
+                MatchContext(
+                    packageName = "com.example.app",
+                    channelId = null,
+                    title = "重要通知",
+                    channelImportance = 4
+                )
+            )
+        )
+    }
+
     // ========== hasRules / getRules / isAllEmpty ==========
 
     @Test

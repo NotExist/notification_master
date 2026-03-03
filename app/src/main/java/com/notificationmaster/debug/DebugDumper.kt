@@ -161,10 +161,10 @@ class DebugDumper(private val context: Context) {
                                 put("suppressedVisualEffects", ranking.suppressedVisualEffects)
                             }
                             if (Build.VERSION.SDK_INT >= 26) {
-                                put("channel", ranking.channel?.id)
                                 put("overrideGroupKey", ranking.overrideGroupKey)
                             }
                             if (Build.VERSION.SDK_INT >= 28) {
+                                put("channel", ranking.channel?.id)
                                 put("isSuspended", ranking.isSuspended)
                                 put("canShowBadge", ranking.canShowBadge())
                             }

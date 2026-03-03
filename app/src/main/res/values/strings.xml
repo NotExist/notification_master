@@ -269,6 +269,29 @@
     <string name="filter_dismiss_delay_custom_hint">分鐘</string>
     <string name="filter_dismiss_delay_format">%s 後清除</string>
 
+    <!-- Keyword matcher -->
+    <string name="filter_keyword_title">關鍵字匹配（選填）</string>
+    <string name="filter_keyword_pattern_hint">搜尋關鍵字或正規表示式</string>
+    <string name="filter_keyword_regex">使用正規表示式</string>
+    <string name="filter_keyword_field_title">標題</string>
+    <string name="filter_keyword_field_text">內容</string>
+    <string name="filter_keyword_field_big_text">展開內容</string>
+    <string name="filter_keyword_field_sub_text">副標題</string>
+    <string name="filter_keyword_field_required">請至少選擇一個搜尋欄位</string>
+    <string name="filter_keyword_display">%1$s (%2$s)</string>
+
+    <!-- ChannelProperty matcher -->
+    <string name="filter_channel_property_title">Channel 屬性匹配（選填）</string>
+    <string name="filter_min_importance">最低重要性</string>
+    <string name="filter_importance_any">不限</string>
+    <string name="filter_importance_min">最低</string>
+    <string name="filter_importance_low">低</string>
+    <string name="filter_importance_default">預設</string>
+    <string name="filter_importance_high">高</string>
+    <string name="filter_importance_max">最高</string>
+    <string name="filter_importance_display">importance ≥ %s</string>
+    <string name="filter_group_id">Channel Group ID（選填）</string>
+
     <!-- Channel -->
     <string name="channel_name_unset">Channel Name 未設定</string>
 </resources>

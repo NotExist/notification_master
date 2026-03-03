@@ -8,6 +8,7 @@ import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import com.google.android.material.checkbox.MaterialCheckBox
+import com.google.android.material.materialswitch.MaterialSwitch
 import android.widget.Toast
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
@@ -15,7 +16,9 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.core.filter.ActionType
+import com.notificationmaster.core.filter.KeywordField
 import com.notificationmaster.core.filter.Matcher
 import com.notificationmaster.core.filter.Rule
 import com.notificationmaster.core.filter.RuleAction
@@ -80,6 +83,60 @@ object FilterRuleDialogHelper {
         val dropdownDismissDelay = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.dropdown_dismiss_delay)
         val layoutDismissDelayCustom = dialogView.findViewById<TextInputLayout>(R.id.layout_dismiss_delay_custom)
         val editDismissDelayCustom = dialogView.findViewById<TextInputEditText>(R.id.edit_dismiss_delay_custom)
+
+        // Keyword 相關 views
+        val editKeywordPattern = dialogView.findViewById<TextInputEditText>(R.id.edit_keyword_pattern)
+        val containerKeywordFields = dialogView.findViewById<LinearLayout>(R.id.container_keyword_fields)
+        val switchKeywordRegex = dialogView.findViewById<MaterialSwitch>(R.id.switch_keyword_regex)
+
+        // ChannelProperty 相關 views
+        val labelChannelProperty = dialogView.findViewById<View>(R.id.label_channel_property)
+        val layoutMinImportance = dialogView.findViewById<TextInputLayout>(R.id.layout_min_importance)
+        val dropdownMinImportance = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.dropdown_min_importance)
+        val layoutGroupId = dialogView.findViewById<TextInputLayout>(R.id.layout_group_id)
+        val editGroupId = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.edit_group_id)
+
+        // === Keyword 欄位 checkbox 動態生成 ===
+        val keywordFieldLabels = mapOf(
+            KeywordField.TITLE to context.getString(R.string.filter_keyword_field_title),
+            KeywordField.TEXT to context.getString(R.string.filter_keyword_field_text),
+            KeywordField.BIG_TEXT to context.getString(R.string.filter_keyword_field_big_text),
+            KeywordField.SUB_TEXT to context.getString(R.string.filter_keyword_field_sub_text)
+        )
+        val keywordFieldCheckBoxes = mutableMapOf<KeywordField, MaterialCheckBox>()
+        for ((field, label) in keywordFieldLabels) {
+            val cb = MaterialCheckBox(context).apply {
+                text = label
+                isChecked = field == KeywordField.TITLE || field == KeywordField.TEXT
+            }
+            keywordFieldCheckBoxes[field] = cb
+            containerKeywordFields.addView(cb)
+        }
+
+        // === Importance dropdown 設定 ===
+        data class ImportanceOption(val label: String, val value: Int?)
+        val importanceOptions = listOf(
+            ImportanceOption(context.getString(R.string.filter_importance_any), null),
+            ImportanceOption(context.getString(R.string.filter_importance_min), 1),
+            ImportanceOption(context.getString(R.string.filter_importance_low), 2),
+            ImportanceOption(context.getString(R.string.filter_importance_default), 3),
+            ImportanceOption(context.getString(R.string.filter_importance_high), 4),
+            ImportanceOption(context.getString(R.string.filter_importance_max), 5)
+        )
+        var selectedImportance: Int? = null
+        val importanceAdapter = ArrayAdapter(context, android.R.layout.simple_dropdown_item_1line, importanceOptions.map { it.label })
+        dropdownMinImportance.setAdapter(importanceAdapter)
+        dropdownMinImportance.setText(importanceOptions[0].label, false)
+        dropdownMinImportance.setOnItemClickListener { _, _, pos, _ ->
+            selectedImportance = importanceOptions[pos].value
+        }
+
+        // ChannelProperty 區塊：API 26+ 才顯示
+        if (!ApiVersionHelper.supportsNotificationChannel()) {
+            labelChannelProperty.visibility = View.GONE
+            layoutMinImportance.visibility = View.GONE
+            layoutGroupId.visibility = View.GONE
+        }
 
         // === Category 下拉選單 ===
         val categoryLabels = arrayOf(
@@ -154,6 +211,25 @@ object FilterRuleDialogHelper {
             }
         }
 
+        // 編輯模式：回填 keyword/channelProperty
+        if (isEditMode) {
+            existingRule!!.matchers.filterIsInstance<Matcher.Keyword>().firstOrNull()?.let { kw ->
+                editKeywordPattern.setText(kw.pattern)
+                switchKeywordRegex.isChecked = kw.isRegex
+                keywordFieldCheckBoxes.forEach { (field, cb) -> cb.isChecked = field in kw.fields }
+            }
+            existingRule.matchers.filterIsInstance<Matcher.ChannelProperty>().firstOrNull()?.let { cp ->
+                cp.minImportance?.let { imp ->
+                    val idx = importanceOptions.indexOfFirst { it.value == imp }
+                    if (idx >= 0) {
+                        selectedImportance = imp
+                        dropdownMinImportance.setText(importanceOptions[idx].label, false)
+                    }
+                }
+                cp.groupId?.let { editGroupId.setText(it) }
+            }
+        }
+
         // === 預填值 ===
         if (isEditMode) {
             editPackageName.setText(existingRule!!.packageName)
@@ -208,25 +284,28 @@ object FilterRuleDialogHelper {
             editPackageName.setOnItemClickListener { _, _, position, _ ->
                 editPackageName.setText(rawPackageNames[position])
                 editPackageName.setSelection(rawPackageNames[position].length)
-                // 觸發 channelId 建議更新
+                // 觸發 channelId / groupId 建議更新
                 loadChannelSuggestions(scope, database, rawPackageNames[position], editChannelId)
+                loadGroupIdSuggestions(scope, database, rawPackageNames[position], editGroupId)
             }
         }
 
-        // packageName 變動時更新 channelId 建議
+        // packageName 變動時更新 channelId / groupId 建議
         editPackageName.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
                 val pkg = s?.toString()?.trim() ?: return
                 loadChannelSuggestions(scope, database, pkg, editChannelId)
+                loadGroupIdSuggestions(scope, database, pkg, editGroupId)
             }
         })
 
-        // 預填 packageName 時立即載入 channel 建議
+        // 預填 packageName 時立即載入 channel / groupId 建議
         val initPackageName = if (isEditMode) existingRule!!.packageName else prefillPackageName
         if (!initPackageName.isNullOrEmpty()) {
             loadChannelSuggestions(scope, database, initPackageName, editChannelId)
+            loadGroupIdSuggestions(scope, database, initPackageName, editGroupId)
         }
 
         // === 建立 Dialog ===
@@ -288,6 +367,23 @@ object FilterRuleDialogHelper {
                 }
                 matchers.add(Matcher.EventTypes(selectedEventTypes))
 
+                // Keyword matcher（pattern 非空時才加入）
+                val keywordPattern = editKeywordPattern.text?.toString()?.trim().orEmpty()
+                if (keywordPattern.isNotEmpty()) {
+                    val selectedFields = keywordFieldCheckBoxes.filter { it.value.isChecked }.keys
+                    if (selectedFields.isEmpty()) {
+                        Toast.makeText(context, R.string.filter_keyword_field_required, Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    matchers.add(Matcher.Keyword(keywordPattern, selectedFields, switchKeywordRegex.isChecked))
+                }
+
+                // ChannelProperty matcher（有選擇時才加入）
+                val groupId = editGroupId.text?.toString()?.trim()?.ifEmpty { null }
+                if (selectedImportance != null || groupId != null) {
+                    matchers.add(Matcher.ChannelProperty(minImportance = selectedImportance, groupId = groupId))
+                }
+
                 // 建構 RuleAction
                 val action: RuleAction = when (resolvedActionType) {
                     ActionType.SKIP_RECORD -> RuleAction.SkipRecord
@@ -347,6 +443,30 @@ object FilterRuleDialogHelper {
                 editChannelId.setText(rawChannelIds[position])
                 editChannelId.setSelection(rawChannelIds[position].length)
             }
+        }
+    }
+
+    /**
+     * 非同步載入指定 packageName 的 channel group ID 建議清單
+     */
+    private fun loadGroupIdSuggestions(
+        scope: CoroutineScope,
+        database: com.notificationmaster.data.db.NotificationDatabase,
+        packageName: String,
+        editGroupId: MaterialAutoCompleteTextView
+    ) {
+        scope.launch {
+            val groupIds = withContext(Dispatchers.IO) {
+                database.channelDao().getByPackageName(packageName)
+                    .mapNotNull { it.groupId }
+                    .distinct()
+            }
+            val adapter = ArrayAdapter(
+                editGroupId.context,
+                android.R.layout.simple_dropdown_item_1line,
+                groupIds
+            )
+            editGroupId.setAdapter(adapter)
         }
     }
 }

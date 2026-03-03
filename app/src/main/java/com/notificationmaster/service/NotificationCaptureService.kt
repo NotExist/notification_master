@@ -199,7 +199,7 @@ class NotificationCaptureService : NotificationListenerService() {
                 processNotification(sbn, eventType, rankingMap)
 
                 // 自動清除檢查（通知已記錄後執行）
-                checkAutoDismiss(sbn)
+                checkAutoDismiss(sbn, rankingMap)
 
                 // Debug dump
                 debugDumper.dumpNotification(sbn, eventType.name)
@@ -261,7 +261,20 @@ class NotificationCaptureService : NotificationListenerService() {
 
         // 0. 過濾檢查（在 extraction 之前，避免不必要的 IO）
         val filterChannelId = if (ApiVersionHelper.supportsNotificationChannel()) sbn.notification.channelId else null
-        if (RuleEngine.matches(ActionType.SKIP_RECORD, MatchContext(sbn.packageName, filterChannelId, eventType))) {
+        val extras = sbn.notification.extras
+        val (rankImportance, rankGroupId) = getRankingInfo(ApiVersionHelper.getNotificationKey(sbn), rankingMap)
+        val matchCtx = MatchContext(
+            packageName = sbn.packageName,
+            channelId = filterChannelId,
+            eventType = eventType,
+            title = extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString(),
+            text = extras?.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString(),
+            bigText = extras?.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString(),
+            subText = extras?.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)?.toString(),
+            channelImportance = rankImportance,
+            channelGroupId = rankGroupId
+        )
+        if (RuleEngine.matches(ActionType.SKIP_RECORD, matchCtx)) {
             Log.d(TAG, "Filtered: ${sbn.packageName}/$filterChannelId event=$eventType")
             return
         }
@@ -359,7 +372,17 @@ class NotificationCaptureService : NotificationListenerService() {
 
         // 過濾檢查（被過濾的通知仍需清理 PendingIntentCache）
         val filterChannelId: String? = if (ApiVersionHelper.supportsNotificationChannel()) sbn.notification.channelId else null
-        if (RuleEngine.matches(ActionType.SKIP_RECORD, MatchContext(sbn.packageName, filterChannelId, EventType.REMOVED))) {
+        val removalExtras = sbn.notification.extras
+        val removalMatchCtx = MatchContext(
+            packageName = sbn.packageName,
+            channelId = filterChannelId,
+            eventType = EventType.REMOVED,
+            title = removalExtras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString(),
+            text = removalExtras?.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString(),
+            bigText = removalExtras?.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString(),
+            subText = removalExtras?.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)?.toString()
+        )
+        if (RuleEngine.matches(ActionType.SKIP_RECORD, removalMatchCtx)) {
             PendingIntentCache.remove(key)
             return
         }
@@ -729,19 +752,47 @@ class NotificationCaptureService : NotificationListenerService() {
     }
 
     /**
+     * 從 RankingMap 取得指定通知的 importance 和 channel groupId
+     */
+    private fun getRankingInfo(key: String, rankingMap: RankingMap?): Pair<Int?, String?> {
+        if (rankingMap == null) return null to null
+        val ranking = Ranking()
+        if (!rankingMap.getRanking(key, ranking)) return null to null
+        // Ranking.importance requires API 24+, Ranking.channel requires API 28+
+        val importance = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) ranking.importance else null
+        val groupId = if (ApiVersionHelper.supportsPerson()) ranking.channel?.group else null
+        return importance to groupId
+    }
+
+    /**
      * 檢查是否需要自動清除通知
      *
      * 通知已記錄到 DB 後呼叫，僅影響狀態列顯示。
      * POSTED 和 UPDATED 都檢查；UPDATED 時重設延遲計時器。
      */
-    private fun checkAutoDismiss(sbn: StatusBarNotification) {
+    private fun checkAutoDismiss(sbn: StatusBarNotification, rankingMap: RankingMap?) {
         val key = ApiVersionHelper.getNotificationKey(sbn)
         val channelId = if (ApiVersionHelper.supportsNotificationChannel())
             sbn.notification.channelId else null
 
+        // 建構含 content + channel 屬性的 MatchContext
+        val dismissExtras = sbn.notification.extras
+        val (dismissImportance, dismissGroupId) = getRankingInfo(key, rankingMap)
+        val dismissMatchCtx = MatchContext(
+            packageName = sbn.packageName,
+            channelId = channelId,
+            eventType = EventType.POSTED,
+            title = dismissExtras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString(),
+            text = dismissExtras?.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString(),
+            bigText = dismissExtras?.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString(),
+            subText = dismissExtras?.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)?.toString(),
+            channelImportance = dismissImportance,
+            channelGroupId = dismissGroupId
+        )
+
         // POSTED 和 UPDATED 都以 POSTED 類型匹配（AUTO_DISMISS 以 POSTED 為主要觸發）
         val rule = RuleEngine.findMatchingRule(
-            ActionType.AUTO_DISMISS, MatchContext(sbn.packageName, channelId, EventType.POSTED)
+            ActionType.AUTO_DISMISS, dismissMatchCtx
         ) ?: return
 
         // 取消既有排程（UPDATED 時重設計時器）
