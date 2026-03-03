@@ -16,7 +16,9 @@ enum class FilterCategory {
     /** 通知過濾黑名單 */
     NOTIFICATION,
     /** 日曆匯出白名單 */
-    CALENDAR_EXPORT
+    CALENDAR_EXPORT,
+    /** 通知自動清除黑名單 */
+    AUTO_DISMISS
 }
 
 /**
@@ -31,7 +33,9 @@ data class FilterRule(
     val packageName: String,
     val channelId: String?,
     val eventTypes: Set<String>,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    /** 自動清除延遲（毫秒），僅 AUTO_DISMISS 使用，0 = 立即清除 */
+    val dismissDelayMs: Long = 0
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
@@ -39,6 +43,7 @@ data class FilterRule(
         put("channelId", channelId ?: JSONObject.NULL)
         put("eventTypes", JSONArray(eventTypes.toList()))
         put("createdAt", createdAt)
+        put("dismissDelayMs", dismissDelayMs)
     }
 
     companion object {
@@ -69,7 +74,8 @@ data class FilterRule(
                 packageName = packageName,
                 channelId = json.optString("channelId").takeIf { it.isNotEmpty() && it != "null" },
                 eventTypes = resolvedEventTypes,
-                createdAt = json.optLong("createdAt", 0L)
+                createdAt = json.optLong("createdAt", 0L),
+                dismissDelayMs = json.optLong("dismissDelayMs", 0L)
             )
         }
     }
@@ -125,16 +131,16 @@ object FilterRuleStore {
     }
 
     /**
-     * 完整匹配：packageName + channelId + eventType
+     * 取得匹配的規則，供需要規則詳細資訊的場景（如 AUTO_DISMISS 需要 dismissDelayMs）
      *
      * 查詢邏輯：
      * 1. 精確匹配：同 packageName + 同 channelId（非 null）→ 優先
      * 2. 包級匹配：同 packageName + rule.channelId == null → 次之
-     * 3. 無匹配 → false
+     * 3. 無匹配 → null
      */
-    fun matches(category: FilterCategory, packageName: String, channelId: String?, eventType: EventType): Boolean {
-        val rules = rulesMap[category] ?: return false
-        if (rules.isEmpty()) return false
+    fun findMatchingRule(category: FilterCategory, packageName: String, channelId: String?, eventType: EventType): FilterRule? {
+        val rules = rulesMap[category] ?: return null
+        if (rules.isEmpty()) return null
 
         // 1. 精確匹配（channel 級）
         if (channelId != null) {
@@ -142,7 +148,7 @@ object FilterRuleStore {
                 it.packageName == packageName && it.channelId == channelId
             }
             if (channelRule != null) {
-                return eventType.name in channelRule.eventTypes
+                return if (eventType.name in channelRule.eventTypes) channelRule else null
             }
         }
 
@@ -151,12 +157,19 @@ object FilterRuleStore {
             it.packageName == packageName && it.channelId == null
         }
         if (packageRule != null) {
-            return eventType.name in packageRule.eventTypes
+            return if (eventType.name in packageRule.eventTypes) packageRule else null
         }
 
         // 3. 無匹配
-        return false
+        return null
     }
+
+    /**
+     * 完整匹配：packageName + channelId + eventType
+     * 委派給 findMatchingRule()
+     */
+    fun matches(category: FilterCategory, packageName: String, channelId: String?, eventType: EventType): Boolean =
+        findMatchingRule(category, packageName, channelId, eventType) != null
 
     /**
      * 僅來源匹配：packageName + channelId（不檢查 eventType）

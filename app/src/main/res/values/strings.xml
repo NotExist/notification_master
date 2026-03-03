@@ -206,6 +206,7 @@
     <string name="filter_dialog_category">規則類別</string>
     <string name="filter_dialog_category_notification">通知過濾黑名單</string>
     <string name="filter_dialog_category_calendar">日曆匯出白名單</string>
+    <string name="filter_dialog_category_auto_dismiss">通知自動清除</string>
     <string name="filter_package_name_required">請輸入 Package Name</string>
     <string name="filter_event_type_required">請至少選擇一種事件類型</string>
 
@@ -251,6 +252,22 @@
     <string name="filter_backup_found_message">在備份目錄發現過濾規則備份檔案，是否匯入？</string>
     <string name="filter_backup_setup_title">設定過濾規則備份</string>
     <string name="filter_backup_setup_message">目前尚無過濾規則。\n是否選擇一個目錄作為自動備份位置？\n設定後，規則異動會自動備份到該目錄。</string>
+
+    <!-- 通知自動清除 -->
+    <string name="settings_auto_dismiss_title">通知自動清除</string>
+    <string name="settings_auto_dismiss_summary">設定要自動從狀態列清除的 App 或 Channel</string>
+    <string name="settings_auto_dismiss_count">%d 條規則</string>
+    <string name="auto_dismiss_empty">尚無自動清除規則</string>
+    <string name="auto_dismiss_empty_hint">新增規則後，符合條件的通知將自動從狀態列清除，但仍會被記錄。</string>
+    <string name="filter_dismiss_delay">清除延遲</string>
+    <string name="filter_dismiss_delay_immediate">立即</string>
+    <string name="filter_dismiss_delay_5min">5 分鐘</string>
+    <string name="filter_dismiss_delay_15min">15 分鐘</string>
+    <string name="filter_dismiss_delay_30min">30 分鐘</string>
+    <string name="filter_dismiss_delay_1h">1 小時</string>
+    <string name="filter_dismiss_delay_custom">自訂…</string>
+    <string name="filter_dismiss_delay_custom_hint">分鐘</string>
+    <string name="filter_dismiss_delay_format">%s 後清除</string>
 
     <!-- Channel -->
     <string name="channel_name_unset">Channel Name 未設定</string>

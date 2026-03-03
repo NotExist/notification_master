@@ -11,6 +11,7 @@ import com.google.android.material.checkbox.MaterialCheckBox
 import android.widget.Toast
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
+import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
@@ -30,6 +31,18 @@ import kotlinx.coroutines.withContext
  * 供 FilterSettingsFragment FAB 和外部長按入口（時間軸、歸檔）共用。
  */
 object FilterRuleDialogHelper {
+
+    /** 延遲選項：label → 毫秒值（-1 代表自訂） */
+    private data class DelayOption(val labelResId: Int, val delayMs: Long)
+
+    private val DELAY_OPTIONS = listOf(
+        DelayOption(R.string.filter_dismiss_delay_immediate, 0),
+        DelayOption(R.string.filter_dismiss_delay_5min, 5 * 60 * 1000L),
+        DelayOption(R.string.filter_dismiss_delay_15min, 15 * 60 * 1000L),
+        DelayOption(R.string.filter_dismiss_delay_30min, 30 * 60 * 1000L),
+        DelayOption(R.string.filter_dismiss_delay_1h, 60 * 60 * 1000L),
+        DelayOption(R.string.filter_dismiss_delay_custom, -1)
+    )
 
     /**
      * 顯示新增或編輯規則 Dialog
@@ -61,14 +74,34 @@ object FilterRuleDialogHelper {
         val editChannelId = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.edit_channel_id)
         val btnSelectAll = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_select_all)
         val containerEventTypes = dialogView.findViewById<LinearLayout>(R.id.container_event_types)
+        val layoutDismissDelay = dialogView.findViewById<TextInputLayout>(R.id.layout_dismiss_delay)
+        val dropdownDismissDelay = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.dropdown_dismiss_delay)
+        val layoutDismissDelayCustom = dialogView.findViewById<TextInputLayout>(R.id.layout_dismiss_delay_custom)
+        val editDismissDelayCustom = dialogView.findViewById<TextInputEditText>(R.id.edit_dismiss_delay_custom)
 
         // === Category 下拉選單 ===
         val categoryLabels = arrayOf(
             context.getString(R.string.filter_dialog_category_notification),
-            context.getString(R.string.filter_dialog_category_calendar)
+            context.getString(R.string.filter_dialog_category_calendar),
+            context.getString(R.string.filter_dialog_category_auto_dismiss)
         )
-        val categoryValues = arrayOf(FilterCategory.NOTIFICATION, FilterCategory.CALENDAR_EXPORT)
+        val categoryValues = arrayOf(FilterCategory.NOTIFICATION, FilterCategory.CALENDAR_EXPORT, FilterCategory.AUTO_DISMISS)
         var selectedCategoryIndex = 0
+
+        // 延遲選項狀態
+        val delayLabels = DELAY_OPTIONS.map { context.getString(it.labelResId) }
+        var selectedDelayIndex = 0  // 預設「立即」
+        var isCustomDelay = false
+
+        /** 根據目前有效的 category 切換延遲區塊顯示 */
+        fun updateDismissDelayVisibility(effectiveCategory: FilterCategory) {
+            val show = effectiveCategory == FilterCategory.AUTO_DISMISS
+            layoutDismissDelay.visibility = if (show) View.VISIBLE else View.GONE
+            if (!show) {
+                layoutDismissDelayCustom.visibility = View.GONE
+                isCustomDelay = false
+            }
+        }
 
         if (isEditMode) {
             // 編輯模式：不顯示 category 選擇
@@ -80,6 +113,41 @@ object FilterRuleDialogHelper {
             dropdownCategory.setText(categoryLabels[0], false)
             dropdownCategory.setOnItemClickListener { _, _, position, _ ->
                 selectedCategoryIndex = position
+                updateDismissDelayVisibility(categoryValues[position])
+            }
+        }
+
+        // 固定 category 或編輯模式時根據 category 決定延遲區塊
+        val effectiveCategory = if (isEditMode) category else category
+        if (effectiveCategory != null) {
+            updateDismissDelayVisibility(effectiveCategory)
+        }
+
+        // === 延遲 Dropdown 設定 ===
+        val delayAdapter = ArrayAdapter(context, android.R.layout.simple_dropdown_item_1line, delayLabels)
+        dropdownDismissDelay.setAdapter(delayAdapter)
+        dropdownDismissDelay.setText(delayLabels[0], false)
+        dropdownDismissDelay.setOnItemClickListener { _, _, position, _ ->
+            selectedDelayIndex = position
+            isCustomDelay = DELAY_OPTIONS[position].delayMs == -1L
+            layoutDismissDelayCustom.visibility = if (isCustomDelay) View.VISIBLE else View.GONE
+        }
+
+        // 編輯模式：回填延遲值
+        if (isEditMode && existingRule!!.dismissDelayMs > 0) {
+            val existingMs = existingRule.dismissDelayMs
+            val matchIndex = DELAY_OPTIONS.indexOfFirst { it.delayMs == existingMs }
+            if (matchIndex >= 0) {
+                selectedDelayIndex = matchIndex
+                dropdownDismissDelay.setText(delayLabels[matchIndex], false)
+            } else {
+                // 自訂值
+                val customIndex = DELAY_OPTIONS.indexOfFirst { it.delayMs == -1L }
+                selectedDelayIndex = customIndex
+                isCustomDelay = true
+                dropdownDismissDelay.setText(delayLabels[customIndex], false)
+                layoutDismissDelayCustom.visibility = View.VISIBLE
+                editDismissDelayCustom.setText((existingMs / 60000).toString())
             }
         }
 
@@ -163,8 +231,9 @@ object FilterRuleDialogHelper {
         if (category != null) {
             FilterRuleStore.load(context, category)
         } else {
-            FilterRuleStore.load(context, FilterCategory.NOTIFICATION)
-            FilterRuleStore.load(context, FilterCategory.CALENDAR_EXPORT)
+            for (cat in FilterCategory.entries) {
+                FilterRuleStore.load(context, cat)
+            }
         }
 
         val dialogTitle = if (isEditMode) R.string.filter_dialog_edit_title else R.string.filter_dialog_title
@@ -201,11 +270,26 @@ object FilterRuleDialogHelper {
                 // 決定 category
                 val resolvedCategory = category ?: categoryValues[selectedCategoryIndex]
 
+                // 計算延遲毫秒（僅 AUTO_DISMISS）
+                val dismissDelayMs = if (resolvedCategory == FilterCategory.AUTO_DISMISS) {
+                    if (isCustomDelay) {
+                        val minutes = editDismissDelayCustom.text?.toString()?.toLongOrNull()
+                        if (minutes == null || minutes < 0) {
+                            Toast.makeText(context, R.string.filter_dismiss_delay_custom_hint, Toast.LENGTH_SHORT).show()
+                            return@setOnClickListener
+                        }
+                        minutes * 60 * 1000L
+                    } else {
+                        DELAY_OPTIONS[selectedDelayIndex].delayMs
+                    }
+                } else 0L
+
                 if (isEditMode) {
                     val updatedRule = existingRule!!.copy(
                         packageName = packageName,
                         channelId = channelId,
-                        eventTypes = selectedEventTypes
+                        eventTypes = selectedEventTypes,
+                        dismissDelayMs = dismissDelayMs
                     )
                     FilterRuleStore.updateRule(context, resolvedCategory, updatedRule)
                     Toast.makeText(context, R.string.filter_rule_updated, Toast.LENGTH_SHORT).show()
@@ -213,7 +297,8 @@ object FilterRuleDialogHelper {
                     val rule = FilterRule(
                         packageName = packageName,
                         channelId = channelId,
-                        eventTypes = selectedEventTypes
+                        eventTypes = selectedEventTypes,
+                        dismissDelayMs = dismissDelayMs
                     )
                     FilterRuleStore.addRule(context, resolvedCategory, rule)
                     Toast.makeText(context, R.string.filter_rule_added, Toast.LENGTH_SHORT).show()

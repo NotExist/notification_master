@@ -27,10 +27,13 @@ import com.notificationmaster.debug.DebugDumper
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -47,6 +50,9 @@ class NotificationCaptureService : NotificationListenerService() {
     private lateinit var debugDumper: DebugDumper
     private lateinit var deviceStateCapture: DeviceStateCapture
     private lateinit var mediaExtractor: MediaExtractor
+
+    /** 追蹤延遲清除的排程任務，key = notification key */
+    private val pendingDismissJobs = ConcurrentHashMap<String, Job>()
 
     companion object {
         private const val TAG = "NotificationCapture"
@@ -71,6 +77,7 @@ class NotificationCaptureService : NotificationListenerService() {
         deviceStateCapture = DeviceStateCapture(this)
         mediaExtractor = MediaExtractor(this)
         FilterRuleStore.load(this, FilterCategory.NOTIFICATION)
+        FilterRuleStore.load(this, FilterCategory.AUTO_DISMISS)
         instance = this
     }
 
@@ -78,6 +85,8 @@ class NotificationCaptureService : NotificationListenerService() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
 
+        pendingDismissJobs.values.forEach { it.cancel() }
+        pendingDismissJobs.clear()
         PendingIntentCache.clear()
         instance = null
         isConnected = false
@@ -188,6 +197,9 @@ class NotificationCaptureService : NotificationListenerService() {
 
                 processNotification(sbn, eventType, rankingMap)
 
+                // 自動清除檢查（通知已記錄後執行）
+                checkAutoDismiss(sbn)
+
                 // Debug dump
                 debugDumper.dumpNotification(sbn, eventType.name)
             } catch (e: Exception) {
@@ -202,6 +214,10 @@ class NotificationCaptureService : NotificationListenerService() {
         reason: Int
     ) {
         Log.d(TAG, "Notification removed: ${sbn.packageName} - reason: $reason (${ApiVersionHelper.categorizeRemovalReason(reason)})")
+
+        // 取消待處理的延遲清除排程（通知已被移除，無需再清除）
+        val dismissKey = ApiVersionHelper.getNotificationKey(sbn)
+        pendingDismissJobs.remove(dismissKey)?.cancel()
 
         serviceScope.launch {
             try {
@@ -711,5 +727,50 @@ class NotificationCaptureService : NotificationListenerService() {
         diffBool("hasCustomBigContentView", old.hasCustomBigContentView, new.hasCustomBigContentView)
 
         return if (diff.length() > 0) diff.toString() else null
+    }
+
+    /**
+     * 檢查是否需要自動清除通知
+     *
+     * 通知已記錄到 DB 後呼叫，僅影響狀態列顯示。
+     * POSTED 和 UPDATED 都檢查；UPDATED 時重設延遲計時器。
+     */
+    private fun checkAutoDismiss(sbn: StatusBarNotification) {
+        val key = ApiVersionHelper.getNotificationKey(sbn)
+        val channelId = if (ApiVersionHelper.supportsNotificationChannel())
+            sbn.notification.channelId else null
+
+        // POSTED 和 UPDATED 都以 POSTED 類型匹配（AUTO_DISMISS 以 POSTED 為主要觸發）
+        val rule = FilterRuleStore.findMatchingRule(
+            FilterCategory.AUTO_DISMISS, sbn.packageName, channelId, EventType.POSTED
+        ) ?: return
+
+        // 取消既有排程（UPDATED 時重設計時器）
+        pendingDismissJobs.remove(key)?.cancel()
+
+        val delayMs = rule.dismissDelayMs
+        if (delayMs <= 0) {
+            try {
+                cancelNotification(key)
+                Log.d(TAG, "Auto-dismissed notification immediately: $key")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to auto-dismiss notification: $key", e)
+            }
+        } else {
+            pendingDismissJobs[key] = serviceScope.launch {
+                delay(delayMs)
+                // 確認通知仍在活躍列表中
+                val active = try { activeNotifications } catch (e: Exception) { null }
+                if (active?.any { ApiVersionHelper.getNotificationKey(it) == key } == true) {
+                    try {
+                        cancelNotification(key)
+                        Log.d(TAG, "Auto-dismissed notification after ${delayMs}ms: $key")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to auto-dismiss notification: $key", e)
+                    }
+                }
+                pendingDismissJobs.remove(key)
+            }
+        }
     }
 }

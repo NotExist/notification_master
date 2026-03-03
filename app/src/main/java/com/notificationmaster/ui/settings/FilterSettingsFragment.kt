@@ -15,6 +15,7 @@ import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.core.filter.FilterCategory
 import com.notificationmaster.core.filter.FilterRule
 import com.notificationmaster.core.filter.FilterRuleStore
+import android.content.Context
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.databinding.FragmentFilterSettingsBinding
 import com.notificationmaster.databinding.ItemFilterRuleBinding
@@ -33,10 +34,13 @@ class FilterSettingsFragment : Fragment() {
 
     private lateinit var category: FilterCategory
 
-    private val adapter = FilterRuleAdapter(
-        onItemClick = { rule -> startEditRuleFlow(rule) },
-        onDeleteClick = { rule -> confirmDeleteRule(rule) }
-    )
+    private val adapter by lazy {
+        FilterRuleAdapter(
+            category = category,
+            onItemClick = { rule -> startEditRuleFlow(rule) },
+            onDeleteClick = { rule -> confirmDeleteRule(rule) }
+        )
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -70,6 +74,10 @@ class FilterSettingsFragment : Fragment() {
             FilterCategory.CALENDAR_EXPORT -> {
                 binding.textEmptyTitle.setText(R.string.calendar_whitelist_empty)
                 binding.textEmptyHint.setText(R.string.calendar_whitelist_empty_hint)
+            }
+            FilterCategory.AUTO_DISMISS -> {
+                binding.textEmptyTitle.setText(R.string.auto_dismiss_empty)
+                binding.textEmptyHint.setText(R.string.auto_dismiss_empty_hint)
             }
         }
 
@@ -146,6 +154,7 @@ class FilterSettingsFragment : Fragment() {
     }
 
     private class FilterRuleAdapter(
+        private val category: FilterCategory,
         private val onItemClick: (FilterRule) -> Unit,
         private val onDeleteClick: (FilterRule) -> Unit
     ) : ListAdapter<FilterRule, FilterRuleAdapter.ViewHolder>(FilterRuleDiffCallback()) {
@@ -177,12 +186,18 @@ class FilterSettingsFragment : Fragment() {
                     binding.textChannelInfo.visibility = View.GONE
                 }
 
-                // 事件類型
+                // 事件類型 + 延遲時間
                 val allEventTypes = EventType.entries.map { it.name }.toSet()
-                binding.textFilterMode.text = if (rule.eventTypes == allEventTypes) {
+                val eventText = if (rule.eventTypes == allEventTypes) {
                     ctx.getString(R.string.filter_mode_ignore_all)
                 } else {
                     rule.eventTypes.joinToString()
+                }
+                binding.textFilterMode.text = if (category == FilterCategory.AUTO_DISMISS && rule.dismissDelayMs > 0) {
+                    val delayText = formatDismissDelay(ctx, rule.dismissDelayMs)
+                    "$eventText — ${ctx.getString(R.string.filter_dismiss_delay_format, delayText)}"
+                } else {
+                    eventText
                 }
 
                 binding.btnDelete.setOnClickListener {
@@ -200,6 +215,18 @@ class FilterSettingsFragment : Fragment() {
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             holder.bind(getItem(position))
+        }
+    }
+
+    companion object {
+        /** 將延遲毫秒數格式化為人可讀的時間文字 */
+        fun formatDismissDelay(ctx: Context, delayMs: Long): String = when (delayMs) {
+            0L -> ctx.getString(R.string.filter_dismiss_delay_immediate)
+            5 * 60 * 1000L -> ctx.getString(R.string.filter_dismiss_delay_5min)
+            15 * 60 * 1000L -> ctx.getString(R.string.filter_dismiss_delay_15min)
+            30 * 60 * 1000L -> ctx.getString(R.string.filter_dismiss_delay_30min)
+            60 * 60 * 1000L -> ctx.getString(R.string.filter_dismiss_delay_1h)
+            else -> "${delayMs / 60000} ${ctx.getString(R.string.filter_dismiss_delay_custom_hint)}"
         }
     }
 }

@@ -94,5 +94,42 @@
             android:layout_height="wrap_content"
             android:orientation="vertical" />
 
+        <!-- 清除延遲（僅 AUTO_DISMISS 時顯示） -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/layout_dismiss_delay"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/filter_dismiss_delay"
+            android:layout_marginTop="12dp"
+            android:visibility="gone">
+
+            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                android:id="@+id/dropdown_dismiss_delay"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="none"
+                android:editable="false" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- 自訂分鐘數（選擇「自訂…」時顯示） -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/layout_dismiss_delay_custom"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/filter_dismiss_delay_custom_hint"
+            android:layout_marginTop="8dp"
+            android:visibility="gone">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/edit_dismiss_delay_custom"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
     </LinearLayout>
 </ScrollView>

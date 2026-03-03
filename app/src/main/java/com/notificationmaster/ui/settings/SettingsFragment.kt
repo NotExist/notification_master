@@ -121,9 +121,10 @@ class SettingsFragment : Fragment() {
 
         debugDumper = DebugDumper(requireContext())
 
-        // 確保兩個 category 的規則已載入
-        FilterRuleStore.load(requireContext(), FilterCategory.NOTIFICATION)
-        FilterRuleStore.load(requireContext(), FilterCategory.CALENDAR_EXPORT)
+        // 確保所有 category 的規則已載入
+        for (cat in FilterCategory.entries) {
+            FilterRuleStore.load(requireContext(), cat)
+        }
 
         setupEnvironmentCard()
         setupFilterSettings()
@@ -149,6 +150,14 @@ class SettingsFragment : Fragment() {
             )
         }
         updateFilterSummary()
+
+        binding.btnAutoDismiss.setOnClickListener {
+            findNavController().navigate(
+                R.id.action_settings_to_filter,
+                bundleOf("category" to FilterCategory.AUTO_DISMISS.name)
+            )
+        }
+        updateAutoDismissSummary()
     }
 
     private fun updateFilterSummary() {
@@ -161,6 +170,16 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    private fun updateAutoDismissSummary() {
+        val b = _binding ?: return
+        val count = FilterRuleStore.getRules(FilterCategory.AUTO_DISMISS).size
+        b.textAutoDismissSummary.text = if (count > 0) {
+            getString(R.string.settings_auto_dismiss_count, count)
+        } else {
+            getString(R.string.settings_auto_dismiss_summary)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         updateDebugInfo()
@@ -168,6 +187,7 @@ class SettingsFragment : Fragment() {
         updateMediaDirDisplay()
         validateCustomMediaDir()
         updateFilterSummary()
+        updateAutoDismissSummary()
         updateCalendarWhitelistSummary()
         updateBackupDirDisplay()
     }
@@ -783,14 +803,17 @@ class SettingsFragment : Fragment() {
             val result = FilterRuleStore.importAllFromJson(ctx, json)
             val notifCount = result[FilterCategory.NOTIFICATION] ?: 0
             val calCount = result[FilterCategory.CALENDAR_EXPORT] ?: 0
+            val dismissCount = result[FilterCategory.AUTO_DISMISS] ?: 0
 
             Toast.makeText(
                 ctx,
-                getString(R.string.filter_import_success, notifCount, calCount),
+                getString(R.string.filter_import_success, notifCount, calCount) +
+                    if (dismissCount > 0) "、自動清除 ${dismissCount} 條" else "",
                 Toast.LENGTH_LONG
             ).show()
 
             updateFilterSummary()
+            updateAutoDismissSummary()
             updateCalendarWhitelistSummary()
         } catch (e: Exception) {
             Toast.makeText(ctx, "匯入失敗：${e.message}", Toast.LENGTH_LONG).show()
@@ -835,12 +858,15 @@ class SettingsFragment : Fragment() {
             val result = FilterRuleStore.importAllFromJson(ctx, json)
             val notifCount = result[FilterCategory.NOTIFICATION] ?: 0
             val calCount = result[FilterCategory.CALENDAR_EXPORT] ?: 0
+            val dismissCount = result[FilterCategory.AUTO_DISMISS] ?: 0
             Toast.makeText(
                 ctx,
-                getString(R.string.filter_import_success, notifCount, calCount),
+                getString(R.string.filter_import_success, notifCount, calCount) +
+                    if (dismissCount > 0) "、自動清除 ${dismissCount} 條" else "",
                 Toast.LENGTH_LONG
             ).show()
             updateFilterSummary()
+            updateAutoDismissSummary()
             updateCalendarWhitelistSummary()
         } catch (e: Exception) {
             Toast.makeText(ctx, "匯入失敗：${e.message}", Toast.LENGTH_LONG).show()
