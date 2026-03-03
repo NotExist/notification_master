@@ -12,8 +12,10 @@ import androidx.room.withTransaction
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.core.NotificationExtractor
 import com.notificationmaster.core.cache.PendingIntentCache
-import com.notificationmaster.core.filter.FilterCategory
-import com.notificationmaster.core.filter.FilterRuleStore
+import com.notificationmaster.core.filter.ActionType
+import com.notificationmaster.core.filter.MatchContext
+import com.notificationmaster.core.filter.RuleAction
+import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.data.db.entity.AppSourceEntity
@@ -76,8 +78,7 @@ class NotificationCaptureService : NotificationListenerService() {
         debugDumper = DebugDumper(this)
         deviceStateCapture = DeviceStateCapture(this)
         mediaExtractor = MediaExtractor(this)
-        FilterRuleStore.load(this, FilterCategory.NOTIFICATION)
-        FilterRuleStore.load(this, FilterCategory.AUTO_DISMISS)
+        RuleEngine.load(this)
         instance = this
     }
 
@@ -260,7 +261,7 @@ class NotificationCaptureService : NotificationListenerService() {
 
         // 0. 過濾檢查（在 extraction 之前，避免不必要的 IO）
         val filterChannelId = if (ApiVersionHelper.supportsNotificationChannel()) sbn.notification.channelId else null
-        if (FilterRuleStore.matches(FilterCategory.NOTIFICATION, sbn.packageName, filterChannelId, eventType)) {
+        if (RuleEngine.matches(ActionType.SKIP_RECORD, MatchContext(sbn.packageName, filterChannelId, eventType))) {
             Log.d(TAG, "Filtered: ${sbn.packageName}/$filterChannelId event=$eventType")
             return
         }
@@ -358,7 +359,7 @@ class NotificationCaptureService : NotificationListenerService() {
 
         // 過濾檢查（被過濾的通知仍需清理 PendingIntentCache）
         val filterChannelId: String? = if (ApiVersionHelper.supportsNotificationChannel()) sbn.notification.channelId else null
-        if (FilterRuleStore.matches(FilterCategory.NOTIFICATION, sbn.packageName, filterChannelId, EventType.REMOVED)) {
+        if (RuleEngine.matches(ActionType.SKIP_RECORD, MatchContext(sbn.packageName, filterChannelId, EventType.REMOVED))) {
             PendingIntentCache.remove(key)
             return
         }
@@ -410,11 +411,9 @@ class NotificationCaptureService : NotificationListenerService() {
 
                 if (latestNotification != null) {
                     // 過濾檢查
-                    if (FilterRuleStore.matches(
-                            FilterCategory.NOTIFICATION,
-                            latestNotification.packageName,
-                            latestNotification.channelId,
-                            EventType.RANKING
+                    if (RuleEngine.matches(
+                            ActionType.SKIP_RECORD,
+                            MatchContext(latestNotification.packageName, latestNotification.channelId, EventType.RANKING)
                         )) continue
 
                     val newRank = ranking.rank
@@ -741,14 +740,14 @@ class NotificationCaptureService : NotificationListenerService() {
             sbn.notification.channelId else null
 
         // POSTED 和 UPDATED 都以 POSTED 類型匹配（AUTO_DISMISS 以 POSTED 為主要觸發）
-        val rule = FilterRuleStore.findMatchingRule(
-            FilterCategory.AUTO_DISMISS, sbn.packageName, channelId, EventType.POSTED
+        val rule = RuleEngine.findMatchingRule(
+            ActionType.AUTO_DISMISS, MatchContext(sbn.packageName, channelId, EventType.POSTED)
         ) ?: return
 
         // 取消既有排程（UPDATED 時重設計時器）
         pendingDismissJobs.remove(key)?.cancel()
 
-        val delayMs = rule.dismissDelayMs
+        val delayMs = (rule.action as RuleAction.AutoDismiss).delayMs
         if (delayMs <= 0) {
             try {
                 cancelNotification(key)

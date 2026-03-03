@@ -91,9 +91,9 @@
         tools:layout="@layout/fragment_filter_settings">
 
         <argument
-            android:name="category"
+            android:name="actionType"
             app:argType="string"
-            android:defaultValue="NOTIFICATION" />
+            android:defaultValue="SKIP_RECORD" />
 
     </fragment>
 

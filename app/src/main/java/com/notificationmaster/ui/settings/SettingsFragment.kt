@@ -21,8 +21,8 @@ import androidx.navigation.fragment.findNavController
 import com.notificationmaster.BuildConfig
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
-import com.notificationmaster.core.filter.FilterCategory
-import com.notificationmaster.core.filter.FilterRuleStore
+import com.notificationmaster.core.filter.ActionType
+import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.data.db.NotificationDatabase
@@ -121,10 +121,8 @@ class SettingsFragment : Fragment() {
 
         debugDumper = DebugDumper(requireContext())
 
-        // 確保所有 category 的規則已載入
-        for (cat in FilterCategory.entries) {
-            FilterRuleStore.load(requireContext(), cat)
-        }
+        // 確保規則已載入
+        RuleEngine.load(requireContext())
 
         setupEnvironmentCard()
         setupFilterSettings()
@@ -146,7 +144,7 @@ class SettingsFragment : Fragment() {
         binding.btnFilter.setOnClickListener {
             findNavController().navigate(
                 R.id.action_settings_to_filter,
-                bundleOf("category" to FilterCategory.NOTIFICATION.name)
+                bundleOf("actionType" to ActionType.SKIP_RECORD.name)
             )
         }
         updateFilterSummary()
@@ -154,7 +152,7 @@ class SettingsFragment : Fragment() {
         binding.btnAutoDismiss.setOnClickListener {
             findNavController().navigate(
                 R.id.action_settings_to_filter,
-                bundleOf("category" to FilterCategory.AUTO_DISMISS.name)
+                bundleOf("actionType" to ActionType.AUTO_DISMISS.name)
             )
         }
         updateAutoDismissSummary()
@@ -162,7 +160,7 @@ class SettingsFragment : Fragment() {
 
     private fun updateFilterSummary() {
         val b = _binding ?: return
-        val count = FilterRuleStore.getRules(FilterCategory.NOTIFICATION).size
+        val count = RuleEngine.getRules(ActionType.SKIP_RECORD).size
         b.textFilterSummary.text = if (count > 0) {
             getString(R.string.settings_filter_count, count)
         } else {
@@ -172,7 +170,7 @@ class SettingsFragment : Fragment() {
 
     private fun updateAutoDismissSummary() {
         val b = _binding ?: return
-        val count = FilterRuleStore.getRules(FilterCategory.AUTO_DISMISS).size
+        val count = RuleEngine.getRules(ActionType.AUTO_DISMISS).size
         b.textAutoDismissSummary.text = if (count > 0) {
             getString(R.string.settings_auto_dismiss_count, count)
         } else {
@@ -357,7 +355,7 @@ class SettingsFragment : Fragment() {
         binding.btnCalendarWhitelist.setOnClickListener {
             findNavController().navigate(
                 R.id.action_settings_to_filter,
-                bundleOf("category" to FilterCategory.CALENDAR_EXPORT.name)
+                bundleOf("actionType" to ActionType.CALENDAR_EXPORT.name)
             )
         }
         updateCalendarWhitelistSummary()
@@ -365,7 +363,7 @@ class SettingsFragment : Fragment() {
 
     private fun updateCalendarWhitelistSummary() {
         val b = _binding ?: return
-        val count = FilterRuleStore.getRules(FilterCategory.CALENDAR_EXPORT).size
+        val count = RuleEngine.getRules(ActionType.CALENDAR_EXPORT).size
         b.textCalendarWhitelistSummary.text = if (count > 0) {
             getString(R.string.settings_calendar_whitelist_count, count)
         } else {
@@ -498,9 +496,7 @@ class SettingsFragment : Fragment() {
         }
 
         binding.btnExportFilterRules.setOnClickListener {
-            val totalRules = FilterCategory.entries.sumOf {
-                FilterRuleStore.getRules(it).size
-            }
+            val totalRules = RuleEngine.getRules().size
             if (totalRules == 0) {
                 Toast.makeText(requireContext(), R.string.filter_export_empty, Toast.LENGTH_SHORT).show()
             } else {
@@ -607,14 +603,14 @@ class SettingsFragment : Fragment() {
             }
 
             // 套用日曆匯出白名單
-            FilterRuleStore.load(ctx, FilterCategory.CALENDAR_EXPORT)
-            val whitelistRules = FilterRuleStore.getRules(FilterCategory.CALENDAR_EXPORT)
+            RuleEngine.load(ctx)
+            val whitelistRules = RuleEngine.getRules(ActionType.CALENDAR_EXPORT)
             val filteredNotifications = if (whitelistRules.isEmpty()) {
                 notifications  // 無白名單規則 → 匯出全部
             } else {
                 notifications.filter { notif ->
-                    FilterRuleStore.matchesSource(
-                        FilterCategory.CALENDAR_EXPORT,
+                    RuleEngine.matchesSource(
+                        ActionType.CALENDAR_EXPORT,
                         notif.packageName,
                         notif.channelId
                     )
@@ -764,13 +760,11 @@ class SettingsFragment : Fragment() {
     private fun exportFilterRulesToUri(uri: android.net.Uri) {
         val ctx = context ?: return
         try {
-            val json = FilterRuleStore.exportAllToJson()
+            val json = RuleEngine.exportAllToJson()
             ctx.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
                 ?: throw IllegalStateException("無法開啟輸出串流")
 
-            val totalRules = FilterCategory.entries.sumOf {
-                FilterRuleStore.getRules(it).size
-            }
+            val totalRules = RuleEngine.getRules().size
             Toast.makeText(
                 ctx,
                 getString(R.string.filter_export_success, totalRules),
@@ -800,10 +794,10 @@ class SettingsFragment : Fragment() {
                 it.bufferedReader().readText()
             } ?: throw IllegalStateException("無法開啟輸入串流")
 
-            val result = FilterRuleStore.importAllFromJson(ctx, json)
-            val notifCount = result[FilterCategory.NOTIFICATION] ?: 0
-            val calCount = result[FilterCategory.CALENDAR_EXPORT] ?: 0
-            val dismissCount = result[FilterCategory.AUTO_DISMISS] ?: 0
+            val result = RuleEngine.importAllFromJson(ctx, json)
+            val notifCount = result[ActionType.SKIP_RECORD] ?: 0
+            val calCount = result[ActionType.CALENDAR_EXPORT] ?: 0
+            val dismissCount = result[ActionType.AUTO_DISMISS] ?: 0
 
             Toast.makeText(
                 ctx,
@@ -824,12 +818,12 @@ class SettingsFragment : Fragment() {
 
     private fun checkBackupAndSuggestImport() {
         if (hasPromptedThisSession) return
-        if (!FilterRuleStore.isAllEmpty()) return
+        if (!RuleEngine.isAllEmpty()) return
         hasPromptedThisSession = true
 
         val ctx = context ?: return
         if (AppPreferences.isBackupDirEnabled(ctx)) {
-            val json = FilterRuleStore.readBackupFromDir(ctx) ?: return
+            val json = RuleEngine.readBackupFromDir(ctx) ?: return
             AlertDialog.Builder(ctx)
                 .setTitle(R.string.filter_backup_found_title)
                 .setMessage(R.string.filter_backup_found_message)
@@ -855,10 +849,10 @@ class SettingsFragment : Fragment() {
     private fun importBackupJson(json: String) {
         val ctx = context ?: return
         try {
-            val result = FilterRuleStore.importAllFromJson(ctx, json)
-            val notifCount = result[FilterCategory.NOTIFICATION] ?: 0
-            val calCount = result[FilterCategory.CALENDAR_EXPORT] ?: 0
-            val dismissCount = result[FilterCategory.AUTO_DISMISS] ?: 0
+            val result = RuleEngine.importAllFromJson(ctx, json)
+            val notifCount = result[ActionType.SKIP_RECORD] ?: 0
+            val calCount = result[ActionType.CALENDAR_EXPORT] ?: 0
+            val dismissCount = result[ActionType.AUTO_DISMISS] ?: 0
             Toast.makeText(
                 ctx,
                 getString(R.string.filter_import_success, notifCount, calCount) +
@@ -893,8 +887,8 @@ class SettingsFragment : Fragment() {
             updateBackupDirDisplay()
 
             // 規則為空且備份檔案存在 → 建議匯入
-            if (FilterRuleStore.isAllEmpty()) {
-                val json = FilterRuleStore.readBackupFromDir(ctx)
+            if (RuleEngine.isAllEmpty()) {
+                val json = RuleEngine.readBackupFromDir(ctx)
                 if (json != null) {
                     AlertDialog.Builder(ctx)
                         .setTitle(R.string.filter_backup_found_title)
@@ -907,7 +901,7 @@ class SettingsFragment : Fragment() {
                 }
             } else {
                 // 規則非空 → 立即執行一次自動備份
-                FilterRuleStore.autoBackup(ctx)
+                RuleEngine.autoBackup(ctx)
             }
         } catch (e: SecurityException) {
             Log.w(TAG, "Failed to take persistable URI permission for backup dir", e)

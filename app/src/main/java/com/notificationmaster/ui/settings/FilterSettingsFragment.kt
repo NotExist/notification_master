@@ -12,9 +12,10 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.notificationmaster.R
 import com.notificationmaster.core.cache.AppLabelCache
-import com.notificationmaster.core.filter.FilterCategory
-import com.notificationmaster.core.filter.FilterRule
-import com.notificationmaster.core.filter.FilterRuleStore
+import com.notificationmaster.core.filter.ActionType
+import com.notificationmaster.core.filter.Rule
+import com.notificationmaster.core.filter.RuleAction
+import com.notificationmaster.core.filter.RuleEngine
 import android.content.Context
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.databinding.FragmentFilterSettingsBinding
@@ -24,19 +25,19 @@ import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 /**
  * 過濾規則管理頁面
  *
- * 透過 Navigation argument "category" 決定操作的 FilterCategory，
- * 同一 Fragment 可用於通知過濾黑名單和日曆匯出白名單。
+ * 透過 Navigation argument "actionType" 決定操作的 ActionType，
+ * 同一 Fragment 可用於通知過濾黑名單、日曆匯出白名單和自動清除。
  */
 class FilterSettingsFragment : Fragment() {
 
     private var _binding: FragmentFilterSettingsBinding? = null
     private val binding get() = _binding!!
 
-    private lateinit var category: FilterCategory
+    private lateinit var actionType: ActionType
 
     private val adapter by lazy {
         FilterRuleAdapter(
-            category = category,
+            actionType = actionType,
             onItemClick = { rule -> startEditRuleFlow(rule) },
             onDeleteClick = { rule -> confirmDeleteRule(rule) }
         )
@@ -54,28 +55,28 @@ class FilterSettingsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // 從 Navigation argument 取得 category
-        val categoryName = arguments?.getString("category") ?: FilterCategory.NOTIFICATION.name
-        category = try {
-            FilterCategory.valueOf(categoryName)
+        // 從 Navigation argument 取得 actionType
+        val actionTypeName = arguments?.getString("actionType") ?: ActionType.SKIP_RECORD.name
+        actionType = try {
+            ActionType.valueOf(actionTypeName)
         } catch (e: IllegalArgumentException) {
-            FilterCategory.NOTIFICATION
+            ActionType.SKIP_RECORD
         }
 
         // 確保已載入
-        context?.let { FilterRuleStore.load(it, category) }
+        context?.let { RuleEngine.load(it) }
 
-        // 根據 category 設定空白提示文字
-        when (category) {
-            FilterCategory.NOTIFICATION -> {
+        // 根據 actionType 設定空白提示文字
+        when (actionType) {
+            ActionType.SKIP_RECORD -> {
                 binding.textEmptyTitle.setText(R.string.filter_empty)
                 binding.textEmptyHint.setText(R.string.filter_empty_hint)
             }
-            FilterCategory.CALENDAR_EXPORT -> {
+            ActionType.CALENDAR_EXPORT -> {
                 binding.textEmptyTitle.setText(R.string.calendar_whitelist_empty)
                 binding.textEmptyHint.setText(R.string.calendar_whitelist_empty_hint)
             }
-            FilterCategory.AUTO_DISMISS -> {
+            ActionType.AUTO_DISMISS -> {
                 binding.textEmptyTitle.setText(R.string.auto_dismiss_empty)
                 binding.textEmptyHint.setText(R.string.auto_dismiss_empty_hint)
             }
@@ -96,7 +97,7 @@ class FilterSettingsFragment : Fragment() {
     }
 
     private fun refreshList() {
-        val rules = FilterRuleStore.getRules(category)
+        val rules = RuleEngine.getRules(actionType)
         adapter.submitList(rules)
 
         val b = _binding ?: return
@@ -115,27 +116,27 @@ class FilterSettingsFragment : Fragment() {
         val ctx = context ?: return
         FilterRuleDialogHelper.showAddRuleDialog(
             context = ctx,
-            category = category,
+            actionType = actionType,
             onRuleAdded = { refreshList() }
         )
     }
 
-    private fun startEditRuleFlow(rule: FilterRule) {
+    private fun startEditRuleFlow(rule: Rule) {
         val ctx = context ?: return
         FilterRuleDialogHelper.showAddRuleDialog(
             context = ctx,
-            category = category,
+            actionType = actionType,
             existingRule = rule,
             onRuleAdded = { refreshList() }
         )
     }
 
-    private fun confirmDeleteRule(rule: FilterRule) {
+    private fun confirmDeleteRule(rule: Rule) {
         val ctx = context ?: return
         AlertDialog.Builder(ctx)
             .setMessage(R.string.filter_delete_confirm)
             .setPositiveButton(R.string.ok) { _, _ ->
-                FilterRuleStore.removeRule(ctx, category, rule.id)
+                RuleEngine.removeRule(ctx, rule.id)
                 Toast.makeText(ctx, R.string.filter_rule_deleted, Toast.LENGTH_SHORT).show()
                 refreshList()
             }
@@ -145,25 +146,25 @@ class FilterSettingsFragment : Fragment() {
 
     // === RecyclerView Adapter ===
 
-    private class FilterRuleDiffCallback : DiffUtil.ItemCallback<FilterRule>() {
-        override fun areItemsTheSame(oldItem: FilterRule, newItem: FilterRule) =
+    private class RuleDiffCallback : DiffUtil.ItemCallback<Rule>() {
+        override fun areItemsTheSame(oldItem: Rule, newItem: Rule) =
             oldItem.id == newItem.id
 
-        override fun areContentsTheSame(oldItem: FilterRule, newItem: FilterRule) =
+        override fun areContentsTheSame(oldItem: Rule, newItem: Rule) =
             oldItem == newItem
     }
 
     private class FilterRuleAdapter(
-        private val category: FilterCategory,
-        private val onItemClick: (FilterRule) -> Unit,
-        private val onDeleteClick: (FilterRule) -> Unit
-    ) : ListAdapter<FilterRule, FilterRuleAdapter.ViewHolder>(FilterRuleDiffCallback()) {
+        private val actionType: ActionType,
+        private val onItemClick: (Rule) -> Unit,
+        private val onDeleteClick: (Rule) -> Unit
+    ) : ListAdapter<Rule, FilterRuleAdapter.ViewHolder>(RuleDiffCallback()) {
 
         inner class ViewHolder(
             private val binding: ItemFilterRuleBinding
         ) : RecyclerView.ViewHolder(binding.root) {
 
-            fun bind(rule: FilterRule) {
+            fun bind(rule: Rule) {
                 binding.root.setOnClickListener { onItemClick(rule) }
                 val ctx = binding.root.context
 
@@ -193,8 +194,9 @@ class FilterSettingsFragment : Fragment() {
                 } else {
                     rule.eventTypes.joinToString()
                 }
-                binding.textFilterMode.text = if (category == FilterCategory.AUTO_DISMISS && rule.dismissDelayMs > 0) {
-                    val delayText = formatDismissDelay(ctx, rule.dismissDelayMs)
+                val delayMs = (rule.action as? RuleAction.AutoDismiss)?.delayMs ?: 0L
+                binding.textFilterMode.text = if (actionType == ActionType.AUTO_DISMISS && delayMs > 0) {
+                    val delayText = formatDismissDelay(ctx, delayMs)
                     "$eventText — ${ctx.getString(R.string.filter_dismiss_delay_format, delayText)}"
                 } else {
                     eventText

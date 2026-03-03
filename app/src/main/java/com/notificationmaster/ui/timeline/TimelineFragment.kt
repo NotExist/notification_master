@@ -146,7 +146,7 @@ class TimelineFragment : Fragment() {
                 onItemLongClick = { notification ->
                     FilterRuleDialogHelper.showAddRuleDialog(
                         context = requireContext(),
-                        category = null,
+                        actionType = null,
                         prefillPackageName = notification.packageName,
                         prefillChannelId = notification.channelId
                     )

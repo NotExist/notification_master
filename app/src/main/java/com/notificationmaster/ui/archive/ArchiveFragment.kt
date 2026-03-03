@@ -100,7 +100,7 @@ class ArchiveFragment : Fragment() {
             onItemLongClick = { appSource ->
                 FilterRuleDialogHelper.showAddRuleDialog(
                     context = requireContext(),
-                    category = null,
+                    actionType = null,
                     prefillPackageName = appSource.packageName
                 )
             }
@@ -118,7 +118,7 @@ class ArchiveFragment : Fragment() {
             onItemLongClick = { channel ->
                 FilterRuleDialogHelper.showAddRuleDialog(
                     context = requireContext(),
-                    category = null,
+                    actionType = null,
                     prefillPackageName = channel.packageName,
                     prefillChannelId = channel.channelId
                 )

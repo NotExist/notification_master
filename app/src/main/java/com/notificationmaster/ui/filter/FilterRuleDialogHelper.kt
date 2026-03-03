@@ -15,9 +15,11 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
-import com.notificationmaster.core.filter.FilterCategory
-import com.notificationmaster.core.filter.FilterRule
-import com.notificationmaster.core.filter.FilterRuleStore
+import com.notificationmaster.core.filter.ActionType
+import com.notificationmaster.core.filter.Matcher
+import com.notificationmaster.core.filter.Rule
+import com.notificationmaster.core.filter.RuleAction
+import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.data.db.entity.EventType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -48,7 +50,7 @@ object FilterRuleDialogHelper {
      * 顯示新增或編輯規則 Dialog
      *
      * @param context Activity/Fragment context
-     * @param category 固定 category；null 則讓使用者在 Dialog 中選擇
+     * @param actionType 固定 actionType；null 則讓使用者在 Dialog 中選擇
      * @param prefillPackageName 預填 packageName（新增模式）
      * @param prefillChannelId 預填 channelId（新增模式）
      * @param existingRule 既有規則（編輯模式），非 null 時為編輯
@@ -56,10 +58,10 @@ object FilterRuleDialogHelper {
      */
     fun showAddRuleDialog(
         context: Context,
-        category: FilterCategory? = null,
+        actionType: ActionType? = null,
         prefillPackageName: String? = null,
         prefillChannelId: String? = null,
-        existingRule: FilterRule? = null,
+        existingRule: Rule? = null,
         onRuleAdded: (() -> Unit)? = null
     ) {
         val isEditMode = existingRule != null
@@ -85,7 +87,7 @@ object FilterRuleDialogHelper {
             context.getString(R.string.filter_dialog_category_calendar),
             context.getString(R.string.filter_dialog_category_auto_dismiss)
         )
-        val categoryValues = arrayOf(FilterCategory.NOTIFICATION, FilterCategory.CALENDAR_EXPORT, FilterCategory.AUTO_DISMISS)
+        val categoryValues = arrayOf(ActionType.SKIP_RECORD, ActionType.CALENDAR_EXPORT, ActionType.AUTO_DISMISS)
         var selectedCategoryIndex = 0
 
         // 延遲選項狀態
@@ -93,9 +95,9 @@ object FilterRuleDialogHelper {
         var selectedDelayIndex = 0  // 預設「立即」
         var isCustomDelay = false
 
-        /** 根據目前有效的 category 切換延遲區塊顯示 */
-        fun updateDismissDelayVisibility(effectiveCategory: FilterCategory) {
-            val show = effectiveCategory == FilterCategory.AUTO_DISMISS
+        /** 根據目前有效的 actionType 切換延遲區塊顯示 */
+        fun updateDismissDelayVisibility(effectiveType: ActionType) {
+            val show = effectiveType == ActionType.AUTO_DISMISS
             layoutDismissDelay.visibility = if (show) View.VISIBLE else View.GONE
             if (!show) {
                 layoutDismissDelayCustom.visibility = View.GONE
@@ -106,7 +108,7 @@ object FilterRuleDialogHelper {
         if (isEditMode) {
             // 編輯模式：不顯示 category 選擇
             layoutCategory.visibility = View.GONE
-        } else if (category == null) {
+        } else if (actionType == null) {
             layoutCategory.visibility = View.VISIBLE
             val categoryAdapter = ArrayAdapter(context, android.R.layout.simple_dropdown_item_1line, categoryLabels)
             dropdownCategory.setAdapter(categoryAdapter)
@@ -117,10 +119,10 @@ object FilterRuleDialogHelper {
             }
         }
 
-        // 固定 category 或編輯模式時根據 category 決定延遲區塊
-        val effectiveCategory = if (isEditMode) category else category
-        if (effectiveCategory != null) {
-            updateDismissDelayVisibility(effectiveCategory)
+        // 固定 actionType 或編輯模式時根據 actionType 決定延遲區塊
+        val effectiveActionType = if (isEditMode) existingRule!!.action.actionType else actionType
+        if (effectiveActionType != null) {
+            updateDismissDelayVisibility(effectiveActionType)
         }
 
         // === 延遲 Dropdown 設定 ===
@@ -134,8 +136,9 @@ object FilterRuleDialogHelper {
         }
 
         // 編輯模式：回填延遲值
-        if (isEditMode && existingRule!!.dismissDelayMs > 0) {
-            val existingMs = existingRule.dismissDelayMs
+        val existingDelayMs = (existingRule?.action as? RuleAction.AutoDismiss)?.delayMs ?: 0L
+        if (isEditMode && existingDelayMs > 0) {
+            val existingMs = existingDelayMs
             val matchIndex = DELAY_OPTIONS.indexOfFirst { it.delayMs == existingMs }
             if (matchIndex >= 0) {
                 selectedDelayIndex = matchIndex
@@ -227,14 +230,8 @@ object FilterRuleDialogHelper {
         }
 
         // === 建立 Dialog ===
-        // 確保 category 已載入
-        if (category != null) {
-            FilterRuleStore.load(context, category)
-        } else {
-            for (cat in FilterCategory.entries) {
-                FilterRuleStore.load(context, cat)
-            }
-        }
+        // 確保規則已載入
+        RuleEngine.load(context)
 
         val dialogTitle = if (isEditMode) R.string.filter_dialog_edit_title else R.string.filter_dialog_title
         val dialog = MaterialAlertDialogBuilder(context)
@@ -267,11 +264,11 @@ object FilterRuleDialogHelper {
 
                 val channelId = editChannelId.text.toString().trim().ifEmpty { null }
 
-                // 決定 category
-                val resolvedCategory = category ?: categoryValues[selectedCategoryIndex]
+                // 決定 actionType
+                val resolvedActionType = actionType ?: categoryValues[selectedCategoryIndex]
 
                 // 計算延遲毫秒（僅 AUTO_DISMISS）
-                val dismissDelayMs = if (resolvedCategory == FilterCategory.AUTO_DISMISS) {
+                val dismissDelayMs = if (resolvedActionType == ActionType.AUTO_DISMISS) {
                     if (isCustomDelay) {
                         val minutes = editDismissDelayCustom.text?.toString()?.toLongOrNull()
                         if (minutes == null || minutes < 0) {
@@ -284,23 +281,32 @@ object FilterRuleDialogHelper {
                     }
                 } else 0L
 
+                // 建構 Matcher 列表
+                val matchers = mutableListOf<Matcher>(Matcher.Package(packageName))
+                if (channelId != null) {
+                    matchers.add(Matcher.Channel(channelId))
+                }
+                matchers.add(Matcher.EventTypes(selectedEventTypes))
+
+                // 建構 RuleAction
+                val action: RuleAction = when (resolvedActionType) {
+                    ActionType.SKIP_RECORD -> RuleAction.SkipRecord
+                    ActionType.CALENDAR_EXPORT -> RuleAction.CalendarExport
+                    ActionType.AUTO_DISMISS -> RuleAction.AutoDismiss(delayMs = dismissDelayMs)
+                }
+
                 if (isEditMode) {
-                    val updatedRule = existingRule!!.copy(
-                        packageName = packageName,
-                        channelId = channelId,
-                        eventTypes = selectedEventTypes,
-                        dismissDelayMs = dismissDelayMs
+                    val updatedRule = Rule(
+                        id = existingRule!!.id,
+                        matchers = matchers,
+                        action = action,
+                        createdAt = existingRule.createdAt
                     )
-                    FilterRuleStore.updateRule(context, resolvedCategory, updatedRule)
+                    RuleEngine.updateRule(context, updatedRule)
                     Toast.makeText(context, R.string.filter_rule_updated, Toast.LENGTH_SHORT).show()
                 } else {
-                    val rule = FilterRule(
-                        packageName = packageName,
-                        channelId = channelId,
-                        eventTypes = selectedEventTypes,
-                        dismissDelayMs = dismissDelayMs
-                    )
-                    FilterRuleStore.addRule(context, resolvedCategory, rule)
+                    val rule = Rule(matchers = matchers, action = action)
+                    RuleEngine.addRule(context, rule)
                     Toast.makeText(context, R.string.filter_rule_added, Toast.LENGTH_SHORT).show()
                 }
                 onRuleAdded?.invoke()

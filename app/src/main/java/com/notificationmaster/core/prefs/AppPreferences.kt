@@ -19,6 +19,7 @@ object AppPreferences {
     /** 舊版單一 key，僅用於遷移 */
     private const val KEY_FILTER_RULES_LEGACY = "filter_rules"
     private const val KEY_FILTER_RULES_PREFIX = "filter_rules_"
+    private const val KEY_RULES_V2 = "filter_rules_v2"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -128,6 +129,17 @@ object AppPreferences {
     fun setFilterRulesJson(context: Context, category: FilterCategory, json: String) {
         prefs(context).edit()
             .putString(filterRulesKey(category), json)
+            .apply()
+    }
+
+    // === v2 規則引擎 ===
+
+    fun getRulesV2Json(context: Context): String? =
+        prefs(context).getString(KEY_RULES_V2, null)
+
+    fun setRulesV2Json(context: Context, json: String) {
+        prefs(context).edit()
+            .putString(KEY_RULES_V2, json)
             .apply()
     }
 }
