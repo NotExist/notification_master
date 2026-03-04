@@ -2,7 +2,6 @@ package com.notificationmaster.core.prefs
 
 import android.content.Context
 import android.net.Uri
-import com.notificationmaster.core.filter.FilterCategory
 
 /**
  * App 偏好設定管理
@@ -16,9 +15,6 @@ object AppPreferences {
     private const val KEY_BACKUP_DIR_URI = "backup_dir_uri"
     private const val KEY_BACKUP_DIR_DISPLAY = "backup_dir_display"
     private const val KEY_BACKUP_SETUP_DECLINED = "backup_setup_declined"
-    /** 舊版單一 key，僅用於遷移 */
-    private const val KEY_FILTER_RULES_LEGACY = "filter_rules"
-    private const val KEY_FILTER_RULES_PREFIX = "filter_rules_"
     private const val KEY_RULES_V2 = "filter_rules_v2"
 
     private fun prefs(context: Context) =
@@ -98,41 +94,7 @@ object AppPreferences {
             .apply()
     }
 
-    // === 過濾規則 ===
-
-    private fun filterRulesKey(category: FilterCategory): String =
-        KEY_FILTER_RULES_PREFIX + category.name
-
-    /**
-     * 取得指定類別的過濾規則 JSON
-     * 首次呼叫 NOTIFICATION 時，若偵測到舊 key 存在，自動遷移並刪除舊 key
-     */
-    fun getFilterRulesJson(context: Context, category: FilterCategory): String? {
-        val p = prefs(context)
-        val key = filterRulesKey(category)
-
-        // 舊 key 遷移（僅 NOTIFICATION）
-        if (category == FilterCategory.NOTIFICATION && !p.contains(key)) {
-            val legacy = p.getString(KEY_FILTER_RULES_LEGACY, null)
-            if (legacy != null) {
-                p.edit()
-                    .putString(key, legacy)
-                    .remove(KEY_FILTER_RULES_LEGACY)
-                    .apply()
-                return legacy
-            }
-        }
-
-        return p.getString(key, null)
-    }
-
-    fun setFilterRulesJson(context: Context, category: FilterCategory, json: String) {
-        prefs(context).edit()
-            .putString(filterRulesKey(category), json)
-            .apply()
-    }
-
-    // === v2 規則引擎 ===
+    // === 規則引擎 ===
 
     fun getRulesV2Json(context: Context): String? =
         prefs(context).getString(KEY_RULES_V2, null)

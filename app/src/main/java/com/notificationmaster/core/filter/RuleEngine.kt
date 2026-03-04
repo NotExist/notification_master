@@ -4,15 +4,13 @@ import android.content.Context
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import com.notificationmaster.core.prefs.AppPreferences
-import com.notificationmaster.data.db.entity.EventType
 import org.json.JSONArray
 import org.json.JSONObject
 
 /**
  * 規則引擎：管理過濾/處置規則的儲存、匹配與匯出匯入
  *
- * 取代舊 FilterRuleStore，支援多種 Matcher 組合和 Action 類型。
- * 儲存格式為 v2 JSON，首次載入時自動從 v1 遷移。
+ * 支援多種 Matcher 組合和 Action 類型，儲存格式為 v2 JSON。
  */
 object RuleEngine {
 
@@ -26,27 +24,22 @@ object RuleEngine {
     // ========== 載入 / 儲存 ==========
 
     /**
-     * 載入規則（首次呼叫時自動從 v1 遷移）
+     * 載入規則
      */
     fun load(context: Context) {
         if (loaded) return
 
         val v2Json = AppPreferences.getRulesV2Json(context)
-        if (v2Json != null) {
-            rules = try {
+        rules = if (v2Json != null) {
+            try {
                 val arr = JSONArray(v2Json)
                 (0 until arr.length()).map { Rule.fromJson(arr.getJSONObject(it)) }
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to parse v2 rules", e)
+                Log.e(TAG, "Failed to parse rules", e)
                 emptyList()
             }
         } else {
-            // 嘗試 v1 遷移
-            rules = migrateFromV1(context)
-            if (rules.isNotEmpty()) {
-                save(context)
-                Log.i(TAG, "Migrated ${rules.size} rules from v1 to v2")
-            }
+            emptyList()
         }
 
         loaded = true
@@ -186,19 +179,14 @@ object RuleEngine {
     }
 
     /**
-     * 匯入 JSON 字串（自動偵測 v1/v2 格式）
+     * 匯入 JSON 字串（v2 格式）
      *
      * @return 各 ActionType 匯入的規則數
      */
     fun importAllFromJson(context: Context, json: String): Map<ActionType, Int> {
         val root = JSONObject(json)
-        val version = root.optInt("version", 1)
-
-        val imported = if (version >= 2) {
-            importV2(root)
-        } else {
-            importV1(root)
-        }
+        val arr = root.getJSONArray("rules")
+        val imported = (0 until arr.length()).map { Rule.fromJson(arr.getJSONObject(it)) }
 
         rules = imported
         save(context)
@@ -208,28 +196,8 @@ object RuleEngine {
             val count = imported.count { it.action.actionType == type }
             if (count > 0) result[type] = count
         }
-        Log.d(TAG, "Imported ${imported.size} rules (v$version)")
+        Log.d(TAG, "Imported ${imported.size} rules")
         return result
-    }
-
-    private fun importV2(root: JSONObject): List<Rule> {
-        val arr = root.getJSONArray("rules")
-        return (0 until arr.length()).map { Rule.fromJson(arr.getJSONObject(it)) }
-    }
-
-    private fun importV1(root: JSONObject): List<Rule> {
-        val categories = root.getJSONObject("categories")
-        val imported = mutableListOf<Rule>()
-
-        for (category in FilterCategory.entries) {
-            val arr = categories.optJSONArray(category.name) ?: continue
-            for (i in 0 until arr.length()) {
-                val v1Rule = FilterRule.fromJson(arr.getJSONObject(i))
-                imported.add(Rule.fromV1(v1Rule, category))
-            }
-        }
-
-        return imported
     }
 
     // ========== 自動備份 ==========
@@ -267,33 +235,6 @@ object RuleEngine {
             Log.w(TAG, "Failed to read backup file", e)
             null
         }
-    }
-
-    // ========== v1 遷移 ==========
-
-    /**
-     * 從 v1 SharedPreferences keys 遷移到 v2 Rule 結構
-     *
-     * 讀取各 FilterCategory 的 v1 JSON，轉換為 Rule 列表。
-     * v1 keys 保留不刪除，確保遷移安全。
-     */
-    private fun migrateFromV1(context: Context): List<Rule> {
-        val migrated = mutableListOf<Rule>()
-
-        for (category in FilterCategory.entries) {
-            val json = AppPreferences.getFilterRulesJson(context, category) ?: continue
-            try {
-                val arr = JSONArray(json)
-                for (i in 0 until arr.length()) {
-                    val v1Rule = FilterRule.fromJson(arr.getJSONObject(i))
-                    migrated.add(Rule.fromV1(v1Rule, category))
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to migrate v1 rules for $category", e)
-            }
-        }
-
-        return migrated
     }
 
     /**

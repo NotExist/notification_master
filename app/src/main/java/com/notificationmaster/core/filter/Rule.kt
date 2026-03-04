@@ -260,31 +260,5 @@ data class Rule(
                 createdAt = json.optLong("createdAt", 0L)
             )
         }
-
-        /**
-         * 從 v1 FilterRule + FilterCategory 建構 Rule（遷移用）
-         */
-        fun fromV1(v1Rule: FilterRule, category: FilterCategory): Rule {
-            val matchers = mutableListOf<Matcher>(Matcher.Package(v1Rule.packageName))
-            if (v1Rule.channelId != null) {
-                matchers.add(Matcher.Channel(v1Rule.channelId))
-            }
-            if (v1Rule.eventTypes.isNotEmpty()) {
-                matchers.add(Matcher.EventTypes(v1Rule.eventTypes))
-            }
-
-            val action: RuleAction = when (category) {
-                FilterCategory.NOTIFICATION -> RuleAction.SkipRecord
-                FilterCategory.CALENDAR_EXPORT -> RuleAction.CalendarExport
-                FilterCategory.AUTO_DISMISS -> RuleAction.AutoDismiss(v1Rule.dismissDelayMs)
-            }
-
-            return Rule(
-                id = v1Rule.id,
-                matchers = matchers,
-                action = action,
-                createdAt = v1Rule.createdAt
-            )
-        }
     }
 }

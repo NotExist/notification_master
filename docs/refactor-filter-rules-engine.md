@@ -225,18 +225,21 @@ SharedPreferences key 維持 `filter_rules_{ACTION_TYPE}` 或統一為 `filter_r
 4. ✅ `TimelineFragment` / `ArchiveFragment` 長按入口參數更新
 5. ✅ `nav_graph.xml` argument 名稱和預設值更新
 
-### Phase 4：Keyword / Channel UI 擴充（待實作）
+### Phase 4：Keyword / Channel UI 擴充 ✅ 完成
 
-1. matcher 列表動態 UI（可新增/移除各種 matcher）
-2. `KeywordMatcher` 輸入：文字 + 欄位選擇 + regex toggle
-3. `ChannelPropertyMatcher` UI：importance / group 選擇
-4. `MatchContext` 加入 channel 屬性查詢
-5. 測試 API 26-27 降級路徑
+1. ✅ `KeywordMatcher` UI：pattern + field checkbox (TITLE/TEXT/BIG_TEXT/SUB_TEXT) + regex switch
+2. ✅ `ChannelPropertyMatcher` UI：importance dropdown + groupId autocomplete
+3. ✅ `MatchContext` 完整填充 content 欄位（title/text/bigText/subText）和 channel 屬性（importance/groupId）
+4. ✅ FilterSettingsFragment adapter 顯示 keyword/channelProperty 資訊
+5. ✅ 整合測試覆蓋 keyword/channelProperty 匹配
 
-### Phase 5：清理（待實作）
+### Phase 5：清理 ✅ 完成
 
-1. 移除舊 `FilterCategory` / `FilterRule` / `FilterRuleStore`（待 v2 穩定後）
-2. 移除 `AppPreferences` 中的 v1 key 方法（待確認無使用者仍持有 v1 資料後）
+1. ✅ 移除舊 `FilterCategory` / `FilterRule` / `FilterRuleStore`（`NotificationFilter.kt` 刪除）
+2. ✅ 移除 `AppPreferences` 中的 v1 key 方法和常數
+3. ✅ 移除 `Rule.fromV1()` 遷移方法
+4. ✅ 移除 `RuleEngine` 中的 `importV1()` / `migrateFromV1()` 邏輯
+5. ✅ 移除舊測試（`FilterRuleTest.kt` / `FilterRuleStoreMatchTest.kt`）
 
 ---
 
