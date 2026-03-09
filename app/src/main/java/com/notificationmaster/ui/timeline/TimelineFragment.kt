@@ -50,6 +50,7 @@ class TimelineFragment : Fragment() {
     private var adapter: TimelineAdapter? = null
     private var isDeduplicatedMode = true
     private var isAudibleMode = false
+    private var isDismissedMode = false
     private var layoutManagerState: Parcelable? = null
     private var currentFilterText = ""
     private var allNotifications: List<NotificationEntity> = emptyList()
@@ -167,7 +168,7 @@ class TimelineFragment : Fragment() {
                 val totalItemCount = layoutManager.itemCount
                 val lastVisible = layoutManager.findLastVisibleItemPosition()
                 if (totalItemCount - lastVisible <= 5 &&
-                    !isLoadingMore && !hasReachedEnd && !isAudibleMode) {
+                    !isLoadingMore && !hasReachedEnd && !isAudibleMode && !isDismissedMode) {
                     loadNextDay()
                 }
             }
@@ -191,6 +192,7 @@ class TimelineFragment : Fragment() {
             if (isChecked) {
                 isDeduplicatedMode = false
                 isAudibleMode = false
+                isDismissedMode = false
                 binding.swipeRefresh.isRefreshing = true
                 loadNotifications()
             }
@@ -200,6 +202,7 @@ class TimelineFragment : Fragment() {
             if (isChecked) {
                 isDeduplicatedMode = true
                 isAudibleMode = false
+                isDismissedMode = false
                 binding.swipeRefresh.isRefreshing = true
                 loadNotifications()
             }
@@ -209,6 +212,17 @@ class TimelineFragment : Fragment() {
             if (isChecked) {
                 isDeduplicatedMode = false
                 isAudibleMode = true
+                isDismissedMode = false
+                binding.swipeRefresh.isRefreshing = true
+                loadNotifications()
+            }
+        }
+
+        binding.chipDismissed.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                isDeduplicatedMode = false
+                isAudibleMode = false
+                isDismissedMode = true
                 binding.swipeRefresh.isRefreshing = true
                 loadNotifications()
             }
@@ -251,8 +265,16 @@ class TimelineFragment : Fragment() {
 
         loadJob = viewLifecycleOwner.lifecycleScope.launch {
             if (isAudibleMode) {
-                // Audible / Heads-up 模式維持現有邏輯（全域查詢，不分天）
+                // Audible 模式（全域查詢，不分天）
                 dao.getRecentAudibleNotifications().collectLatest { notifications ->
+                    if (_binding == null) return@collectLatest
+                    _binding?.swipeRefresh?.isRefreshing = false
+                    allNotifications = notifications
+                    applyFilterAndDisplay()
+                }
+            } else if (isDismissedMode) {
+                // Dismissed 模式（全域查詢，不分天）
+                dao.getRecentDismissedNotifications().collectLatest { notifications ->
                     if (_binding == null) return@collectLatest
                     _binding?.swipeRefresh?.isRefreshing = false
                     allNotifications = notifications
@@ -301,7 +323,7 @@ class TimelineFragment : Fragment() {
      * 載入下一天的歷史資料
      */
     private fun loadNextDay() {
-        if (isLoadingMore || hasReachedEnd || isAudibleMode) return
+        if (isLoadingMore || hasReachedEnd || isAudibleMode || isDismissedMode) return
         isLoadingMore = true
         updateFooterInList()
 
@@ -391,8 +413,8 @@ class TimelineFragment : Fragment() {
                     buildTimelineItems(filtered)
                 }
 
-                // 非 Audible 模式加入 footer 指示器
-                if (!isAudibleMode) {
+                // 非 Audible/Dismissed 模式加入 footer 指示器
+                if (!isAudibleMode && !isDismissedMode) {
                     val footer = when {
                         isLoadingMore -> TimelineItem.LoadingMore
                         hasReachedEnd -> TimelineItem.EndOfTimeline
@@ -637,6 +659,7 @@ class TimelineFragment : Fragment() {
     private fun activateAudibleMode() {
         isAudibleMode = true
         isDeduplicatedMode = false
+        isDismissedMode = false
         binding.chipAudible.isChecked = true
     }
 

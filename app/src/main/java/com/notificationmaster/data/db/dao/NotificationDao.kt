@@ -195,6 +195,31 @@ interface NotificationDao {
     """)
     fun getRecentHeadsupNotifications(limit: Int = 20): Flow<List<NotificationEntity>>
 
+    // === 查詢 - 已移除 ===
+
+    /**
+     * 取得最近被移除的通知（每個 notification_key 取最新一筆）
+     * 按移除事件時間倒序排列
+     */
+    @Query("""
+        SELECT n.* FROM notifications n
+        INNER JOIN (
+            SELECT e.notification_id, MAX(e.event_time) AS removal_time
+            FROM notification_events e
+            WHERE e.event_type = 'REMOVED'
+            GROUP BY e.notification_id
+        ) r ON n.id = r.notification_id
+        WHERE n.id IN (
+            SELECT MAX(n2.id) FROM notifications n2
+            INNER JOIN notification_events e2 ON n2.id = e2.notification_id
+            WHERE e2.event_type = 'REMOVED'
+            GROUP BY n2.notification_key
+        )
+        ORDER BY r.removal_time DESC
+        LIMIT :limit
+    """)
+    fun getRecentDismissedNotifications(limit: Int = 30): Flow<List<NotificationEntity>>
+
     // === 查詢 - 按來源 ===
 
     @Query("""

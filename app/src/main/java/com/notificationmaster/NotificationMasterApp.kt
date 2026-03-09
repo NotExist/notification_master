@@ -7,6 +7,7 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.ui.shortcut.AudibleShortcutActivity
+import com.notificationmaster.ui.shortcut.DismissedShortcutActivity
 import com.notificationmaster.ui.shortcut.HeadsupShortcutActivity
 
 /**
@@ -49,12 +50,22 @@ class NotificationMasterApp : Application() {
             })
             .build()
 
-        ShortcutManagerCompat.setDynamicShortcuts(this, listOf(audibleShortcut, headsupShortcut))
+        val dismissedShortcut = ShortcutInfoCompat.Builder(this, SHORTCUT_ID_DISMISSED)
+            .setShortLabel(getString(R.string.shortcut_dismissed_short))
+            .setLongLabel(getString(R.string.shortcut_dismissed_long))
+            .setIcon(IconCompat.createWithResource(this, R.drawable.ic_shortcut_dismissed))
+            .setIntent(Intent(DismissedShortcutActivity.ACTION_SHORTCUT_DISMISSED).apply {
+                setClass(this@NotificationMasterApp, DismissedShortcutActivity::class.java)
+            })
+            .build()
+
+        ShortcutManagerCompat.setDynamicShortcuts(this, listOf(audibleShortcut, headsupShortcut, dismissedShortcut))
     }
 
     companion object {
         private const val SHORTCUT_ID_AUDIBLE = "recent_audible"
         private const val SHORTCUT_ID_HEADSUP = "recent_headsup"
+        private const val SHORTCUT_ID_DISMISSED = "recent_dismissed"
 
         @Volatile
         private var instance: NotificationMasterApp? = null

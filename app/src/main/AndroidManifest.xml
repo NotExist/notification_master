@@ -78,6 +78,20 @@
             </intent-filter>
         </activity>
 
+        <!-- Dismissed Shortcut Activity (BottomSheet 風格) -->
+        <activity
+            android:name=".ui.shortcut.DismissedShortcutActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.NotificationMaster.Transparent">
+            <intent-filter>
+                <action android:name="com.notificationmaster.action.SHORTCUT_DISMISSED" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <!-- NotificationListenerService -->
         <service
             android:name=".service.NotificationCaptureService"

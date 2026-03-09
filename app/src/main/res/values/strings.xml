@@ -238,6 +238,11 @@
     <string name="shortcut_headsup_title">最近 Heads-up 通知</string>
     <string name="shortcut_empty_audible">尚無有聲通知記錄</string>
     <string name="shortcut_empty_headsup">尚無 Heads-up 通知記錄</string>
+    <string name="timeline_dismissed_only">已移除</string>
+    <string name="shortcut_dismissed_short">最近移除</string>
+    <string name="shortcut_dismissed_long">最近被移除的通知</string>
+    <string name="shortcut_dismissed_title">最近移除的通知</string>
+    <string name="shortcut_empty_dismissed">尚無已移除通知記錄</string>
     <!-- 過濾規則自動備份 -->
     <string name="settings_filter_backup_dir">過濾規則自動備份</string>
     <string name="settings_filter_backup_dir_not_set">未設定備份目錄</string>
