@@ -31,6 +31,7 @@ import com.notificationmaster.debug.DebugDumper
 import com.notificationmaster.export.archive.ArchiveExporter
 import com.notificationmaster.export.archive.ArchiveImporter
 import com.notificationmaster.export.calendar.CalendarExporter
+import com.notificationmaster.export.ical.IcsExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -95,16 +96,28 @@ class SettingsFragment : Fragment() {
         uri?.let { handleBackupDirSelected(it) }
     }
 
-    // 日曆權限請求
+    // .ics 日曆檔匯出 SAF
+    private val exportIcsLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("text/calendar")
+    ) { uri ->
+        uri?.let { exportIcsToUri(it) }
+    }
+
+    // 防止 Switch 程式設值觸發 listener 迴圈
+    private var isUpdatingRealtimeSwitch = false
+
+    // 日曆權限請求（通用）
+    private var pendingCalendarAction: (() -> Unit)? = null
+
     private val calendarPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val allGranted = permissions.values.all { it }
-        if (allGranted) {
-            showCalendarPicker()
+        if (permissions.values.all { it }) {
+            pendingCalendarAction?.invoke()
         } else {
-            context?.let { Toast.makeText(it, "需要日曆權限才能匯出", Toast.LENGTH_SHORT).show() }
+            context?.let { Toast.makeText(it, "需要日曆權限", Toast.LENGTH_SHORT).show() }
         }
+        pendingCalendarAction = null
     }
 
     override fun onCreateView(
@@ -187,6 +200,7 @@ class SettingsFragment : Fragment() {
         updateFilterSummary()
         updateAutoDismissSummary()
         updateCalendarWhitelistSummary()
+        updateRealtimeCalendarDisplay()
         updateBackupDirDisplay()
     }
 
@@ -348,10 +362,30 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupCalendarIntegration() {
+        // 匯出到系統日曆（既有的批次匯出）
         binding.btnExportIcal.setOnClickListener {
             requestCalendarExport()
         }
 
+        // .ics 匯出按鈕
+        binding.btnExportIcsFile.setOnClickListener {
+            showIcsExportDialog()
+        }
+
+        // 即時匯出開關
+        binding.switchRealtimeCalendar.isChecked =
+            AppPreferences.isRealtimeCalendarEnabled(requireContext())
+        binding.switchRealtimeCalendar.setOnCheckedChangeListener { _, isChecked ->
+            if (!isUpdatingRealtimeSwitch) handleRealtimeCalendarToggle(isChecked)
+        }
+        updateRealtimeCalendarDisplay()
+
+        // 目標日曆選擇
+        binding.btnChooseTargetCalendar.setOnClickListener {
+            requestCalendarPermissionThen { showTargetCalendarPicker() }
+        }
+
+        // 白名單
         binding.btnCalendarWhitelist.setOnClickListener {
             findNavController().navigate(
                 R.id.action_settings_to_filter,
@@ -531,30 +565,39 @@ class SettingsFragment : Fragment() {
 
     // === 日曆匯出 ===
 
-    private fun requestCalendarExport() {
-        val calendarExporter = CalendarExporter(requireContext())
-        if (calendarExporter.hasCalendarPermission()) {
-            showCalendarPicker()
+    /**
+     * 共用日曆權限請求
+     */
+    private fun requestCalendarPermissionThen(action: () -> Unit) {
+        val exporter = CalendarExporter(requireContext())
+        if (exporter.hasCalendarPermission()) {
+            action()
         } else {
-            // 先顯示權限說明
+            pendingCalendarAction = action
             AlertDialog.Builder(requireContext())
                 .setTitle("需要日曆權限")
-                .setMessage("匯出到日曆需要讀取和寫入日曆的權限。\n\n功能：將通知記錄寫入系統日曆\n拒絕影響：無法使用日曆匯出功能")
+                .setMessage("此功能需要讀取和寫入日曆的權限。")
                 .setPositiveButton("授予權限") { _, _ ->
-                    calendarPermissionLauncher.launch(
-                        arrayOf(
-                            Manifest.permission.READ_CALENDAR,
-                            Manifest.permission.WRITE_CALENDAR
-                        )
-                    )
+                    calendarPermissionLauncher.launch(arrayOf(
+                        Manifest.permission.READ_CALENDAR,
+                        Manifest.permission.WRITE_CALENDAR
+                    ))
                 }
-                .setNegativeButton(R.string.cancel, null)
+                .setNegativeButton(R.string.cancel) { _, _ ->
+                    pendingCalendarAction = null
+                }
                 .show()
         }
     }
 
+    private fun requestCalendarExport() {
+        requestCalendarPermissionThen { showCalendarPicker() }
+    }
+
     private fun showCalendarPicker() {
         val calendarExporter = CalendarExporter(requireContext())
+        // 確保 local calendar 存在
+        calendarExporter.getOrCreateLocalCalendar()
         val calendars = calendarExporter.getAvailableCalendars()
 
         if (calendars.isEmpty()) {
@@ -562,7 +605,10 @@ class SettingsFragment : Fragment() {
             return
         }
 
-        val names = calendars.map { "${it.displayName} (${it.accountName})" }.toTypedArray()
+        val names = calendars.map { cal ->
+            if (cal.isLocal) cal.displayName
+            else "${cal.displayName} (${cal.accountName})"
+        }.toTypedArray()
 
         AlertDialog.Builder(requireContext())
             .setTitle("選擇目標日曆")
@@ -602,20 +648,7 @@ class SettingsFragment : Fragment() {
                     .getNotificationsByTimeRangePaged(startTime, endTime, 500, 0)
             }
 
-            // 套用日曆匯出白名單
-            RuleEngine.load(ctx)
-            val whitelistRules = RuleEngine.getRules(ActionType.CALENDAR_EXPORT)
-            val filteredNotifications = if (whitelistRules.isEmpty()) {
-                notifications  // 無白名單規則 → 匯出全部
-            } else {
-                notifications.filter { notif ->
-                    RuleEngine.matchesSource(
-                        ActionType.CALENDAR_EXPORT,
-                        notif.packageName,
-                        notif.channelId
-                    )
-                }
-            }
+            val filteredNotifications = applyCalendarWhitelist(notifications)
 
             val result = withContext(Dispatchers.IO) {
                 exporter.exportToCalendar(filteredNotifications, calendarId, detailLevel)
@@ -630,6 +663,174 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    // === .ics 匯出 ===
+
+    private fun showIcsExportDialog() {
+        val ranges = arrayOf("最近 7 天", "最近 30 天", "最近 90 天", "全部")
+        AlertDialog.Builder(requireContext())
+            .setTitle("選擇匯出範圍")
+            .setItems(ranges) { _, which ->
+                pendingExportStartTime = calculateStartTime(which)
+                pendingExportEndTime = System.currentTimeMillis()
+                exportIcsLauncher.launch("notification_master.ics")
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun exportIcsToUri(uri: android.net.Uri) {
+        val ctx = context ?: return
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val database = NotificationMasterApp.getInstance().database
+                val notifications = withContext(Dispatchers.IO) {
+                    database.notificationDao()
+                        .getNotificationsByTimeRangePaged(
+                            pendingExportStartTime, pendingExportEndTime, Int.MAX_VALUE, 0
+                        )
+                }
+
+                val filtered = applyCalendarWhitelist(notifications)
+
+                val icsContent = withContext(Dispatchers.IO) {
+                    IcsExporter().export(filtered)
+                }
+
+                withContext(Dispatchers.IO) {
+                    ctx.contentResolver.openOutputStream(uri)?.use {
+                        it.write(icsContent.toByteArray())
+                    }
+                }
+
+                _binding ?: return@launch
+                Toast.makeText(ctx, "已匯出 ${filtered.size} 筆通知到 .ics", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                _binding ?: return@launch
+                Toast.makeText(ctx, "匯出失敗：${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    // === 即時匯出設定 ===
+
+    private fun handleRealtimeCalendarToggle(enabled: Boolean) {
+        if (enabled) {
+            requestCalendarPermissionThen {
+                val calId = AppPreferences.getRealtimeCalendarId(requireContext())
+                if (calId < 0) {
+                    // 尚未選擇目標日曆，先引導選擇
+                    showTargetCalendarPicker()
+                } else {
+                    AppPreferences.setRealtimeCalendarEnabled(requireContext(), true)
+                    updateRealtimeCalendarDisplay()
+                }
+            }
+        } else {
+            AppPreferences.setRealtimeCalendarEnabled(requireContext(), false)
+            updateRealtimeCalendarDisplay()
+        }
+    }
+
+    private fun showTargetCalendarPicker() {
+        val exporter = CalendarExporter(requireContext())
+        // 確保 local calendar 存在
+        exporter.getOrCreateLocalCalendar()
+        val calendars = exporter.getAvailableCalendars()
+
+        if (calendars.isEmpty()) {
+            Toast.makeText(requireContext(), "找不到可用的日曆", Toast.LENGTH_SHORT).show()
+            setRealtimeSwitchChecked(false)
+            return
+        }
+
+        val names = calendars.map { cal ->
+            if (cal.isLocal) cal.displayName
+            else "${cal.displayName} (${cal.accountName})"
+        }.toTypedArray()
+
+        AlertDialog.Builder(requireContext())
+            .setTitle("選擇即時匯出目標日曆")
+            .setItems(names) { _, which ->
+                val cal = calendars[which]
+                AppPreferences.setRealtimeCalendarTarget(requireContext(), cal.id, cal.displayName)
+                AppPreferences.setRealtimeCalendarEnabled(requireContext(), true)
+                setRealtimeSwitchChecked(true)
+                showRealtimeDetailLevelPicker()
+                updateRealtimeCalendarDisplay()
+            }
+            .setNegativeButton(R.string.cancel) { _, _ ->
+                setRealtimeSwitchChecked(false)
+            }
+            .show()
+    }
+
+    private fun setRealtimeSwitchChecked(checked: Boolean) {
+        isUpdatingRealtimeSwitch = true
+        _binding?.switchRealtimeCalendar?.isChecked = checked
+        isUpdatingRealtimeSwitch = false
+    }
+
+    private fun showRealtimeDetailLevelPicker() {
+        val levels = arrayOf("僅標題", "含內容", "完整資訊")
+        val currentLevel = AppPreferences.getRealtimeCalendarDetailLevel(requireContext())
+
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.settings_realtime_detail_level)
+            .setSingleChoiceItems(levels, currentLevel) { dialog, which ->
+                AppPreferences.setRealtimeCalendarDetailLevel(requireContext(), which)
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun updateRealtimeCalendarDisplay() {
+        val ctx = context ?: return
+        val b = _binding ?: return
+        val enabled = AppPreferences.isRealtimeCalendarEnabled(ctx)
+        b.layoutRealtimeCalendarOptions.visibility = if (enabled) View.VISIBLE else View.GONE
+        val calName = AppPreferences.getRealtimeCalendarName(ctx)
+        b.textRealtimeCalendarStatus.text = if (enabled && calName != null) {
+            getString(R.string.settings_realtime_calendar_target, calName)
+        } else {
+            getString(R.string.settings_realtime_calendar_off)
+        }
+        if (enabled && calName != null) {
+            b.textTargetCalendarName.text = getString(R.string.settings_realtime_calendar_target, calName)
+            b.textTargetCalendarName.visibility = View.VISIBLE
+        } else {
+            b.textTargetCalendarName.visibility = View.GONE
+        }
+    }
+
+    // === 白名單篩選（共用） ===
+
+    private fun applyCalendarWhitelist(
+        notifications: List<com.notificationmaster.data.db.entity.NotificationEntity>
+    ): List<com.notificationmaster.data.db.entity.NotificationEntity> {
+        val ctx = context ?: return notifications
+        RuleEngine.load(ctx)
+        val whitelistRules = RuleEngine.getRules(ActionType.CALENDAR_EXPORT)
+        return if (whitelistRules.isEmpty()) {
+            notifications  // 無白名單 → 全部
+        } else {
+            notifications.filter {
+                RuleEngine.matchesSource(ActionType.CALENDAR_EXPORT, it.packageName, it.channelId)
+            }
+        }
+    }
+
+    private fun calculateStartTime(rangeIndex: Int): Long {
+        if (rangeIndex == 3) return 0L  // 全部
+        val cal = Calendar.getInstance()
+        when (rangeIndex) {
+            0 -> cal.add(Calendar.DAY_OF_YEAR, -7)
+            1 -> cal.add(Calendar.DAY_OF_YEAR, -30)
+            2 -> cal.add(Calendar.DAY_OF_YEAR, -90)
+        }
+        return cal.timeInMillis
+    }
+
     // === JSON 封存匯出 ===
 
     private fun showArchiveExportDialog() {
@@ -638,18 +839,9 @@ class SettingsFragment : Fragment() {
         AlertDialog.Builder(requireContext())
             .setTitle("選擇匯出範圍")
             .setItems(ranges) { _, which ->
-                val endTime = System.currentTimeMillis()
-                val cal = Calendar.getInstance()
-                val startTime = when (which) {
-                    0 -> { cal.add(Calendar.DAY_OF_YEAR, -7); cal.timeInMillis }
-                    1 -> { cal.add(Calendar.DAY_OF_YEAR, -30); cal.timeInMillis }
-                    2 -> { cal.add(Calendar.DAY_OF_YEAR, -90); cal.timeInMillis }
-                    else -> 0L
-                }
+                pendingExportStartTime = calculateStartTime(which)
+                pendingExportEndTime = System.currentTimeMillis()
                 exportJsonLauncher.launch("notification_master_archive.json")
-                // 暫存時間範圍
-                pendingExportStartTime = startTime
-                pendingExportEndTime = endTime
             }
             .setNegativeButton(R.string.cancel, null)
             .show()

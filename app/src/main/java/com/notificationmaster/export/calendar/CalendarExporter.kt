@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.CalendarContract
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.notificationmaster.data.db.entity.NotificationEntity
 import java.util.TimeZone
@@ -21,10 +22,17 @@ import java.util.TimeZone
 class CalendarExporter(private val context: Context) {
 
     companion object {
+        private const val TAG = "CalendarExporter"
+
         /** 匯出精細程度 */
         const val DETAIL_TITLE_ONLY = 0
         const val DETAIL_WITH_CONTENT = 1
         const val DETAIL_FULL = 2
+
+        /** Local Calendar 常數 */
+        const val LOCAL_CALENDAR_NAME = "Notification Master"
+        const val LOCAL_ACCOUNT_TYPE = CalendarContract.ACCOUNT_TYPE_LOCAL
+        const val LOCAL_ACCOUNT_NAME = "Notification Master"
     }
 
     /**
@@ -37,6 +45,92 @@ class CalendarExporter(private val context: Context) {
         ContextCompat.checkSelfPermission(
             context, Manifest.permission.WRITE_CALENDAR
         ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    /**
+     * 取得或建立 Local Calendar
+     * @return CalendarInfo，或 null（權限不足）
+     */
+    fun getOrCreateLocalCalendar(): CalendarInfo? {
+        if (!hasCalendarPermission()) return null
+
+        // 先查詢是否已存在
+        val existing = findLocalCalendar()
+        if (existing != null) return existing
+
+        // 建立新的 local calendar
+        // CALLER_IS_SYNCADAPTER 必須用於設定 ACCOUNT_TYPE
+        val uri = CalendarContract.Calendars.CONTENT_URI.buildUpon()
+            .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
+            .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, LOCAL_ACCOUNT_NAME)
+            .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_TYPE, LOCAL_ACCOUNT_TYPE)
+            .build()
+
+        val values = ContentValues().apply {
+            put(CalendarContract.Calendars.ACCOUNT_NAME, LOCAL_ACCOUNT_NAME)
+            put(CalendarContract.Calendars.ACCOUNT_TYPE, LOCAL_ACCOUNT_TYPE)
+            put(CalendarContract.Calendars.NAME, LOCAL_CALENDAR_NAME)
+            put(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, LOCAL_CALENDAR_NAME)
+            put(CalendarContract.Calendars.CALENDAR_COLOR, 0xFF4CAF50.toInt()) // Material Green
+            put(CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL,
+                CalendarContract.Calendars.CAL_ACCESS_OWNER)
+            put(CalendarContract.Calendars.OWNER_ACCOUNT, LOCAL_ACCOUNT_NAME)
+            put(CalendarContract.Calendars.VISIBLE, 1)
+            put(CalendarContract.Calendars.SYNC_EVENTS, 1)
+            put(CalendarContract.Calendars.CALENDAR_TIME_ZONE, TimeZone.getDefault().id)
+        }
+
+        return try {
+            val resultUri = context.contentResolver.insert(uri, values)
+            val calId = ContentUris.parseId(resultUri ?: return null)
+
+            Log.d(TAG, "Created local calendar with id=$calId")
+
+            CalendarInfo(
+                id = calId,
+                displayName = LOCAL_CALENDAR_NAME,
+                accountName = LOCAL_ACCOUNT_NAME,
+                accountType = LOCAL_ACCOUNT_TYPE,
+                isLocal = true
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to create local calendar", e)
+            null
+        }
+    }
+
+    /**
+     * 查詢已存在的 Local Calendar
+     */
+    private fun findLocalCalendar(): CalendarInfo? {
+        val projection = arrayOf(
+            CalendarContract.Calendars._ID,
+            CalendarContract.Calendars.CALENDAR_DISPLAY_NAME
+        )
+        val selection = "${CalendarContract.Calendars.ACCOUNT_NAME} = ? AND " +
+                "${CalendarContract.Calendars.ACCOUNT_TYPE} = ?"
+        val selectionArgs = arrayOf(LOCAL_ACCOUNT_NAME, LOCAL_ACCOUNT_TYPE)
+
+        context.contentResolver.query(
+            CalendarContract.Calendars.CONTENT_URI,
+            projection,
+            selection,
+            selectionArgs,
+            null
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val idIndex = cursor.getColumnIndex(CalendarContract.Calendars._ID)
+                val nameIndex = cursor.getColumnIndex(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME)
+                return CalendarInfo(
+                    id = cursor.getLong(idIndex),
+                    displayName = cursor.getString(nameIndex) ?: LOCAL_CALENDAR_NAME,
+                    accountName = LOCAL_ACCOUNT_NAME,
+                    accountType = LOCAL_ACCOUNT_TYPE,
+                    isLocal = true
+                )
+            }
+        }
+        return null
     }
 
     /**
@@ -75,13 +169,14 @@ class CalendarExporter(private val context: Context) {
             val accountTypeIndex = cursor.getColumnIndex(CalendarContract.Calendars.ACCOUNT_TYPE)
 
             while (cursor.moveToNext()) {
+                val accountType = cursor.getString(accountTypeIndex) ?: ""
                 calendars.add(
                     CalendarInfo(
                         id = cursor.getLong(idIndex),
                         displayName = cursor.getString(nameIndex) ?: "",
                         accountName = cursor.getString(accountNameIndex) ?: "",
-                        accountType = cursor.getString(accountTypeIndex) ?: "",
-                        isGoogleCalendar = cursor.getString(accountTypeIndex) == "com.google"
+                        accountType = accountType,
+                        isLocal = accountType == CalendarContract.ACCOUNT_TYPE_LOCAL
                     )
                 )
             }
@@ -128,6 +223,25 @@ class CalendarExporter(private val context: Context) {
         } else null
 
         return ExportResult(successCount, failCount, errorMsg)
+    }
+
+    /**
+     * 匯出單筆通知到日曆（即時匯出用）
+     * @return 成功 true / 失敗 false
+     */
+    fun exportSingleNotification(
+        notification: NotificationEntity,
+        calendarId: Long,
+        detailLevel: Int = DETAIL_WITH_CONTENT
+    ): Boolean {
+        if (!hasCalendarPermission()) return false
+        return try {
+            insertCalendarEvent(notification, calendarId, detailLevel)
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to export notification to calendar", e)
+            false
+        }
     }
 
     /**
@@ -196,7 +310,7 @@ data class CalendarInfo(
     val displayName: String,
     val accountName: String,
     val accountType: String,
-    val isGoogleCalendar: Boolean
+    val isLocal: Boolean = false
 )
 
 /**

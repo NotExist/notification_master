@@ -29,7 +29,7 @@
     <string name="settings_debug_mode_summary">將原始通知資料 dump 到外部儲存</string>
     <string name="settings_debug_clear">清除 Debug 資料</string>
     <string name="settings_calendar_integration">日曆整合</string>
-    <string name="settings_export_ical">匯出到日曆</string>
+    <string name="settings_export_ical">匯出到系統日曆</string>
     <string name="settings_export_json">匯出為 JSON 封存</string>
     <string name="settings_import_json">匯入 JSON 封存</string>
     <string name="settings_storage">儲存空間</string>
@@ -188,6 +188,16 @@
     <string name="filter_rule_deleted">已刪除過濾規則</string>
     <string name="filter_rule_updated">已更新過濾規則</string>
     <string name="filter_all_channels">所有 Channel</string>
+
+    <!-- 即時日曆匯出 -->
+    <string name="settings_realtime_calendar">即時匯出到日曆</string>
+    <string name="settings_realtime_calendar_off">未啟用</string>
+    <string name="settings_realtime_calendar_target">目標：%s</string>
+    <string name="settings_choose_target_calendar">選擇目標日曆</string>
+    <string name="settings_realtime_detail_level">匯出精細程度</string>
+
+    <!-- .ics 匯出 -->
+    <string name="settings_export_ics">匯出 .ics 日曆檔</string>
 
     <!-- 日曆匯出白名單 -->
     <string name="settings_calendar_whitelist">匯出白名單</string>

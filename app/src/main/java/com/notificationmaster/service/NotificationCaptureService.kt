@@ -25,7 +25,9 @@ import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.core.capture.DeviceStateCapture
 import com.notificationmaster.core.media.MediaExtractor
+import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.debug.DebugDumper
+import com.notificationmaster.export.calendar.CalendarExporter
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
@@ -52,6 +54,7 @@ class NotificationCaptureService : NotificationListenerService() {
     private lateinit var debugDumper: DebugDumper
     private lateinit var deviceStateCapture: DeviceStateCapture
     private lateinit var mediaExtractor: MediaExtractor
+    private lateinit var calendarExporter: CalendarExporter
 
     /** 追蹤延遲清除的排程任務，key = notification key */
     private val pendingDismissJobs = ConcurrentHashMap<String, Job>()
@@ -78,6 +81,7 @@ class NotificationCaptureService : NotificationListenerService() {
         debugDumper = DebugDumper(this)
         deviceStateCapture = DeviceStateCapture(this)
         mediaExtractor = MediaExtractor(this)
+        calendarExporter = CalendarExporter(this)
         RuleEngine.load(this)
         instance = this
     }
@@ -354,6 +358,11 @@ class NotificationCaptureService : NotificationListenerService() {
                     } else null
                 } else null
             updateChannel(sbn.packageName, entity.channelId, captureTime, notificationChannel)
+        }
+
+        // 7. 即時日曆匯出（僅 POSTED/UPDATED，INITIAL 不觸發）
+        if (eventType != EventType.INITIAL) {
+            checkRealtimeCalendarExport(entity, matchCtx)
         }
 
         Log.d(TAG, "Saved notification: $notificationId, event: $eventType")
@@ -762,6 +771,32 @@ class NotificationCaptureService : NotificationListenerService() {
         val importance = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) ranking.importance else null
         val groupId = if (ApiVersionHelper.supportsPerson()) ranking.channel?.group else null
         return importance to groupId
+    }
+
+    /**
+     * 檢查是否需要即時匯出到日曆
+     * 條件：即時匯出已啟用 + CALENDAR_EXPORT 白名單匹配
+     */
+    private fun checkRealtimeCalendarExport(
+        entity: NotificationEntity,
+        matchCtx: MatchContext
+    ) {
+        if (!AppPreferences.isRealtimeCalendarEnabled(this)) return
+
+        val calendarId = AppPreferences.getRealtimeCalendarId(this)
+        if (calendarId < 0) return
+
+        // 只匯出白名單匹配的通知
+        val whitelistRules = RuleEngine.getRules(ActionType.CALENDAR_EXPORT)
+        if (whitelistRules.isEmpty()) return  // 無白名單 → 不匯出（避免大量灌入）
+
+        if (!RuleEngine.matches(ActionType.CALENDAR_EXPORT, matchCtx)) return
+
+        val detailLevel = AppPreferences.getRealtimeCalendarDetailLevel(this)
+        val success = calendarExporter.exportSingleNotification(entity, calendarId, detailLevel)
+        if (success) {
+            Log.d(TAG, "Realtime calendar export: ${entity.packageName}")
+        }
     }
 
     /**

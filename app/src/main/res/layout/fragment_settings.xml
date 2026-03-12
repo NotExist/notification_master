@@ -298,14 +298,102 @@
                     android:textAppearance="?attr/textAppearanceTitleMedium"
                     android:textStyle="bold" />
 
+                <!-- 即時匯出區塊 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_realtime_calendar"
+                            android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+                        <TextView
+                            android:id="@+id/text_realtime_calendar_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_realtime_calendar_off"
+                            android:textAppearance="?attr/textAppearanceBodySmall"
+                            android:textColor="?android:attr/textColorSecondary" />
+
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switch_realtime_calendar"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+
+                </LinearLayout>
+
+                <!-- 即時匯出 — 目標日曆選擇（Switch 開啟時顯示） -->
+                <LinearLayout
+                    android:id="@+id/layout_realtime_calendar_options"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_choose_target_calendar"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_choose_target_calendar"
+                        style="@style/Widget.Material3.Button.TonalButton" />
+
+                    <TextView
+                        android:id="@+id/text_target_calendar_name"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?android:attr/textColorSecondary"
+                        tools:text="目標：Notification Master" />
+
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="12dp"
+                    android:background="?android:attr/listDivider" />
+
+                <!-- 匯出到系統日曆（既有的批次匯出） -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_export_ical"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
                     android:text="@string/settings_export_ical"
                     style="@style/Widget.Material3.Button.TonalButton" />
 
+                <!-- .ics 匯出 -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_export_ics_file"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_export_ics"
+                    style="@style/Widget.Material3.Button.TonalButton" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="12dp"
+                    android:background="?android:attr/listDivider" />
+
+                <!-- 日曆匯出白名單 -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_calendar_whitelist"
                     android:layout_width="match_parent"
