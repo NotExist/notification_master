@@ -188,44 +188,14 @@ class TimelineFragment : Fragment() {
     }
 
     private fun setupFilterChips() {
-        binding.chipShowAll.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                isDeduplicatedMode = false
-                isAudibleMode = false
-                isDismissedMode = false
-                binding.swipeRefresh.isRefreshing = true
-                loadNotifications()
-            }
-        }
-
-        binding.chipDeduplicated.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                isDeduplicatedMode = true
-                isAudibleMode = false
-                isDismissedMode = false
-                binding.swipeRefresh.isRefreshing = true
-                loadNotifications()
-            }
-        }
-
-        binding.chipAudible.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                isDeduplicatedMode = false
-                isAudibleMode = true
-                isDismissedMode = false
-                binding.swipeRefresh.isRefreshing = true
-                loadNotifications()
-            }
-        }
-
-        binding.chipDismissed.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                isDeduplicatedMode = false
-                isAudibleMode = false
-                isDismissedMode = true
-                binding.swipeRefresh.isRefreshing = true
-                loadNotifications()
-            }
+        // 不選 = 顯示全部；選其中一個 = 對應篩選模式
+        binding.chipGroupFilter.setOnCheckedStateChangeListener { _, checkedIds ->
+            val checkedId = checkedIds.firstOrNull()
+            isDeduplicatedMode = checkedId == R.id.chip_deduplicated
+            isAudibleMode = checkedId == R.id.chip_audible
+            isDismissedMode = checkedId == R.id.chip_dismissed
+            binding.swipeRefresh.isRefreshing = true
+            loadNotifications()
         }
     }
 
@@ -657,10 +627,7 @@ class TimelineFragment : Fragment() {
      * 切換到 Audible 篩選模式
      */
     private fun activateAudibleMode() {
-        isAudibleMode = true
-        isDeduplicatedMode = false
-        isDismissedMode = false
-        binding.chipAudible.isChecked = true
+        binding.chipAudible.isChecked = true  // 觸發 setOnCheckedStateChangeListener 統一處理
     }
 
     private fun showSimilarNotifications(notification: NotificationEntity) {
