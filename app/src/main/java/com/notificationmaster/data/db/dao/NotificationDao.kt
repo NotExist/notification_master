@@ -263,12 +263,14 @@ interface NotificationDao {
     // === 查詢 - 搜尋 ===
 
     @Query("""
-        SELECT * FROM notifications
-        WHERE title LIKE '%' || :query || '%'
-           OR text LIKE '%' || :query || '%'
-           OR big_text LIKE '%' || :query || '%'
-           OR sub_text LIKE '%' || :query || '%'
-        ORDER BY post_time DESC
+        SELECT DISTINCT n.* FROM notifications n
+        LEFT JOIN media_attachments m ON n.id = m.notification_id
+        WHERE n.title LIKE '%' || :query || '%'
+           OR n.text LIKE '%' || :query || '%'
+           OR n.big_text LIKE '%' || :query || '%'
+           OR n.sub_text LIKE '%' || :query || '%'
+           OR m.file_path LIKE '%' || :query || '%'
+        ORDER BY n.post_time DESC
         LIMIT :limit
     """)
     suspend fun searchNotifications(query: String, limit: Int = 100): List<NotificationEntity>
