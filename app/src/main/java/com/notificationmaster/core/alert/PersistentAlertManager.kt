@@ -12,8 +12,9 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import android.annotation.SuppressLint
+import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.notificationmaster.R
 
 /**
@@ -24,6 +25,7 @@ import com.notificationmaster.R
  */
 class PersistentAlertManager(private val context: Context) {
 
+    private val TAG = "PersistentAlertManager"
     private var ringtone: Ringtone? = null
     private var vibrator: Vibrator? = null
     private var isAlerting = false
@@ -58,6 +60,16 @@ class PersistentAlertManager(private val context: Context) {
         soundUri: String?,
         vibrate: Boolean
     ) {
+        // API 33+: 若無 POST_NOTIFICATIONS 權限則跳過（無法顯示停止按鈕，提醒將無法被停止）
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    context, "android.permission.POST_NOTIFICATIONS"
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                Log.w(TAG, "POST_NOTIFICATIONS not granted, skipping persistent alert")
+                return
+            }
+        }
+
         stopAlert()  // 一次一個
 
         // 鈴聲（循環）
@@ -103,7 +115,6 @@ class PersistentAlertManager(private val context: Context) {
         isAlerting = false
     }
 
-    @SuppressLint("NotificationPermission")
     private fun postAlertNotification(notificationKey: String, title: String, text: String?) {
         val stopIntent = Intent(ACTION_STOP_ALERT).apply {
             setPackage(context.packageName)
@@ -123,6 +134,14 @@ class PersistentAlertManager(private val context: Context) {
             .setOngoing(true)
             .addAction(0, context.getString(R.string.alert_stop), stopPi)
             .build()
+        // 權限已在 startAlert() 入口檢查；此處為 lint 滿足條件的雙重保護
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context, "android.permission.POST_NOTIFICATIONS"
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "POST_NOTIFICATIONS not granted, cannot post alert notification")
+            return
+        }
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .notify(NOTIFICATION_ID, notification)
     }

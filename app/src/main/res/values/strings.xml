@@ -297,6 +297,12 @@
     <!-- Channel -->
     <string name="channel_name_unset">Channel Name 未設定</string>
 
+    <!-- 通知權限 -->
+    <string name="permission_post_notifications_title">需要通知權限</string>
+    <string name="permission_post_notifications_message">持續提醒功能需要「發送通知」權限，才能顯示帶有「停止」按鈕的提醒通知。\n\n未授權時提醒將無法運作。</string>
+    <string name="permission_post_notifications_denied">未取得通知權限，持續提醒功能將無法運作</string>
+    <string name="permission_grant">授予權限</string>
+
     <!-- 持續提醒 -->
     <string name="persistent_alert_empty">尚無持續提醒規則</string>
     <string name="persistent_alert_empty_hint">新增規則後，符合條件的通知到達時將以振動/鈴聲持續提醒。</string>

@@ -90,6 +90,25 @@ object PermissionDescriptions {
             deniedImpact = "無法使用日曆匯出功能。",
             isRequired = false
         ),
+        PermissionInfo(
+            permission = Manifest.permission.VIBRATE,
+            displayName = "振動",
+            type = "普通權限",
+            relatedFeature = "持續提醒功能（振動）",
+            rationale = "持續提醒觸發時產生循環振動，直到使用者回應。",
+            deniedImpact = "持續提醒無法使用振動，僅能以鈴聲提示。",
+            isRequired = false
+        ),
+        PermissionInfo(
+            permission = "android.permission.POST_NOTIFICATIONS",
+            displayName = "發送通知",
+            type = "危險權限",
+            relatedFeature = "持續提醒功能（停止按鈕通知）",
+            rationale = "持續提醒觸發時需要發送 heads-up 通知，提供「停止提醒」按鈕讓使用者回應。",
+            deniedImpact = "持續提醒功能無法運作（無法顯示停止按鈕，提醒將無法被停止）。",
+            isRequired = false,
+            minApi = 33
+        ),
         // === 未實作（預留） ===
         PermissionInfo(
             permission = "android.permission.BIND_ACCESSIBILITY_SERVICE",

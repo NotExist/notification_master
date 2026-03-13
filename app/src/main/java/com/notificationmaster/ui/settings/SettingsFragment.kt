@@ -3,6 +3,8 @@ package com.notificationmaster.ui.settings
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
@@ -120,6 +122,23 @@ class SettingsFragment : Fragment() {
         pendingCalendarAction = null
     }
 
+    // 通知權限請求（持續提醒用，API 33+）
+    private var pendingNotificationAction: (() -> Unit)? = null
+
+    @SuppressLint("InlinedApi")
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            pendingNotificationAction?.invoke()
+        } else {
+            context?.let {
+                Toast.makeText(it, R.string.permission_post_notifications_denied, Toast.LENGTH_SHORT).show()
+            }
+        }
+        pendingNotificationAction = null
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -171,10 +190,12 @@ class SettingsFragment : Fragment() {
         updateAutoDismissSummary()
 
         binding.btnPersistentAlert.setOnClickListener {
-            findNavController().navigate(
-                R.id.action_settings_to_filter,
-                bundleOf("actionType" to ActionType.PERSISTENT_ALERT.name)
-            )
+            requestNotificationPermissionThen {
+                findNavController().navigate(
+                    R.id.action_settings_to_filter,
+                    bundleOf("actionType" to ActionType.PERSISTENT_ALERT.name)
+                )
+            }
         }
         updatePersistentAlertSummary()
     }
@@ -604,6 +625,35 @@ class SettingsFragment : Fragment() {
                 }
                 .setNegativeButton(R.string.cancel) { _, _ ->
                     pendingCalendarAction = null
+                }
+                .show()
+        }
+    }
+
+    /**
+     * 共用通知權限請求（API 33+）
+     *
+     * API 33 以下不需要此權限，直接執行 action。
+     */
+    @SuppressLint("InlinedApi")
+    private fun requestNotificationPermissionThen(action: () -> Unit) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            action()
+            return
+        }
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.POST_NOTIFICATIONS)
+            == PackageManager.PERMISSION_GRANTED) {
+            action()
+        } else {
+            pendingNotificationAction = action
+            AlertDialog.Builder(requireContext())
+                .setTitle(R.string.permission_post_notifications_title)
+                .setMessage(R.string.permission_post_notifications_message)
+                .setPositiveButton(R.string.permission_grant) { _, _ ->
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                .setNegativeButton(R.string.cancel) { _, _ ->
+                    pendingNotificationAction = null
                 }
                 .show()
         }
