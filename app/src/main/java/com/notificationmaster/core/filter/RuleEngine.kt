@@ -225,7 +225,15 @@ object RuleEngine {
     }
 
     /**
-     * 計算備份 JSON 中有多少規則不在目前規則集內（以 ID 判斷）
+     * 取得規則的內容鍵（排除 id 和 createdAt，僅比對 matchers + action）
+     *
+     * Rule 是 data class，Matcher/RuleAction 子類也都是 data class，
+     * copy 後的 equals/hashCode 可正確進行內容比對。
+     */
+    private fun Rule.contentKey(): Rule = copy(id = "", createdAt = 0)
+
+    /**
+     * 計算備份 JSON 中有多少規則不在目前規則集內（以內容比對）
      *
      * @return 備份中尚未同步的規則數量；解析失敗回傳 0
      */
@@ -233,11 +241,9 @@ object RuleEngine {
         return try {
             val root = JSONObject(json)
             val arr = root.getJSONArray("rules")
-            val existingIds = rules.map { it.id }.toSet()
-            (0 until arr.length()).count { i ->
-                val id = arr.getJSONObject(i).optString("id")
-                id.isNotEmpty() && id !in existingIds
-            }
+            val backupRules = (0 until arr.length()).map { Rule.fromJson(arr.getJSONObject(it)) }
+            val localContentKeys = rules.map { it.contentKey() }.toSet()
+            backupRules.count { it.contentKey() !in localContentKeys }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to count new rules in backup", e)
             0
@@ -245,31 +251,36 @@ object RuleEngine {
     }
 
     /**
-     * 合併匯入 JSON 字串（v2 格式）
+     * 合併匯入 JSON 字串（v2 格式，以內容比對去重）
      *
-     * 保留現有規則，僅加入備份中 ID 不重複的新規則。
+     * 以備份規則為主體，保留本機中備份沒有的獨有規則。
+     * 內容相同（matchers + action）但 id/createdAt 不同的規則視為重複。
      *
-     * @return 各 ActionType 新增的規則數
+     * @return 各 ActionType 從備份新增的規則數
      */
     fun mergeFromJson(context: Context, json: String): Map<ActionType, Int> {
         val root = JSONObject(json)
         val arr = root.getJSONArray("rules")
-        val imported = (0 until arr.length()).map { Rule.fromJson(arr.getJSONObject(it)) }
+        val backupRules = (0 until arr.length()).map { Rule.fromJson(arr.getJSONObject(it)) }
 
-        val existingIds = rules.map { it.id }.toSet()
-        val newRules = imported.filter { it.id !in existingIds }
+        val backupContentKeys = backupRules.map { it.contentKey() }.toSet()
+        val localOnlyRules = rules.filter { it.contentKey() !in backupContentKeys }
 
-        if (newRules.isEmpty()) return emptyMap()
+        val localContentKeys = rules.map { it.contentKey() }.toSet()
+        val newFromBackup = backupRules.filter { it.contentKey() !in localContentKeys }
 
-        rules = rules + newRules
+        if (newFromBackup.isEmpty() && localOnlyRules.size == rules.size) return emptyMap()
+
+        // 備份規則為主 + 本機獨有規則
+        rules = backupRules + localOnlyRules
         save(context)
 
         val result = mutableMapOf<ActionType, Int>()
         for (type in ActionType.entries) {
-            val count = newRules.count { it.action.actionType == type }
+            val count = newFromBackup.count { it.action.actionType == type }
             if (count > 0) result[type] = count
         }
-        Log.d(TAG, "Merged ${newRules.size} new rules (${imported.size} total in backup)")
+        Log.d(TAG, "Merged: ${backupRules.size} from backup + ${localOnlyRules.size} local-only (${newFromBackup.size} new)")
         return result
     }
 
