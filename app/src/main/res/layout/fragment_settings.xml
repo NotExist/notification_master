@@ -275,6 +275,23 @@
                     android:textAppearance="?attr/textAppearanceBodySmall"
                     android:textColor="?android:attr/textColorSecondary" />
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_persistent_alert"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/settings_persistent_alert_title"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                <TextView
+                    android:id="@+id/text_persistent_alert_summary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/settings_persistent_alert_summary"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?android:attr/textColorSecondary" />
+
             </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>

@@ -169,6 +169,14 @@ class SettingsFragment : Fragment() {
             )
         }
         updateAutoDismissSummary()
+
+        binding.btnPersistentAlert.setOnClickListener {
+            findNavController().navigate(
+                R.id.action_settings_to_filter,
+                bundleOf("actionType" to ActionType.PERSISTENT_ALERT.name)
+            )
+        }
+        updatePersistentAlertSummary()
     }
 
     private fun updateFilterSummary() {
@@ -191,6 +199,16 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    private fun updatePersistentAlertSummary() {
+        val b = _binding ?: return
+        val count = RuleEngine.getRules(ActionType.PERSISTENT_ALERT).size
+        b.textPersistentAlertSummary.text = if (count > 0) {
+            getString(R.string.settings_persistent_alert_count, count)
+        } else {
+            getString(R.string.settings_persistent_alert_summary)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         updateDebugInfo()
@@ -199,6 +217,7 @@ class SettingsFragment : Fragment() {
         validateCustomMediaDir()
         updateFilterSummary()
         updateAutoDismissSummary()
+        updatePersistentAlertSummary()
         updateCalendarWhitelistSummary()
         updateRealtimeCalendarDisplay()
         updateBackupDirDisplay()
@@ -975,16 +994,19 @@ class SettingsFragment : Fragment() {
             val notifCount = result[ActionType.SKIP_RECORD] ?: 0
             val calCount = result[ActionType.CALENDAR_EXPORT] ?: 0
             val dismissCount = result[ActionType.AUTO_DISMISS] ?: 0
+            val alertCount = result[ActionType.PERSISTENT_ALERT] ?: 0
 
             Toast.makeText(
                 ctx,
                 getString(R.string.filter_import_success, notifCount, calCount) +
-                    if (dismissCount > 0) "、自動清除 ${dismissCount} 條" else "",
+                    (if (dismissCount > 0) "、自動清除 ${dismissCount} 條" else "") +
+                    (if (alertCount > 0) "、持續提醒 ${alertCount} 條" else ""),
                 Toast.LENGTH_LONG
             ).show()
 
             updateFilterSummary()
             updateAutoDismissSummary()
+            updatePersistentAlertSummary()
             updateCalendarWhitelistSummary()
         } catch (e: Exception) {
             Toast.makeText(ctx, "匯入失敗：${e.message}", Toast.LENGTH_LONG).show()
@@ -1030,14 +1052,17 @@ class SettingsFragment : Fragment() {
             val notifCount = result[ActionType.SKIP_RECORD] ?: 0
             val calCount = result[ActionType.CALENDAR_EXPORT] ?: 0
             val dismissCount = result[ActionType.AUTO_DISMISS] ?: 0
+            val alertCount = result[ActionType.PERSISTENT_ALERT] ?: 0
             Toast.makeText(
                 ctx,
                 getString(R.string.filter_import_success, notifCount, calCount) +
-                    if (dismissCount > 0) "、自動清除 ${dismissCount} 條" else "",
+                    (if (dismissCount > 0) "、自動清除 ${dismissCount} 條" else "") +
+                    (if (alertCount > 0) "、持續提醒 ${alertCount} 條" else ""),
                 Toast.LENGTH_LONG
             ).show()
             updateFilterSummary()
             updateAutoDismissSummary()
+            updatePersistentAlertSummary()
             updateCalendarWhitelistSummary()
         } catch (e: Exception) {
             Toast.makeText(ctx, "匯入失敗：${e.message}", Toast.LENGTH_LONG).show()

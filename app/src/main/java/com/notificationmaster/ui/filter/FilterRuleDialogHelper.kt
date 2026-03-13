@@ -1,6 +1,7 @@
 package com.notificationmaster.ui.filter
 
 import android.content.Context
+import android.media.RingtoneManager
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
@@ -10,6 +11,7 @@ import android.widget.LinearLayout
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.materialswitch.MaterialSwitch
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputEditText
@@ -96,6 +98,11 @@ object FilterRuleDialogHelper {
         val layoutGroupId = dialogView.findViewById<TextInputLayout>(R.id.layout_group_id)
         val editGroupId = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.edit_group_id)
 
+        // PersistentAlert 相關 views
+        val btnChooseSound = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_choose_sound)
+        val switchAlertVibrate = dialogView.findViewById<MaterialSwitch>(R.id.switch_alert_vibrate)
+        var selectedSoundUri: String? = null
+
         // === Keyword 欄位 checkbox 動態生成 ===
         val keywordFieldLabels = mapOf(
             KeywordField.TITLE to context.getString(R.string.filter_keyword_field_title),
@@ -142,9 +149,10 @@ object FilterRuleDialogHelper {
         val categoryLabels = arrayOf(
             context.getString(R.string.filter_dialog_category_notification),
             context.getString(R.string.filter_dialog_category_calendar),
-            context.getString(R.string.filter_dialog_category_auto_dismiss)
+            context.getString(R.string.filter_dialog_category_auto_dismiss),
+            context.getString(R.string.filter_dialog_category_persistent_alert)
         )
-        val categoryValues = arrayOf(ActionType.SKIP_RECORD, ActionType.CALENDAR_EXPORT, ActionType.AUTO_DISMISS)
+        val categoryValues = arrayOf(ActionType.SKIP_RECORD, ActionType.CALENDAR_EXPORT, ActionType.AUTO_DISMISS, ActionType.PERSISTENT_ALERT)
         var selectedCategoryIndex = 0
 
         // 延遲選項狀態
@@ -162,6 +170,43 @@ object FilterRuleDialogHelper {
             }
         }
 
+        /** 根據目前有效的 actionType 切換提醒設定區塊顯示 */
+        fun updateAlertOptionsVisibility(effectiveType: ActionType) {
+            val show = effectiveType == ActionType.PERSISTENT_ALERT
+            btnChooseSound.visibility = if (show) View.VISIBLE else View.GONE
+            switchAlertVibrate.visibility = if (show) View.VISIBLE else View.GONE
+        }
+
+        // === EventType CheckBox 動態生成 ===
+        val eventTypes = EventType.entries
+        val checkBoxes = mutableListOf<MaterialCheckBox>()
+        for (et in eventTypes) {
+            val cb = MaterialCheckBox(context).apply {
+                text = et.name
+                isChecked = isEditMode && et.name in existingRule!!.eventTypes
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
+            checkBoxes.add(cb)
+            containerEventTypes.addView(cb)
+        }
+
+        // === EventType 可選限制 ===
+        /** 根據有效的 actionType 更新 EventType checkbox 可選狀態 */
+        fun updateEventTypeAvailability(effectiveType: ActionType) {
+            val enabledTypes = when (effectiveType) {
+                ActionType.CALENDAR_EXPORT -> setOf(EventType.POSTED, EventType.UPDATED, EventType.REMOVED)
+                ActionType.PERSISTENT_ALERT -> setOf(EventType.POSTED, EventType.UPDATED)
+                else -> EventType.entries.toSet()
+            }
+            eventTypes.forEachIndexed { i, et ->
+                checkBoxes[i].isEnabled = et in enabledTypes
+                if (et !in enabledTypes) checkBoxes[i].isChecked = false
+            }
+        }
+
         if (isEditMode) {
             // 編輯模式：不顯示 category 選擇
             layoutCategory.visibility = View.GONE
@@ -173,14 +218,17 @@ object FilterRuleDialogHelper {
             dropdownCategory.setOnItemClickListener { _, _, position, _ ->
                 selectedCategoryIndex = position
                 updateDismissDelayVisibility(categoryValues[position])
+                updateAlertOptionsVisibility(categoryValues[position])
                 updateEventTypeAvailability(categoryValues[position])
             }
         }
 
-        // 固定 actionType 或編輯模式時根據 actionType 決定延遲區塊
+        // 固定 actionType 或編輯模式時根據 actionType 決定延遲/提醒區塊
         val effectiveActionType = if (isEditMode) existingRule!!.action.actionType else actionType
         if (effectiveActionType != null) {
             updateDismissDelayVisibility(effectiveActionType)
+            updateAlertOptionsVisibility(effectiveActionType)
+            updateEventTypeAvailability(effectiveActionType)
         }
 
         // === 延遲 Dropdown 設定 ===
@@ -212,6 +260,32 @@ object FilterRuleDialogHelper {
             }
         }
 
+        // 鈴聲選擇按鈕
+        btnChooseSound.setOnClickListener {
+            showSoundPicker(context, selectedSoundUri) { uri ->
+                selectedSoundUri = uri
+                btnChooseSound.text = if (uri != null) {
+                    RingtoneManager.getRingtone(context, android.net.Uri.parse(uri))
+                        ?.getTitle(context) ?: context.getString(R.string.filter_alert_choose_sound)
+                } else {
+                    context.getString(R.string.filter_alert_sound_default)
+                }
+            }
+        }
+
+        // 編輯模式：回填 PersistentAlert 設定
+        (existingRule?.action as? RuleAction.PersistentAlert)?.let { alert ->
+            selectedSoundUri = alert.soundUri
+            switchAlertVibrate.isChecked = alert.vibrate
+            if (alert.soundUri != null) {
+                btnChooseSound.text = RingtoneManager.getRingtone(
+                    context, android.net.Uri.parse(alert.soundUri)
+                )?.getTitle(context) ?: context.getString(R.string.filter_alert_choose_sound)
+            } else {
+                btnChooseSound.text = context.getString(R.string.filter_alert_sound_default)
+            }
+        }
+
         // 編輯模式：回填 keyword/channelProperty
         if (isEditMode) {
             existingRule!!.matchers.filterIsInstance<Matcher.Keyword>().firstOrNull()?.let { kw ->
@@ -238,40 +312,6 @@ object FilterRuleDialogHelper {
         } else {
             prefillPackageName?.let { editPackageName.setText(it) }
             prefillChannelId?.let { editChannelId.setText(it) }
-        }
-
-        // === EventType CheckBox 動態生成 ===
-        val eventTypes = EventType.entries
-        val checkBoxes = mutableListOf<MaterialCheckBox>()
-        for (et in eventTypes) {
-            val cb = MaterialCheckBox(context).apply {
-                text = et.name
-                isChecked = isEditMode && et.name in existingRule!!.eventTypes
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-            }
-            checkBoxes.add(cb)
-            containerEventTypes.addView(cb)
-        }
-
-        // === EventType 可選限制 ===
-        /** 根據有效的 actionType 更新 EventType checkbox 可選狀態 */
-        fun updateEventTypeAvailability(effectiveType: ActionType) {
-            val enabledTypes = when (effectiveType) {
-                ActionType.CALENDAR_EXPORT -> setOf(EventType.POSTED, EventType.UPDATED, EventType.REMOVED)
-                else -> EventType.entries.toSet()
-            }
-            eventTypes.forEachIndexed { i, et ->
-                checkBoxes[i].isEnabled = et in enabledTypes
-                if (et !in enabledTypes) checkBoxes[i].isChecked = false
-            }
-        }
-
-        // 固定 actionType 或編輯模式時套用限制
-        if (effectiveActionType != null) {
-            updateEventTypeAvailability(effectiveActionType)
         }
 
         // === 全選按鈕 ===
@@ -409,6 +449,10 @@ object FilterRuleDialogHelper {
                     ActionType.SKIP_RECORD -> RuleAction.SkipRecord
                     ActionType.CALENDAR_EXPORT -> RuleAction.CalendarExport
                     ActionType.AUTO_DISMISS -> RuleAction.AutoDismiss(delayMs = dismissDelayMs)
+                    ActionType.PERSISTENT_ALERT -> RuleAction.PersistentAlert(
+                        soundUri = selectedSoundUri,
+                        vibrate = switchAlertVibrate.isChecked
+                    )
                 }
 
                 if (isEditMode) {
@@ -488,5 +532,36 @@ object FilterRuleDialogHelper {
             )
             editGroupId.setAdapter(adapter)
         }
+    }
+
+    /**
+     * 顯示系統鈴聲選擇 Dialog（單選列表）
+     *
+     * 使用 RingtoneManager.cursor 手動列出鈴聲清單，
+     * 避免依賴 ActivityResultLauncher（object 中不可用）。
+     */
+    private fun showSoundPicker(context: Context, currentUri: String?, onSelected: (String?) -> Unit) {
+        val rm = RingtoneManager(context)
+        rm.setType(RingtoneManager.TYPE_ALARM or RingtoneManager.TYPE_NOTIFICATION)
+        val cursor = rm.cursor
+
+        val titles = mutableListOf(context.getString(R.string.filter_alert_sound_default))
+        val uris = mutableListOf<String?>(null)
+
+        while (cursor.moveToNext()) {
+            titles.add(cursor.getString(RingtoneManager.TITLE_COLUMN_INDEX))
+            uris.add(rm.getRingtoneUri(cursor.position).toString())
+        }
+
+        val checked = uris.indexOf(currentUri).coerceAtLeast(0)
+
+        AlertDialog.Builder(context)
+            .setTitle(R.string.filter_alert_choose_sound)
+            .setSingleChoiceItems(titles.toTypedArray(), checked) { dialog, which ->
+                onSelected(uris[which])
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 }

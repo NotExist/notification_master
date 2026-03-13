@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import com.notificationmaster.core.prefs.AppPreferences
+import com.notificationmaster.data.db.entity.EventType
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -39,7 +40,13 @@ object RuleEngine {
                 emptyList()
             }
         } else {
-            emptyList()
+            // 首次啟動：建立預設規則（過濾自身通知）
+            listOf(createSelfFilterRule(context))
+        }
+
+        // 首次啟動時持久化預設規則
+        if (v2Json == null && rules.isNotEmpty()) {
+            save(context)
         }
 
         loaded = true
@@ -58,6 +65,23 @@ object RuleEngine {
         val arr = JSONArray(rules.map { it.toJson() })
         AppPreferences.setRulesV2Json(context, arr.toString())
         autoBackup(context)
+    }
+
+    /**
+     * 建立預設的自身過濾規則
+     *
+     * 將 Notification Master 自身的通知加入黑名單，
+     * 避免記錄 App 自己發出的通知（如持續提醒的 heads-up 通知）。
+     * 同時作為使用者理解過濾規則的範例。
+     */
+    private fun createSelfFilterRule(context: Context): Rule {
+        return Rule(
+            matchers = listOf(
+                Matcher.Package(context.packageName),
+                Matcher.EventTypes(EventType.entries.map { it.name }.toSet())
+            ),
+            action = RuleAction.SkipRecord
+        )
     }
 
     // ========== CRUD ==========

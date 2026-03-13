@@ -82,6 +82,10 @@ class FilterSettingsFragment : Fragment() {
                 binding.textEmptyTitle.setText(R.string.auto_dismiss_empty)
                 binding.textEmptyHint.setText(R.string.auto_dismiss_empty_hint)
             }
+            ActionType.PERSISTENT_ALERT -> {
+                binding.textEmptyTitle.setText(R.string.persistent_alert_empty)
+                binding.textEmptyHint.setText(R.string.persistent_alert_empty_hint)
+            }
         }
 
         binding.recyclerRules.adapter = adapter
@@ -197,9 +201,20 @@ class FilterSettingsFragment : Fragment() {
                     rule.eventTypes.joinToString()
                 }
                 val delayMs = (rule.action as? RuleAction.AutoDismiss)?.delayMs ?: 0L
+                val alertAction = rule.action as? RuleAction.PersistentAlert
                 binding.textFilterMode.text = if (actionType == ActionType.AUTO_DISMISS && delayMs > 0) {
                     val delayText = formatDismissDelay(ctx, delayMs)
                     "$eventText — ${ctx.getString(R.string.filter_dismiss_delay_format, delayText)}"
+                } else if (actionType == ActionType.PERSISTENT_ALERT && alertAction != null) {
+                    val vibrateLabel = if (alertAction.vibrate) ctx.getString(R.string.filter_alert_vibrate) else ""
+                    val soundLabel = if (alertAction.soundUri != null) {
+                        android.media.RingtoneManager.getRingtone(ctx, android.net.Uri.parse(alertAction.soundUri))
+                            ?.getTitle(ctx) ?: ""
+                    } else {
+                        ctx.getString(R.string.filter_alert_sound_default)
+                    }
+                    val extras = listOf(soundLabel, vibrateLabel).filter { it.isNotEmpty() }.joinToString(", ")
+                    if (extras.isNotEmpty()) "$eventText — $extras" else eventText
                 } else {
                     eventText
                 }

@@ -11,7 +11,8 @@ import java.util.UUID
 enum class ActionType {
     SKIP_RECORD,
     CALENDAR_EXPORT,
-    AUTO_DISMISS
+    AUTO_DISMISS,
+    PERSISTENT_ALERT
 }
 
 /**
@@ -199,11 +200,28 @@ sealed interface RuleAction {
         }
     }
 
+    /** 持續提醒（PERSISTENT_ALERT） */
+    data class PersistentAlert(
+        val soundUri: String? = null,  // null = 系統預設鬧鐘鈴聲
+        val vibrate: Boolean = true
+    ) : RuleAction {
+        override val actionType = ActionType.PERSISTENT_ALERT
+        override fun toJson() = JSONObject().apply {
+            put("type", "PersistentAlert")
+            put("soundUri", soundUri ?: JSONObject.NULL)
+            put("vibrate", vibrate)
+        }
+    }
+
     companion object {
         fun fromJson(json: JSONObject): RuleAction = when (val type = json.getString("type")) {
             "SkipRecord" -> SkipRecord
             "CalendarExport" -> CalendarExport
             "AutoDismiss" -> AutoDismiss(json.optLong("delayMs", 0))
+            "PersistentAlert" -> PersistentAlert(
+                soundUri = if (json.isNull("soundUri")) null else json.getString("soundUri"),
+                vibrate = json.optBoolean("vibrate", true)
+            )
             else -> throw IllegalArgumentException("Unknown action type: $type")
         }
     }

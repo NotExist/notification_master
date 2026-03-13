@@ -17,6 +17,9 @@
     <!-- 網路狀態（裝置狀態記錄用） -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- 振動（持續提醒功能） -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <!-- 日曆（匯出到日曆功能，預設關閉） -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
@@ -101,6 +104,15 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- 持續提醒停止 Receiver -->
+        <receiver
+            android:name=".core.alert.AlertStopReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.notificationmaster.action.STOP_ALERT" />
+            </intent-filter>
+        </receiver>
 
         <!-- FileProvider 用於分享匯出檔案 -->
         <provider

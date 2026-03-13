@@ -12,6 +12,7 @@ import androidx.room.withTransaction
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.core.NotificationExtractor
 import com.notificationmaster.core.cache.PendingIntentCache
+import com.notificationmaster.core.alert.PersistentAlertManager
 import com.notificationmaster.core.filter.ActionType
 import com.notificationmaster.core.filter.MatchContext
 import com.notificationmaster.core.filter.RuleAction
@@ -55,6 +56,7 @@ class NotificationCaptureService : NotificationListenerService() {
     private lateinit var deviceStateCapture: DeviceStateCapture
     private lateinit var mediaExtractor: MediaExtractor
     private lateinit var calendarExporter: CalendarExporter
+    private lateinit var alertManager: PersistentAlertManager
 
     /** 追蹤延遲清除的排程任務，key = notification key */
     private val pendingDismissJobs = ConcurrentHashMap<String, Job>()
@@ -85,6 +87,7 @@ class NotificationCaptureService : NotificationListenerService() {
         deviceStateCapture = DeviceStateCapture(this)
         mediaExtractor = MediaExtractor(this)
         calendarExporter = CalendarExporter(this)
+        alertManager = PersistentAlertManager(this)
         RuleEngine.load(this)
         instance = this
     }
@@ -93,6 +96,7 @@ class NotificationCaptureService : NotificationListenerService() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
 
+        alertManager.stopAlert()
         pendingDismissJobs.values.forEach { it.cancel() }
         pendingDismissJobs.clear()
         calendarExportMap.clear()
@@ -367,6 +371,7 @@ class NotificationCaptureService : NotificationListenerService() {
         // 7. 即時日曆匯出（僅 POSTED/UPDATED，INITIAL 不觸發）
         if (eventType != EventType.INITIAL) {
             checkRealtimeCalendarExport(entity, matchCtx)
+            checkPersistentAlert(entity, matchCtx)
         }
 
         Log.d(TAG, "Saved notification: $notificationId, event: $eventType")
@@ -862,6 +867,25 @@ class NotificationCaptureService : NotificationListenerService() {
 
         calendarExporter.updateCalendarEventEndTime(eventId, removalTime)
         Log.d(TAG, "Updated calendar event end time for: $notificationKey")
+    }
+
+    /**
+     * 檢查是否需要觸發持續提醒
+     *
+     * 僅 POSTED/UPDATED 觸發（在 processNotification 的 eventType != INITIAL 區塊呼叫）。
+     */
+    private fun checkPersistentAlert(entity: NotificationEntity, matchCtx: MatchContext) {
+        val rule = RuleEngine.findMatchingRule(ActionType.PERSISTENT_ALERT, matchCtx) ?: return
+        val action = rule.action as RuleAction.PersistentAlert
+        val title = "[${entity.packageName.substringAfterLast('.')}] ${entity.title ?: "通知"}"
+        alertManager.startAlert(entity.notificationKey, title, entity.text, action.soundUri, action.vibrate)
+    }
+
+    /**
+     * 停止持續提醒（供 AlertStopReceiver 呼叫）
+     */
+    fun stopPersistentAlert() {
+        alertManager.stopAlert()
     }
 
     /**
