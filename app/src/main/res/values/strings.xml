@@ -9,8 +9,6 @@
     <string name="today_notifications">今日通知</string>
     <string name="total_notifications">總計</string>
 
-    <string name="signing_info">簽章資訊 (Debug)</string>
-
     <!-- 權限相關 -->
     <string name="permission_status">權限狀態</string>
     <string name="go_to_settings">前往設定</string>
@@ -40,7 +38,6 @@
     <string name="timeline_empty">尚無通知記錄</string>
     <string name="timeline_empty_hint">通知監聽服務運作中，新的通知會自動記錄在這裡。</string>
     <string name="timeline_permission_hint">需要授權「通知存取權」才能開始擷取通知。\n授權後所有通知都會自動記錄在這裡。</string>
-    <string name="timeline_show_all">顯示全部</string>
     <string name="timeline_show_deduplicated">去重顯示</string>
     <string name="timeline_count_format">%d 筆</string>
     <string name="timeline_filter_hint">依標題、內容、App 名稱或包名過濾…</string>
@@ -137,7 +134,6 @@
     <string name="media_file_removed">已移除</string>
     <string name="media_unavailable">無法取得</string>
     <string name="media_uri_copied">已複製媒體 URI</string>
-    <string name="unknown_app">未知 App</string>
     <string name="no_title">無標題</string>
     <string name="no_content">無內容</string>
 
@@ -176,25 +172,18 @@
     <string name="filter_empty">尚無過濾規則</string>
     <string name="filter_empty_hint">新增規則後，符合條件的通知將不會被記錄。</string>
     <string name="filter_add_rule">新增規則</string>
-    <string name="filter_select_app">選擇 App</string>
-    <string name="filter_select_scope">選擇範圍</string>
-    <string name="filter_scope_all_channels">整個 App（所有 Channel）</string>
-    <string name="filter_scope_specific_channel">指定 Channel</string>
     <string name="filter_mode_ignore_all">完全忽略</string>
-    <string name="filter_select_events">選擇事件類型</string>
     <string name="filter_select_all">全選</string>
     <string name="filter_delete_confirm">確定要刪除此過濾規則嗎？</string>
     <string name="filter_rule_added">已新增過濾規則</string>
     <string name="filter_rule_deleted">已刪除過濾規則</string>
     <string name="filter_rule_updated">已更新過濾規則</string>
-    <string name="filter_all_channels">所有 Channel</string>
 
     <!-- 即時日曆匯出 -->
     <string name="settings_realtime_calendar">即時匯出到日曆</string>
     <string name="settings_realtime_calendar_off">未啟用</string>
     <string name="settings_realtime_calendar_target">目標：%s</string>
     <string name="settings_choose_target_calendar">選擇目標日曆</string>
-    <string name="settings_realtime_detail_level">匯出精細程度</string>
 
     <!-- .ics 匯出 -->
     <string name="settings_export_ics">匯出 .ics 日曆檔</string>
@@ -203,7 +192,6 @@
     <string name="settings_calendar_whitelist">匯出白名單</string>
     <string name="settings_calendar_whitelist_summary">設定要匯出到日曆的 App 或 Channel</string>
     <string name="settings_calendar_whitelist_count">%d 條規則</string>
-    <string name="settings_calendar_whitelist_title">日曆匯出白名單</string>
     <string name="calendar_whitelist_empty">尚無白名單規則</string>
     <string name="calendar_whitelist_empty_hint">無白名單規則時將匯出所有通知。\n新增規則後，僅匯出符合條件的通知。</string>
 
@@ -222,7 +210,6 @@
 
     <!-- 事件分組 -->
     <string name="event_group_header">第 %1$d 次</string>
-    <string name="event_group_current">（目前檢視）</string>
     <string name="event_group_time_range">%1$s — %2$s</string>
 
     <!-- 事件分頁 -->
