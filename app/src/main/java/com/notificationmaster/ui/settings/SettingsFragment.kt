@@ -11,6 +11,8 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ArrayAdapter
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -33,6 +35,7 @@ import com.notificationmaster.debug.DebugDumper
 import com.notificationmaster.export.archive.ArchiveExporter
 import com.notificationmaster.export.archive.ArchiveImporter
 import com.notificationmaster.export.calendar.CalendarExporter
+import com.notificationmaster.export.calendar.CalendarInfo
 import com.notificationmaster.export.ical.IcsExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -812,14 +815,35 @@ class SettingsFragment : Fragment() {
             return
         }
 
-        val names = calendars.map { cal ->
-            if (cal.isLocal) cal.displayName
-            else "${cal.displayName} (${cal.accountName})"
-        }.toTypedArray()
+        val adapter = object : ArrayAdapter<CalendarInfo>(
+            requireContext(),
+            android.R.layout.simple_list_item_2,
+            android.R.id.text1,
+            calendars
+        ) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val view = super.getView(position, convertView, parent)
+                val cal = getItem(position) ?: return view
+                val text1 = view.findViewById<TextView>(android.R.id.text1)
+                val text2 = view.findViewById<TextView>(android.R.id.text2)
+
+                val isOwnCalendar = cal.accountName == CalendarExporter.LOCAL_ACCOUNT_NAME
+                    && cal.accountType == CalendarExporter.LOCAL_ACCOUNT_TYPE
+                text1.text = if (isOwnCalendar) {
+                    getString(R.string.calendar_picker_own_label, cal.displayName)
+                } else {
+                    cal.displayName
+                }
+
+                text2.text = getString(R.string.calendar_picker_detail, cal.accountName, cal.accountType)
+
+                return view
+            }
+        }
 
         AlertDialog.Builder(requireContext())
-            .setTitle("選擇即時匯出目標日曆")
-            .setItems(names) { _, which ->
+            .setTitle(R.string.calendar_picker_title)
+            .setAdapter(adapter) { _, which ->
                 val cal = calendars[which]
                 AppPreferences.setRealtimeCalendarTarget(requireContext(), cal.id, cal.displayName)
                 AppPreferences.setRealtimeCalendarEnabled(requireContext(), true)
@@ -831,6 +855,7 @@ class SettingsFragment : Fragment() {
             }
             .show()
     }
+
 
     private fun setRealtimeSwitchChecked(checked: Boolean) {
         isUpdatingRealtimeSwitch = true

@@ -184,6 +184,9 @@
     <string name="settings_realtime_calendar_off">未啟用</string>
     <string name="settings_realtime_calendar_target">目標：%s</string>
     <string name="settings_choose_target_calendar">選擇目標日曆</string>
+    <string name="calendar_picker_title">選擇即時匯出目標日曆</string>
+    <string name="calendar_picker_own_label">%s（本 App）</string>
+    <string name="calendar_picker_detail">%1$s · %2$s</string>
 
     <!-- .ics 匯出 -->
     <string name="settings_export_ics">匯出 .ics 日曆檔</string>
