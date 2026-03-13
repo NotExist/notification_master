@@ -224,6 +224,55 @@ object RuleEngine {
         return result
     }
 
+    /**
+     * 計算備份 JSON 中有多少規則不在目前規則集內（以 ID 判斷）
+     *
+     * @return 備份中尚未同步的規則數量；解析失敗回傳 0
+     */
+    fun countNewRulesInBackup(json: String): Int {
+        return try {
+            val root = JSONObject(json)
+            val arr = root.getJSONArray("rules")
+            val existingIds = rules.map { it.id }.toSet()
+            (0 until arr.length()).count { i ->
+                val id = arr.getJSONObject(i).optString("id")
+                id.isNotEmpty() && id !in existingIds
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to count new rules in backup", e)
+            0
+        }
+    }
+
+    /**
+     * 合併匯入 JSON 字串（v2 格式）
+     *
+     * 保留現有規則，僅加入備份中 ID 不重複的新規則。
+     *
+     * @return 各 ActionType 新增的規則數
+     */
+    fun mergeFromJson(context: Context, json: String): Map<ActionType, Int> {
+        val root = JSONObject(json)
+        val arr = root.getJSONArray("rules")
+        val imported = (0 until arr.length()).map { Rule.fromJson(arr.getJSONObject(it)) }
+
+        val existingIds = rules.map { it.id }.toSet()
+        val newRules = imported.filter { it.id !in existingIds }
+
+        if (newRules.isEmpty()) return emptyMap()
+
+        rules = rules + newRules
+        save(context)
+
+        val result = mutableMapOf<ActionType, Int>()
+        for (type in ActionType.entries) {
+            val count = newRules.count { it.action.actionType == type }
+            if (count > 0) result[type] = count
+        }
+        Log.d(TAG, "Merged ${newRules.size} new rules (${imported.size} total in backup)")
+        return result
+    }
+
     // ========== 自動備份 ==========
 
     fun autoBackup(context: Context) {

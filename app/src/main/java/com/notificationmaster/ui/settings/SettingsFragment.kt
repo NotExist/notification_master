@@ -1065,23 +1065,35 @@ class SettingsFragment : Fragment() {
 
     // === 過濾規則備份 ===
 
+    /**
+     * 進入設定頁時自動檢查備份狀態
+     *
+     * 流程：
+     * 1. 已設定備份目錄 → 檢查備份檔案 → 有未同步規則 → 詢問合併匯入
+     * 2. 未設定備份目錄（且未拒絕） → 建議設定
+     * 3. 使用者忽略 → 本次 session 不再提問
+     */
     private fun checkBackupAndSuggestImport() {
         if (hasPromptedThisSession) return
-        if (!RuleEngine.isAllEmpty()) return
         hasPromptedThisSession = true
 
         val ctx = context ?: return
         if (AppPreferences.isBackupDirEnabled(ctx)) {
+            // 有備份目錄 → 檢查是否有未同步規則
             val json = RuleEngine.readBackupFromDir(ctx) ?: return
-            AlertDialog.Builder(ctx)
-                .setTitle(R.string.filter_backup_found_title)
-                .setMessage(R.string.filter_backup_found_message)
-                .setPositiveButton(R.string.ok) { _, _ ->
-                    importBackupJson(json)
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
+            val newCount = RuleEngine.countNewRulesInBackup(json)
+            if (newCount > 0) {
+                AlertDialog.Builder(ctx)
+                    .setTitle(R.string.filter_backup_found_title)
+                    .setMessage(getString(R.string.filter_backup_found_message, newCount))
+                    .setPositiveButton(R.string.ok) { _, _ ->
+                        mergeBackupJson(json)
+                    }
+                    .setNegativeButton(R.string.cancel, null)
+                    .show()
+            }
         } else if (!AppPreferences.isBackupSetupDeclined(ctx)) {
+            // 未設定備份目錄 → 建議設定
             AlertDialog.Builder(ctx)
                 .setTitle(R.string.filter_backup_setup_title)
                 .setMessage(R.string.filter_backup_setup_message)
@@ -1095,10 +1107,17 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    private fun importBackupJson(json: String) {
+    /**
+     * 合併匯入備份規則（保留現有規則，僅加入新規則）
+     */
+    private fun mergeBackupJson(json: String) {
         val ctx = context ?: return
         try {
-            val result = RuleEngine.importAllFromJson(ctx, json)
+            val result = RuleEngine.mergeFromJson(ctx, json)
+            if (result.isEmpty()) {
+                Toast.makeText(ctx, "備份規則已全部同步，無需匯入", Toast.LENGTH_SHORT).show()
+                return
+            }
             val notifCount = result[ActionType.SKIP_RECORD] ?: 0
             val calCount = result[ActionType.CALENDAR_EXPORT] ?: 0
             val dismissCount = result[ActionType.AUTO_DISMISS] ?: 0
@@ -1138,21 +1157,22 @@ class SettingsFragment : Fragment() {
             Toast.makeText(ctx, R.string.settings_filter_backup_dir_success, Toast.LENGTH_SHORT).show()
             updateBackupDirDisplay()
 
-            // 規則為空且備份檔案存在 → 建議匯入
-            if (RuleEngine.isAllEmpty()) {
-                val json = RuleEngine.readBackupFromDir(ctx)
-                if (json != null) {
+            // 備份檔案存在且有未同步規則 → 建議合併匯入
+            val json = RuleEngine.readBackupFromDir(ctx)
+            if (json != null) {
+                val newCount = RuleEngine.countNewRulesInBackup(json)
+                if (newCount > 0) {
                     AlertDialog.Builder(ctx)
                         .setTitle(R.string.filter_backup_found_title)
-                        .setMessage(R.string.filter_backup_found_message)
+                        .setMessage(getString(R.string.filter_backup_found_message, newCount))
                         .setPositiveButton(R.string.ok) { _, _ ->
-                            importBackupJson(json)
+                            mergeBackupJson(json)
                         }
                         .setNegativeButton(R.string.cancel, null)
                         .show()
                 }
             } else {
-                // 規則非空 → 立即執行一次自動備份
+                // 無備份檔案 → 立即執行一次自動備份
                 RuleEngine.autoBackup(ctx)
             }
         } catch (e: SecurityException) {

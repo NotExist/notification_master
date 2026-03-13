@@ -251,9 +251,9 @@
     <string name="settings_filter_backup_dir_reset_confirm">確定要清除備份目錄設定嗎？\n\n已備份的檔案不會被刪除。</string>
     <string name="settings_filter_backup_dir_reset_done">已清除備份目錄設定</string>
     <string name="filter_backup_found_title">偵測到過濾規則備份</string>
-    <string name="filter_backup_found_message">在備份目錄發現過濾規則備份檔案，是否匯入？</string>
+    <string name="filter_backup_found_message">在備份目錄發現 %d 條尚未同步的規則，是否合併匯入？\n現有規則會保留，僅加入新規則。</string>
     <string name="filter_backup_setup_title">設定過濾規則備份</string>
-    <string name="filter_backup_setup_message">目前尚無過濾規則。\n是否選擇一個目錄作為自動備份位置？\n設定後，規則異動會自動備份到該目錄。</string>
+    <string name="filter_backup_setup_message">是否選擇一個目錄作為自動備份位置？\n設定後，規則異動會自動備份到該目錄。</string>
 
     <!-- 通知自動清除 -->
     <string name="settings_auto_dismiss_title">通知自動清除</string>
