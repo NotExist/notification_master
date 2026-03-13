@@ -11,6 +11,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.os.VibratorManager
+import android.annotation.SuppressLint
 import androidx.core.app.NotificationCompat
 import com.notificationmaster.R
 
@@ -68,7 +70,14 @@ class PersistentAlertManager(private val context: Context) {
 
         // 振動（循環）
         if (vibrate) {
-            vibrator = (context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)?.also {
+            val vib = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager)
+                    .defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            }
+            vibrator = vib.also {
                 val pattern = longArrayOf(0, 500, 500)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     it.vibrate(VibrationEffect.createWaveform(pattern, 0))
@@ -94,6 +103,7 @@ class PersistentAlertManager(private val context: Context) {
         isAlerting = false
     }
 
+    @SuppressLint("NotificationPermission")
     private fun postAlertNotification(notificationKey: String, title: String, text: String?) {
         val stopIntent = Intent(ACTION_STOP_ALERT).apply {
             setPackage(context.packageName)
