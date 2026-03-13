@@ -59,6 +59,9 @@ class NotificationCaptureService : NotificationListenerService() {
     /** 追蹤延遲清除的排程任務，key = notification key */
     private val pendingDismissJobs = ConcurrentHashMap<String, Job>()
 
+    /** 追蹤即時日曆匯出的事件 ID，key = notification key */
+    private val calendarExportMap = ConcurrentHashMap<String, Long>()
+
     companion object {
         private const val TAG = "NotificationCapture"
 
@@ -92,6 +95,7 @@ class NotificationCaptureService : NotificationListenerService() {
 
         pendingDismissJobs.values.forEach { it.cancel() }
         pendingDismissJobs.clear()
+        calendarExportMap.clear()
         PendingIntentCache.clear()
         instance = null
         isConnected = false
@@ -421,6 +425,12 @@ class NotificationCaptureService : NotificationListenerService() {
         } else {
             Log.w(TAG, "Removal event for unknown notification: $key")
         }
+
+        // 即時日曆匯出 — 更新結束時間
+        checkRealtimeCalendarRemoval(
+            key, captureTime, sbn.packageName,
+            if (ApiVersionHelper.supportsNotificationChannel()) sbn.notification.channelId else null
+        )
 
         PendingIntentCache.remove(key)
     }
@@ -774,8 +784,27 @@ class NotificationCaptureService : NotificationListenerService() {
     }
 
     /**
+     * 回找已匯出的日曆事件 ID（記憶體映射 → CalendarContract 查詢）
+     * @param remove 是否從映射中移除（REMOVED 時為 true）
+     */
+    private fun resolveCalendarEventId(notificationKey: String, remove: Boolean): Long {
+        val eventId = if (remove) calendarExportMap.remove(notificationKey) else calendarExportMap[notificationKey]
+        if (eventId != null) return eventId
+
+        val calendarId = AppPreferences.getRealtimeCalendarId(this)
+        if (calendarId < 0) return -1L
+
+        val recovered = calendarExporter.findEventByNotificationKey(calendarId, notificationKey)
+        if (recovered > 0 && !remove) {
+            calendarExportMap[notificationKey] = recovered
+        }
+        return recovered
+    }
+
+    /**
      * 檢查是否需要即時匯出到日曆
      * 條件：即時匯出已啟用 + CALENDAR_EXPORT 白名單匹配
+     * UPDATED 時更新既有事件內容，不建立重複事件
      */
     private fun checkRealtimeCalendarExport(
         entity: NotificationEntity,
@@ -792,11 +821,47 @@ class NotificationCaptureService : NotificationListenerService() {
 
         if (!RuleEngine.matches(ActionType.CALENDAR_EXPORT, matchCtx)) return
 
-        val detailLevel = AppPreferences.getRealtimeCalendarDetailLevel(this)
-        val success = calendarExporter.exportSingleNotification(entity, calendarId, detailLevel)
-        if (success) {
-            Log.d(TAG, "Realtime calendar export: ${entity.packageName}")
+        val key = entity.notificationKey
+        val existingEventId = resolveCalendarEventId(key, remove = false)
+
+        if (existingEventId > 0) {
+            // UPDATED: 更新既有事件內容
+            calendarExporter.updateCalendarEventContent(existingEventId, entity, CalendarExporter.DETAIL_FULL)
+        } else {
+            // 首次 POSTED: 插入新事件並記錄映射
+            val eventId = calendarExporter.exportSingleNotification(entity, calendarId, CalendarExporter.DETAIL_FULL)
+            if (eventId > 0) {
+                calendarExportMap[key] = eventId
+                Log.d(TAG, "Realtime calendar export: ${entity.packageName}")
+            }
         }
+    }
+
+    /**
+     * 通知移除時更新對應日曆事件的結束時間
+     * 輕量級檢查：packageName/channelId 匹配 + EventTypes 包含 REMOVED
+     */
+    private fun checkRealtimeCalendarRemoval(
+        notificationKey: String,
+        removalTime: Long,
+        packageName: String,
+        channelId: String?
+    ) {
+        if (!AppPreferences.isRealtimeCalendarEnabled(this)) return
+
+        val eventId = resolveCalendarEventId(notificationKey, remove = true)
+        if (eventId < 0) return
+
+        // 輕量級規則檢查：只比對 package/channel + EventTypes
+        val shouldUpdate = RuleEngine.getRules(ActionType.CALENDAR_EXPORT).any { rule ->
+            rule.packageName == packageName &&
+            (rule.channelId == null || rule.channelId == channelId) &&
+            "REMOVED" in rule.eventTypes
+        }
+        if (!shouldUpdate) return
+
+        calendarExporter.updateCalendarEventEndTime(eventId, removalTime)
+        Log.d(TAG, "Updated calendar event end time for: $notificationKey")
     }
 
     /**

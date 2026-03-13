@@ -2,7 +2,6 @@ package com.notificationmaster.core.prefs
 
 import android.content.Context
 import android.net.Uri
-import com.notificationmaster.export.calendar.CalendarExporter
 
 /**
  * App 偏好設定管理
@@ -100,8 +99,6 @@ object AppPreferences {
     private const val KEY_REALTIME_CALENDAR_ENABLED = "realtime_calendar_enabled"
     private const val KEY_REALTIME_CALENDAR_ID = "realtime_calendar_id"
     private const val KEY_REALTIME_CALENDAR_NAME = "realtime_calendar_name"
-    private const val KEY_REALTIME_CALENDAR_DETAIL_LEVEL = "realtime_calendar_detail_level"
-
     fun isRealtimeCalendarEnabled(context: Context): Boolean =
         prefs(context).getBoolean(KEY_REALTIME_CALENDAR_ENABLED, false)
 
@@ -124,21 +121,11 @@ object AppPreferences {
     fun getRealtimeCalendarName(context: Context): String? =
         prefs(context).getString(KEY_REALTIME_CALENDAR_NAME, null)
 
-    fun getRealtimeCalendarDetailLevel(context: Context): Int =
-        prefs(context).getInt(KEY_REALTIME_CALENDAR_DETAIL_LEVEL, CalendarExporter.DETAIL_WITH_CONTENT)
-
-    fun setRealtimeCalendarDetailLevel(context: Context, level: Int) {
-        prefs(context).edit()
-            .putInt(KEY_REALTIME_CALENDAR_DETAIL_LEVEL, level)
-            .apply()
-    }
-
     fun clearRealtimeCalendar(context: Context) {
         prefs(context).edit()
             .remove(KEY_REALTIME_CALENDAR_ENABLED)
             .remove(KEY_REALTIME_CALENDAR_ID)
             .remove(KEY_REALTIME_CALENDAR_NAME)
-            .remove(KEY_REALTIME_CALENDAR_DETAIL_LEVEL)
             .apply()
     }
 

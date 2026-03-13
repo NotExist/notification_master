@@ -208,8 +208,8 @@ class CalendarExporter(private val context: Context) {
 
         for (notification in notifications) {
             try {
-                insertCalendarEvent(notification, calendarId, detailLevel)
-                successCount++
+                val eventId = insertCalendarEvent(notification, calendarId, detailLevel)
+                if (eventId > 0) successCount++ else failCount++
             } catch (e: Exception) {
                 failCount++
                 if (errors.size < 5) {
@@ -227,31 +227,31 @@ class CalendarExporter(private val context: Context) {
 
     /**
      * 匯出單筆通知到日曆（即時匯出用）
-     * @return 成功 true / 失敗 false
+     * @return 事件 ID（>0 表示成功），-1L 表示失敗
      */
     fun exportSingleNotification(
         notification: NotificationEntity,
         calendarId: Long,
         detailLevel: Int = DETAIL_WITH_CONTENT
-    ): Boolean {
-        if (!hasCalendarPermission()) return false
+    ): Long {
+        if (!hasCalendarPermission()) return -1L
         return try {
             insertCalendarEvent(notification, calendarId, detailLevel)
-            true
         } catch (e: Exception) {
             Log.w(TAG, "Failed to export notification to calendar", e)
-            false
+            -1L
         }
     }
 
     /**
      * 插入單筆日曆事件
+     * @return 事件 ID（>0 表示成功），-1L 表示失敗
      */
     private fun insertCalendarEvent(
         notification: NotificationEntity,
         calendarId: Long,
         detailLevel: Int
-    ): Uri? {
+    ): Long {
         val title = buildEventTitle(notification, detailLevel)
         val description = buildEventDescription(notification, detailLevel)
 
@@ -260,13 +260,83 @@ class CalendarExporter(private val context: Context) {
             put(CalendarContract.Events.TITLE, title)
             put(CalendarContract.Events.DESCRIPTION, description)
             put(CalendarContract.Events.DTSTART, notification.postTime)
-            put(CalendarContract.Events.DTEND, notification.postTime + 60_000) // 1 分鐘
+            put(CalendarContract.Events.DTEND, notification.postTime)  // 零長度，REMOVED 時更新
             put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
             put(CalendarContract.Events.HAS_ALARM, 0)
             put(CalendarContract.Events.STATUS, CalendarContract.Events.STATUS_CONFIRMED)
+            put(CalendarContract.Events.CUSTOM_APP_URI, notification.notificationKey)
         }
 
-        return context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
+        val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
+        return if (uri != null) ContentUris.parseId(uri) else -1L
+    }
+
+    /**
+     * 更新日曆事件的結束時間
+     * @return 是否成功
+     */
+    fun updateCalendarEventEndTime(eventId: Long, endTime: Long): Boolean {
+        if (!hasCalendarPermission()) return false
+        return try {
+            val values = ContentValues().apply {
+                put(CalendarContract.Events.DTEND, endTime)
+            }
+            val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
+            context.contentResolver.update(uri, values, null, null) > 0
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to update calendar event end time", e)
+            false
+        }
+    }
+
+    /**
+     * 更新日曆事件的標題和描述（UPDATED 通知用）
+     * @return 是否成功
+     */
+    fun updateCalendarEventContent(eventId: Long, notification: NotificationEntity, detailLevel: Int): Boolean {
+        if (!hasCalendarPermission()) return false
+        return try {
+            val title = buildEventTitle(notification, detailLevel)
+            val description = buildEventDescription(notification, detailLevel)
+            val values = ContentValues().apply {
+                put(CalendarContract.Events.TITLE, title)
+                put(CalendarContract.Events.DESCRIPTION, description)
+            }
+            val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
+            context.contentResolver.update(uri, values, null, null) > 0
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to update calendar event content", e)
+            false
+        }
+    }
+
+    /**
+     * 透過 CUSTOM_APP_URI（notification_key）回找日曆事件
+     * @return 事件 ID（>0 表示找到），-1L 表示未找到
+     */
+    fun findEventByNotificationKey(calendarId: Long, notificationKey: String): Long {
+        if (!hasCalendarPermission()) return -1L
+        return try {
+            val projection = arrayOf(CalendarContract.Events._ID)
+            val selection = "${CalendarContract.Events.CALENDAR_ID} = ? AND " +
+                    "${CalendarContract.Events.CUSTOM_APP_URI} = ?"
+            val selectionArgs = arrayOf(calendarId.toString(), notificationKey)
+
+            context.contentResolver.query(
+                CalendarContract.Events.CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    cursor.getLong(0)
+                } else -1L
+            } ?: -1L
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to find calendar event by notification key", e)
+            -1L
+        }
     }
 
     private fun buildEventTitle(notification: NotificationEntity, @Suppress("UNUSED_PARAMETER") detailLevel: Int): String {

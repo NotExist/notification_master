@@ -173,6 +173,7 @@ object FilterRuleDialogHelper {
             dropdownCategory.setOnItemClickListener { _, _, position, _ ->
                 selectedCategoryIndex = position
                 updateDismissDelayVisibility(categoryValues[position])
+                updateEventTypeAvailability(categoryValues[position])
             }
         }
 
@@ -255,10 +256,29 @@ object FilterRuleDialogHelper {
             containerEventTypes.addView(cb)
         }
 
+        // === EventType 可選限制 ===
+        /** 根據有效的 actionType 更新 EventType checkbox 可選狀態 */
+        fun updateEventTypeAvailability(effectiveType: ActionType) {
+            val enabledTypes = when (effectiveType) {
+                ActionType.CALENDAR_EXPORT -> setOf(EventType.POSTED, EventType.UPDATED, EventType.REMOVED)
+                else -> EventType.entries.toSet()
+            }
+            eventTypes.forEachIndexed { i, et ->
+                checkBoxes[i].isEnabled = et in enabledTypes
+                if (et !in enabledTypes) checkBoxes[i].isChecked = false
+            }
+        }
+
+        // 固定 actionType 或編輯模式時套用限制
+        if (effectiveActionType != null) {
+            updateEventTypeAvailability(effectiveActionType)
+        }
+
         // === 全選按鈕 ===
         btnSelectAll.setOnClickListener {
-            val allChecked = checkBoxes.all { it.isChecked }
-            checkBoxes.forEach { it.isChecked = !allChecked }
+            val enabledBoxes = checkBoxes.filter { it.isEnabled }
+            val allChecked = enabledBoxes.all { it.isChecked }
+            enabledBoxes.forEach { it.isChecked = !allChecked }
         }
 
         // === AutoComplete 資料載入 ===
@@ -332,8 +352,8 @@ object FilterRuleDialogHelper {
                 }
                 layoutPackageName.error = null
 
-                // 驗證至少選一個 EventType
-                val selectedEventTypes = eventTypes.filterIndexed { i, _ -> checkBoxes[i].isChecked }
+                // 驗證至少選一個已啟用的 EventType
+                val selectedEventTypes = eventTypes.filterIndexed { i, _ -> checkBoxes[i].isChecked && checkBoxes[i].isEnabled }
                     .map { it.name }
                     .toSet()
                 if (selectedEventTypes.isEmpty()) {

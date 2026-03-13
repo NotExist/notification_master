@@ -755,7 +755,6 @@ class SettingsFragment : Fragment() {
                 AppPreferences.setRealtimeCalendarTarget(requireContext(), cal.id, cal.displayName)
                 AppPreferences.setRealtimeCalendarEnabled(requireContext(), true)
                 setRealtimeSwitchChecked(true)
-                showRealtimeDetailLevelPicker()
                 updateRealtimeCalendarDisplay()
             }
             .setNegativeButton(R.string.cancel) { _, _ ->
@@ -768,20 +767,6 @@ class SettingsFragment : Fragment() {
         isUpdatingRealtimeSwitch = true
         _binding?.switchRealtimeCalendar?.isChecked = checked
         isUpdatingRealtimeSwitch = false
-    }
-
-    private fun showRealtimeDetailLevelPicker() {
-        val levels = arrayOf("僅標題", "含內容", "完整資訊")
-        val currentLevel = AppPreferences.getRealtimeCalendarDetailLevel(requireContext())
-
-        AlertDialog.Builder(requireContext())
-            .setTitle(R.string.settings_realtime_detail_level)
-            .setSingleChoiceItems(levels, currentLevel) { dialog, which ->
-                AppPreferences.setRealtimeCalendarDetailLevel(requireContext(), which)
-                dialog.dismiss()
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
     }
 
     private fun updateRealtimeCalendarDisplay() {
