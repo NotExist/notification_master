@@ -55,33 +55,10 @@ class MainActivity : AppCompatActivity() {
 
         setupActionBarWithNavController(navController, appBarConfiguration)
         binding.bottomNav.setupWithNavController(navController)
-
-        // 子目的地 → 所屬 tab 的對應表
-        // setupWithNavController 的 matchDestination 只匹配頂層 destination ID，
-        // 非巢狀子目的地（如 nav_archive_detail）還原 back stack 後 tab 不會跟著選中。
-        val childToTabMap = mapOf(
-            R.id.nav_archive_detail to R.id.nav_archive,
-            R.id.nav_home to R.id.nav_settings,
-            R.id.nav_filter_settings to R.id.nav_settings
-        )
-        navController.addOnDestinationChangedListener { controller, destination, _ ->
-            // 頂層目的地由 setupWithNavController 自動處理，不干預
-            if (binding.bottomNav.menu.findItem(destination.id) != null) return@addOnDestinationChangedListener
-
-            // 子目的地：先查靜態對應表
-            val tabId = childToTabMap[destination.id]
-                ?: run {
-                    // 未映射的共用目的地（如 nav_detail 可從 Timeline 或 Archive 進入），
-                    // 從 back stack 的上一層推斷所屬 tab
-                    controller.previousBackStackEntry?.destination?.id?.let { prevId ->
-                        childToTabMap[prevId]
-                            ?: prevId.takeIf { binding.bottomNav.menu.findItem(it) != null }
-                    }
-                }
-            if (tabId != null && binding.bottomNav.selectedItemId != tabId) {
-                binding.bottomNav.menu.findItem(tabId)?.isChecked = true
-            }
-        }
+        // setupWithNavController 預設行為：
+        // - 頂層目的地 → 自動選取對應 tab
+        // - 非頂層目的地 → tab 保持原狀（使用者從哪個 tab 進入就停在哪個 tab）
+        // 不需要自訂 OnDestinationChangedListener
     }
 
     override fun onNewIntent(intent: Intent) {
