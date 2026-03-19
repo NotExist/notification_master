@@ -1,6 +1,7 @@
 package com.notificationmaster.export.calendar
 
 import android.Manifest
+import android.content.ContentProviderOperation
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
@@ -30,7 +31,7 @@ class CalendarExporter(private val context: Context) {
         const val DETAIL_FULL = 2
 
         /** Local Calendar 常數 */
-        const val LOCAL_CALENDAR_NAME = "Notification Master"
+        const val LOCAL_CALENDAR_NAME = "Local SyncAdapter"
         const val LOCAL_ACCOUNT_TYPE = CalendarContract.ACCOUNT_TYPE_LOCAL
         const val LOCAL_ACCOUNT_NAME = "Notification Master"
     }
@@ -255,20 +256,31 @@ class CalendarExporter(private val context: Context) {
         val title = buildEventTitle(notification, detailLevel)
         val description = buildEventDescription(notification, detailLevel)
 
-        val values = ContentValues().apply {
-            put(CalendarContract.Events.CALENDAR_ID, calendarId)
-            put(CalendarContract.Events.TITLE, title)
-            put(CalendarContract.Events.DESCRIPTION, description)
-            put(CalendarContract.Events.DTSTART, notification.postTime)
-            put(CalendarContract.Events.DTEND, notification.postTime)  // 零長度，REMOVED 時更新
-            put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
-            put(CalendarContract.Events.HAS_ALARM, 0)
-            put(CalendarContract.Events.STATUS, CalendarContract.Events.STATUS_CONFIRMED)
-            put(CalendarContract.Events.CUSTOM_APP_URI, notification.notificationKey)
-        }
+        val ops = arrayListOf(
+            // Op 0: 插入事件
+            ContentProviderOperation.newInsert(CalendarContract.Events.CONTENT_URI)
+                .withValue(CalendarContract.Events.CALENDAR_ID, calendarId)
+                .withValue(CalendarContract.Events.TITLE, title)
+                .withValue(CalendarContract.Events.DESCRIPTION, description)
+                .withValue(CalendarContract.Events.EVENT_LOCATION, buildEventLocation(notification))
+                .withValue(CalendarContract.Events.DTSTART, notification.postTime)
+                .withValue(CalendarContract.Events.DTEND, notification.postTime)
+                .withValue(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+                .withValue(CalendarContract.Events.HAS_ALARM, 0)
+                .withValue(CalendarContract.Events.STATUS, CalendarContract.Events.STATUS_TENTATIVE)
+                .withValue(CalendarContract.Events.CUSTOM_APP_URI, notification.notificationKey)
+                .build(),
+            // Op 1: 附加 URL 擴充屬性，EVENT_ID 回參 Op 0
+            ContentProviderOperation.newInsert(CalendarContract.ExtendedProperties.CONTENT_URI)
+                .withValueBackReference(CalendarContract.ExtendedProperties.EVENT_ID, 0)
+                .withValue(CalendarContract.ExtendedProperties.NAME, "URL")
+                .withValue(CalendarContract.ExtendedProperties.VALUE, notification.notificationKey)
+                .build()
+        )
 
-        val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
-        return if (uri != null) ContentUris.parseId(uri) else -1L
+        val results = context.contentResolver.applyBatch(CalendarContract.AUTHORITY, ops)
+        val eventUri = results[0].uri
+        return if (eventUri != null) ContentUris.parseId(eventUri) else -1L
     }
 
     /**
@@ -301,6 +313,7 @@ class CalendarExporter(private val context: Context) {
             val values = ContentValues().apply {
                 put(CalendarContract.Events.TITLE, title)
                 put(CalendarContract.Events.DESCRIPTION, description)
+                put(CalendarContract.Events.EVENT_LOCATION, buildEventLocation(notification))
             }
             val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
             context.contentResolver.update(uri, values, null, null) > 0
@@ -345,29 +358,48 @@ class CalendarExporter(private val context: Context) {
         return "[$appName] $title"
     }
 
+    private fun buildEventLocation(notification: NotificationEntity): String {
+        val channelId = notification.channelId
+        return if (channelId != null) {
+            "$channelId / ${notification.packageName}"
+        } else {
+            notification.packageName
+        }
+    }
+
     private fun buildEventDescription(notification: NotificationEntity, detailLevel: Int): String {
         return buildString {
-            append("來源: ${notification.packageName}\n")
-
             when (detailLevel) {
                 DETAIL_TITLE_ONLY -> {
-                    // 只有標題，不含內容
+                    // 只有標題（已在 title 欄位），描述留空
                 }
                 DETAIL_WITH_CONTENT -> {
-                    notification.text?.let { append("內容: $it\n") }
+                    // bigText 是 text 的完整版，優先使用避免重複
+                    val content = notification.bigText ?: notification.text
+                    content?.let { append(it) }
                 }
                 DETAIL_FULL -> {
-                    notification.text?.let { append("內容: $it\n") }
-                    notification.bigText?.let { append("展開: $it\n") }
-                    notification.subText?.let { append("副文: $it\n") }
-                    append("Channel: ${notification.channelId ?: "N/A"}\n")
-                    append("Key: ${notification.notificationKey}\n")
-                    if (notification.isOngoing) append("標記: Ongoing\n")
-                    if (notification.isForegroundService) append("標記: Foreground Service\n")
+                    // 主要內容：bigText 優先（text 的完整版），不帶前綴
+                    val mainContent = notification.bigText ?: notification.text
+                    mainContent?.let { append(it) }
+
+                    // subText 獨立於 text/bigText，有值時換行附加
+                    notification.subText?.let {
+                        if (isNotEmpty()) append("\n")
+                        append(it)
+                    }
+
+                    // Metadata 區塊（僅有 flags 時才顯示）
+                    val flags = mutableListOf<String>()
+                    if (notification.isOngoing) flags.add("Ongoing")
+                    if (notification.isForegroundService) flags.add("FG Service")
+                    if (flags.isNotEmpty()) {
+                        append("\n\n-- NotificationMaster --\n")
+                        append("Flags: ${flags.joinToString(", ")}")
+                        append("\n-- NotificationMaster --")
+                    }
                 }
             }
-
-            append("\n-- Notification Master --")
         }
     }
 }
