@@ -65,6 +65,10 @@
             app:argType="string"
             android:defaultValue="" />
 
+        <action
+            android:id="@+id/action_search_to_detail"
+            app:destination="@id/nav_detail" />
+
     </fragment>
 
     <fragment

@@ -5,10 +5,13 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
+import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.notificationmaster.NotificationMasterApp
+import com.notificationmaster.R
 import com.notificationmaster.databinding.FragmentSearchBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -56,8 +59,11 @@ class SearchFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        notificationAdapter = NotificationAdapter { _ ->
-            // TODO: 導航到通知詳情
+        notificationAdapter = NotificationAdapter { notification ->
+            findNavController().navigate(
+                R.id.action_search_to_detail,
+                bundleOf("notificationId" to notification.id)
+            )
         }
 
         binding.recyclerView.apply {
