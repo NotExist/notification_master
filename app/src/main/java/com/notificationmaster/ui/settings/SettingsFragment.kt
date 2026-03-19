@@ -861,13 +861,16 @@ class SettingsFragment : Fragment() {
         val ctx = context ?: return
         val b = _binding ?: return
         val enabled = AppPreferences.isRealtimeCalendarEnabled(ctx)
-        b.layoutRealtimeCalendarOptions.visibility = if (enabled) View.VISIBLE else View.GONE
         val calName = AppPreferences.getRealtimeCalendarName(ctx)
-        b.textRealtimeCalendarStatus.text = if (enabled && calName != null) {
-            getString(R.string.settings_realtime_calendar_target, calName)
-        } else {
-            getString(R.string.settings_realtime_calendar_off)
-        }
+
+        // Switch 旁狀態文字：僅顯示啟用/未啟用
+        b.textRealtimeCalendarStatus.text = getString(
+            if (enabled) R.string.settings_realtime_calendar_on
+            else R.string.settings_realtime_calendar_off
+        )
+
+        // 展開區塊：目標日曆名稱顯示在按鈕下方
+        b.layoutRealtimeCalendarOptions.visibility = if (enabled) View.VISIBLE else View.GONE
         if (enabled && calName != null) {
             b.textTargetCalendarName.text = getString(R.string.settings_realtime_calendar_target, calName)
             b.textTargetCalendarName.visibility = View.VISIBLE

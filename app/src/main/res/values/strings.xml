@@ -182,6 +182,7 @@
     <!-- 即時日曆匯出 -->
     <string name="settings_realtime_calendar">即時匯出到日曆</string>
     <string name="settings_realtime_calendar_off">未啟用</string>
+    <string name="settings_realtime_calendar_on">已啟用</string>
     <string name="settings_realtime_calendar_target">目標：%s</string>
     <string name="settings_choose_target_calendar">選擇目標日曆</string>
     <string name="calendar_picker_title">選擇即時匯出目標日曆</string>
