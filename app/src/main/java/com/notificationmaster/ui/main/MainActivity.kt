@@ -65,7 +65,10 @@ class MainActivity : AppCompatActivity() {
             R.id.nav_filter_settings to R.id.nav_settings
         )
         navController.addOnDestinationChangedListener { controller, destination, _ ->
-            // 先查靜態對應表
+            // 頂層目的地由 setupWithNavController 自動處理，不干預
+            if (binding.bottomNav.menu.findItem(destination.id) != null) return@addOnDestinationChangedListener
+
+            // 子目的地：先查靜態對應表
             val tabId = childToTabMap[destination.id]
                 ?: run {
                     // 未映射的共用目的地（如 nav_detail 可從 Timeline 或 Archive 進入），
