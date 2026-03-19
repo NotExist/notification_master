@@ -668,28 +668,12 @@ class SettingsFragment : Fragment() {
 
     private fun showCalendarPicker() {
         val calendarExporter = CalendarExporter(requireContext())
-        // 確保 local calendar 存在
-        calendarExporter.getOrCreateLocalCalendar()
-        val calendars = calendarExporter.getAvailableCalendars()
-
-        if (calendars.isEmpty()) {
-            Toast.makeText(requireContext(), "找不到可用的日曆", Toast.LENGTH_SHORT).show()
-            return
+        showCalendarPickerDialog(
+            title = R.string.calendar_picker_title,
+            exporter = calendarExporter
+        ) { cal ->
+            showCalendarDetailLevelPicker(cal.id, calendarExporter)
         }
-
-        val names = calendars.map { cal ->
-            if (cal.isLocal) cal.displayName
-            else "${cal.displayName} (${cal.accountName})"
-        }.toTypedArray()
-
-        AlertDialog.Builder(requireContext())
-            .setTitle("選擇目標日曆")
-            .setItems(names) { _, which ->
-                val calendar = calendars[which]
-                showCalendarDetailLevelPicker(calendar.id, calendarExporter)
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
     }
 
     private fun showCalendarDetailLevelPicker(calendarId: Long, exporter: CalendarExporter) {
@@ -804,14 +788,32 @@ class SettingsFragment : Fragment() {
     }
 
     private fun showTargetCalendarPicker() {
-        val exporter = CalendarExporter(requireContext())
-        // 確保 local calendar 存在
+        showCalendarPickerDialog(
+            title = R.string.calendar_picker_title,
+            onCancel = { setRealtimeSwitchChecked(false) }
+        ) { cal ->
+            AppPreferences.setRealtimeCalendarTarget(requireContext(), cal.id, cal.displayName)
+            AppPreferences.setRealtimeCalendarEnabled(requireContext(), true)
+            setRealtimeSwitchChecked(true)
+            updateRealtimeCalendarDisplay()
+        }
+    }
+
+    /**
+     * 共用日曆選擇 Dialog（雙行佈局：displayName + accountName · accountType）
+     */
+    private fun showCalendarPickerDialog(
+        title: Int,
+        exporter: CalendarExporter = CalendarExporter(requireContext()),
+        onCancel: (() -> Unit)? = null,
+        onSelected: (CalendarInfo) -> Unit
+    ) {
         exporter.getOrCreateLocalCalendar()
         val calendars = exporter.getAvailableCalendars()
 
         if (calendars.isEmpty()) {
             Toast.makeText(requireContext(), "找不到可用的日曆", Toast.LENGTH_SHORT).show()
-            setRealtimeSwitchChecked(false)
+            onCancel?.invoke()
             return
         }
 
@@ -842,17 +844,9 @@ class SettingsFragment : Fragment() {
         }
 
         AlertDialog.Builder(requireContext())
-            .setTitle(R.string.calendar_picker_title)
-            .setAdapter(adapter) { _, which ->
-                val cal = calendars[which]
-                AppPreferences.setRealtimeCalendarTarget(requireContext(), cal.id, cal.displayName)
-                AppPreferences.setRealtimeCalendarEnabled(requireContext(), true)
-                setRealtimeSwitchChecked(true)
-                updateRealtimeCalendarDisplay()
-            }
-            .setNegativeButton(R.string.cancel) { _, _ ->
-                setRealtimeSwitchChecked(false)
-            }
+            .setTitle(title)
+            .setAdapter(adapter) { _, which -> onSelected(calendars[which]) }
+            .setNegativeButton(R.string.cancel) { _, _ -> onCancel?.invoke() }
             .show()
     }
 

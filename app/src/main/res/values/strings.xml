@@ -27,7 +27,7 @@
     <string name="settings_debug_mode_summary">將原始通知資料 dump 到外部儲存</string>
     <string name="settings_debug_clear">清除 Debug 資料</string>
     <string name="settings_calendar_integration">日曆整合</string>
-    <string name="settings_export_ical">匯出到系統日曆</string>
+    <string name="settings_export_ical">匯出到指定日曆</string>
     <string name="settings_export_json">匯出為 JSON 封存</string>
     <string name="settings_import_json">匯入 JSON 封存</string>
     <string name="settings_storage">儲存空間</string>
@@ -276,6 +276,8 @@
 
     <!-- Keyword matcher -->
     <string name="filter_keyword_title">關鍵字匹配（選填）</string>
+    <string name="filter_keyword_expand">▶ 關鍵字條件…</string>
+    <string name="filter_keyword_collapse">▼ 關鍵字條件</string>
     <string name="filter_keyword_pattern_hint">搜尋關鍵字或正規表示式</string>
     <string name="filter_keyword_regex">使用正規表示式</string>
     <string name="filter_keyword_field_title">標題</string>
@@ -284,6 +286,13 @@
     <string name="filter_keyword_field_sub_text">副標題</string>
     <string name="filter_keyword_field_required">請至少選擇一個搜尋欄位</string>
     <string name="filter_keyword_display">%1$s (%2$s)</string>
+
+    <!-- 規則預覽 -->
+    <string name="filter_preview_match">預覽匹配結果</string>
+    <string name="filter_preview_title">匹配結果（最近 %d 筆中）</string>
+    <string name="filter_preview_count">符合 %d 筆</string>
+    <string name="filter_preview_empty">無符合的通知</string>
+    <string name="filter_preview_package_required">請先填寫 Package Name</string>
 
     <!-- ChannelProperty matcher -->
     <string name="filter_channel_property_title">Channel 屬性匹配（選填）</string>
