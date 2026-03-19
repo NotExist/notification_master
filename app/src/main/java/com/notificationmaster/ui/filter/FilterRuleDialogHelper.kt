@@ -87,9 +87,20 @@ object FilterRuleDialogHelper {
         val editDismissDelayCustom = dialogView.findViewById<TextInputEditText>(R.id.edit_dismiss_delay_custom)
 
         // Keyword 相關 views
+        val btnToggleKeyword = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_toggle_keyword)
+        val layoutKeywordSection = dialogView.findViewById<LinearLayout>(R.id.layout_keyword_section)
         val editKeywordPattern = dialogView.findViewById<TextInputEditText>(R.id.edit_keyword_pattern)
         val containerKeywordFields = dialogView.findViewById<LinearLayout>(R.id.container_keyword_fields)
         val switchKeywordRegex = dialogView.findViewById<MaterialSwitch>(R.id.switch_keyword_regex)
+
+        // Keyword 區塊收合/展開
+        btnToggleKeyword.setOnClickListener {
+            val expanded = layoutKeywordSection.visibility == View.VISIBLE
+            layoutKeywordSection.visibility = if (expanded) View.GONE else View.VISIBLE
+            btnToggleKeyword.text = context.getString(
+                if (expanded) R.string.filter_keyword_expand else R.string.filter_keyword_collapse
+            )
+        }
 
         // ChannelProperty 相關 views
         val labelChannelProperty = dialogView.findViewById<View>(R.id.label_channel_property)
@@ -292,6 +303,9 @@ object FilterRuleDialogHelper {
                 editKeywordPattern.setText(kw.pattern)
                 switchKeywordRegex.isChecked = kw.isRegex
                 keywordFieldCheckBoxes.forEach { (field, cb) -> cb.isChecked = field in kw.fields }
+                // 有 keyword matcher 時自動展開
+                layoutKeywordSection.visibility = View.VISIBLE
+                btnToggleKeyword.text = context.getString(R.string.filter_keyword_collapse)
             }
             existingRule.matchers.filterIsInstance<Matcher.ChannelProperty>().firstOrNull()?.let { cp ->
                 cp.minImportance?.let { imp ->
@@ -302,6 +316,72 @@ object FilterRuleDialogHelper {
                     }
                 }
                 cp.groupId?.let { editGroupId.setText(it) }
+            }
+        }
+
+        // === 預覽匹配結果 ===
+        val btnPreviewMatch = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_preview_match)
+        btnPreviewMatch.setOnClickListener {
+            val packageName = editPackageName.text.toString().trim()
+            if (packageName.isEmpty()) {
+                Toast.makeText(context, R.string.filter_preview_package_required, Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            // 建構臨時 matcher 列表
+            val tempMatchers = mutableListOf<Matcher>(Matcher.Package(packageName))
+            val channelId = editChannelId.text.toString().trim().ifEmpty { null }
+            if (channelId != null) tempMatchers.add(Matcher.Channel(channelId))
+            val selectedETs = eventTypes.filterIndexed { i, _ -> checkBoxes[i].isChecked && checkBoxes[i].isEnabled }
+                .map { it.name }.toSet()
+            if (selectedETs.isNotEmpty()) tempMatchers.add(Matcher.EventTypes(selectedETs))
+            val kwPattern = editKeywordPattern.text?.toString()?.trim().orEmpty()
+            if (kwPattern.isNotEmpty()) {
+                val selectedFields = keywordFieldCheckBoxes.filter { it.value.isChecked }.keys
+                if (selectedFields.isNotEmpty()) {
+                    tempMatchers.add(Matcher.Keyword(kwPattern, selectedFields, switchKeywordRegex.isChecked))
+                }
+            }
+            val gid = editGroupId.text?.toString()?.trim()?.ifEmpty { null }
+            if (selectedImportance != null || gid != null) {
+                tempMatchers.add(Matcher.ChannelProperty(minImportance = selectedImportance, groupId = gid))
+            }
+            val tempRule = Rule(matchers = tempMatchers, action = RuleAction.SkipRecord)
+
+            val previewLimit = 200
+            scope.launch {
+                val notifications = withContext(Dispatchers.IO) {
+                    database.notificationDao().getNotificationsPaged(previewLimit, 0)
+                }
+                val matched = notifications.filter { n ->
+                    val mc = com.notificationmaster.core.filter.MatchContext(
+                        packageName = n.packageName,
+                        channelId = n.channelId,
+                        // eventType 不在 NotificationEntity 中，設 null 使 EventTypes matcher 通過
+                        title = n.title,
+                        text = n.text,
+                        bigText = n.bigText,
+                        subText = n.subText
+                    )
+                    tempRule.matches(mc)
+                }
+
+                if (matched.isEmpty()) {
+                    Toast.makeText(context, R.string.filter_preview_empty, Toast.LENGTH_SHORT).show()
+                } else {
+                    val items = matched.take(20).map { n ->
+                        val title = n.title ?: context.getString(R.string.no_title)
+                        val text = n.text ?: ""
+                        if (text.isNotEmpty()) "$title — $text" else title
+                    }.toTypedArray()
+
+                    AlertDialog.Builder(context)
+                        .setTitle(context.getString(R.string.filter_preview_title, previewLimit))
+                        .setMessage(context.getString(R.string.filter_preview_count, matched.size))
+                        .setItems(items, null)
+                        .setPositiveButton(R.string.ok, null)
+                        .show()
+                }
             }
         }
 
