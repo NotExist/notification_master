@@ -12,7 +12,8 @@ enum class ActionType {
     SKIP_RECORD,
     CALENDAR_EXPORT,
     AUTO_DISMISS,
-    PERSISTENT_ALERT
+    PERSISTENT_ALERT,
+    CLIPBOARD_COPY
 }
 
 /**
@@ -213,6 +214,12 @@ sealed interface RuleAction {
         }
     }
 
+    /** 複製到剪貼簿（CLIPBOARD_COPY） */
+    data object ClipboardCopy : RuleAction {
+        override val actionType = ActionType.CLIPBOARD_COPY
+        override fun toJson() = JSONObject().apply { put("type", "ClipboardCopy") }
+    }
+
     companion object {
         fun fromJson(json: JSONObject): RuleAction = when (val type = json.getString("type")) {
             "SkipRecord" -> SkipRecord
@@ -222,6 +229,7 @@ sealed interface RuleAction {
                 soundUri = if (json.isNull("soundUri")) null else json.getString("soundUri"),
                 vibrate = json.optBoolean("vibrate", true)
             )
+            "ClipboardCopy" -> ClipboardCopy
             else -> throw IllegalArgumentException("Unknown action type: $type")
         }
     }

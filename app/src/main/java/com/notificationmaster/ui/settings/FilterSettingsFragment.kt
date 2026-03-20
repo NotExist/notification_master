@@ -86,6 +86,10 @@ class FilterSettingsFragment : Fragment() {
                 binding.textEmptyTitle.setText(R.string.persistent_alert_empty)
                 binding.textEmptyHint.setText(R.string.persistent_alert_empty_hint)
             }
+            ActionType.CLIPBOARD_COPY -> {
+                binding.textEmptyTitle.setText(R.string.clipboard_copy_empty)
+                binding.textEmptyHint.setText(R.string.clipboard_copy_empty_hint)
+            }
         }
 
         binding.recyclerRules.adapter = adapter

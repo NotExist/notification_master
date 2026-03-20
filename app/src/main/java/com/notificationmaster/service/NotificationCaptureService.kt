@@ -1,5 +1,8 @@
 package com.notificationmaster.service
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -14,7 +17,9 @@ import com.notificationmaster.core.NotificationExtractor
 import com.notificationmaster.core.cache.PendingIntentCache
 import com.notificationmaster.core.alert.PersistentAlertManager
 import com.notificationmaster.core.filter.ActionType
+import com.notificationmaster.core.filter.KeywordField
 import com.notificationmaster.core.filter.MatchContext
+import com.notificationmaster.core.filter.Matcher
 import com.notificationmaster.core.filter.RuleAction
 import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.compat.ApiVersionHelper
@@ -372,6 +377,7 @@ class NotificationCaptureService : NotificationListenerService() {
         if (eventType != EventType.INITIAL) {
             checkRealtimeCalendarExport(entity, matchCtx)
             checkPersistentAlert(entity, matchCtx)
+            checkClipboardCopy(entity, matchCtx)
         }
 
         Log.d(TAG, "Saved notification: $notificationId, event: $eventType")
@@ -879,6 +885,60 @@ class NotificationCaptureService : NotificationListenerService() {
         val action = rule.action as RuleAction.PersistentAlert
         val title = "[${entity.packageName.substringAfterLast('.')}] ${entity.title ?: "通知"}"
         alertManager.startAlert(entity.notificationKey, title, entity.text, action.soundUri, action.vibrate)
+    }
+
+    /**
+     * 檢查是否需要複製通知內容到剪貼簿
+     *
+     * 無 regex：複製 title + 最完整內容（bigText ?: text）
+     * 有 regex：對每個匹配欄位提取所有 capture group，各欄位獨立複製到剪貼簿
+     */
+    private fun checkClipboardCopy(entity: NotificationEntity, matchCtx: MatchContext) {
+        val rule = RuleEngine.findMatchingRule(ActionType.CLIPBOARD_COPY, matchCtx) ?: return
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+
+        val keywordMatcher = rule.matchers.filterIsInstance<Matcher.Keyword>().firstOrNull()
+
+        if (keywordMatcher != null && keywordMatcher.isRegex) {
+            // Regex 模式：對每個匹配欄位提取 capture group，各自獨立複製
+            val regex = try { Regex(keywordMatcher.pattern) } catch (_: Exception) { return }
+            val fieldTexts = keywordMatcher.fields.mapNotNull { field ->
+                when (field) {
+                    KeywordField.TITLE -> matchCtx.title
+                    KeywordField.TEXT -> matchCtx.text
+                    KeywordField.BIG_TEXT -> matchCtx.bigText
+                    KeywordField.SUB_TEXT -> matchCtx.subText
+                }?.let { field to it }
+            }
+            for ((field, text) in fieldTexts) {
+                val allMatches = regex.findAll(text).toList()
+                if (allMatches.isEmpty()) continue
+                // 所有 match 的所有 group values，空白分隔
+                val groups = allMatches.flatMap { result ->
+                    result.groupValues
+                }
+                val clipText = groups.joinToString(" ")
+                clipboard.setPrimaryClip(
+                    ClipData.newPlainText("NM:${field.name}", clipText)
+                )
+                Log.d(TAG, "Clipboard copy (regex ${field.name}): ${clipText.take(50)}")
+            }
+        } else {
+            // 非 regex：複製 title + 最完整內容
+            val title = entity.title ?: ""
+            val content = entity.bigText ?: entity.text ?: ""
+            val clipText = if (title.isNotEmpty() && content.isNotEmpty()) {
+                "$title\n$content"
+            } else {
+                title.ifEmpty { content }
+            }
+            if (clipText.isNotEmpty()) {
+                clipboard.setPrimaryClip(
+                    ClipData.newPlainText("NotificationMaster", clipText)
+                )
+                Log.d(TAG, "Clipboard copy: ${clipText.take(50)}")
+            }
+        }
     }
 
     /**

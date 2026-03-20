@@ -161,9 +161,10 @@ object FilterRuleDialogHelper {
             context.getString(R.string.filter_dialog_category_notification),
             context.getString(R.string.filter_dialog_category_calendar),
             context.getString(R.string.filter_dialog_category_auto_dismiss),
-            context.getString(R.string.filter_dialog_category_persistent_alert)
+            context.getString(R.string.filter_dialog_category_persistent_alert),
+            context.getString(R.string.filter_dialog_category_clipboard_copy)
         )
-        val categoryValues = arrayOf(ActionType.SKIP_RECORD, ActionType.CALENDAR_EXPORT, ActionType.AUTO_DISMISS, ActionType.PERSISTENT_ALERT)
+        val categoryValues = arrayOf(ActionType.SKIP_RECORD, ActionType.CALENDAR_EXPORT, ActionType.AUTO_DISMISS, ActionType.PERSISTENT_ALERT, ActionType.CLIPBOARD_COPY)
         var selectedCategoryIndex = 0
 
         // 延遲選項狀態
@@ -210,6 +211,7 @@ object FilterRuleDialogHelper {
             val enabledTypes = when (effectiveType) {
                 ActionType.CALENDAR_EXPORT -> setOf(EventType.POSTED, EventType.UPDATED, EventType.REMOVED)
                 ActionType.PERSISTENT_ALERT -> setOf(EventType.POSTED, EventType.UPDATED)
+                ActionType.CLIPBOARD_COPY -> setOf(EventType.POSTED, EventType.UPDATED)
                 else -> EventType.entries.toSet()
             }
             eventTypes.forEachIndexed { i, et ->
@@ -532,6 +534,7 @@ object FilterRuleDialogHelper {
                         soundUri = selectedSoundUri,
                         vibrate = switchAlertVibrate.isChecked
                     )
+                    ActionType.CLIPBOARD_COPY -> RuleAction.ClipboardCopy
                 }
 
                 if (isEditMode) {

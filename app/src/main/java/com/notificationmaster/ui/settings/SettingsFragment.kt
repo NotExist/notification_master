@@ -201,6 +201,14 @@ class SettingsFragment : Fragment() {
             }
         }
         updatePersistentAlertSummary()
+
+        binding.btnClipboardCopy.setOnClickListener {
+            findNavController().navigate(
+                R.id.action_settings_to_filter,
+                bundleOf("actionType" to ActionType.CLIPBOARD_COPY.name)
+            )
+        }
+        updateClipboardCopySummary()
     }
 
     private fun updateFilterSummary() {
@@ -233,6 +241,16 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    private fun updateClipboardCopySummary() {
+        val b = _binding ?: return
+        val count = RuleEngine.getRules(ActionType.CLIPBOARD_COPY).size
+        b.textClipboardCopySummary.text = if (count > 0) {
+            getString(R.string.settings_clipboard_copy_count, count)
+        } else {
+            getString(R.string.settings_clipboard_copy_summary)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         updateDebugInfo()
@@ -242,6 +260,7 @@ class SettingsFragment : Fragment() {
         updateFilterSummary()
         updateAutoDismissSummary()
         updatePersistentAlertSummary()
+        updateClipboardCopySummary()
         updateCalendarWhitelistSummary()
         updateRealtimeCalendarDisplay()
         updateBackupDirDisplay()

@@ -319,10 +319,16 @@
     <!-- 持續提醒 -->
     <string name="persistent_alert_empty">尚無持續提醒規則</string>
     <string name="persistent_alert_empty_hint">新增規則後，符合條件的通知到達時將以振動/鈴聲持續提醒。</string>
+    <string name="clipboard_copy_empty">尚無剪貼簿複製規則</string>
+    <string name="clipboard_copy_empty_hint">新增規則後，符合條件的通知內容將自動複製到剪貼簿。\n使用正規表示式時，各 capture group 將分別複製。</string>
     <string name="settings_persistent_alert_title">通知持續提醒</string>
     <string name="settings_persistent_alert_summary">通知到達時以振動/鈴聲持續提醒</string>
+    <string name="settings_clipboard_copy_title">通知內容複製</string>
+    <string name="settings_clipboard_copy_summary">自動複製符合條件的通知內容到剪貼簿</string>
+    <string name="settings_clipboard_copy_count">%d 條規則</string>
     <string name="settings_persistent_alert_count">%d 條規則</string>
     <string name="filter_dialog_category_persistent_alert">持續提醒</string>
+    <string name="filter_dialog_category_clipboard_copy">複製到剪貼簿</string>
     <string name="filter_alert_choose_sound">選擇提醒鈴聲</string>
     <string name="filter_alert_sound_default">系統預設鬧鐘</string>
     <string name="filter_alert_vibrate">振動</string>
