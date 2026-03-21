@@ -9,7 +9,14 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.CalendarContract
 import android.util.Log
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ArrayAdapter
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
+import com.notificationmaster.R
 import com.notificationmaster.core.content.NotificationContentHelper
 import com.notificationmaster.data.db.entity.NotificationEntity
 import java.util.TimeZone
@@ -398,6 +405,64 @@ class CalendarExporter(private val context: Context) {
                 }
             }
         }
+    }
+
+    // ========== 日曆選擇器 UI ==========
+
+    /**
+     * 顯示日曆選擇 Dialog（雙行佈局：displayName + accountName · accountType）
+     *
+     * 共用日曆選擇器，供 SettingsFragment 和 FilterRuleDialogHelper 等處呼叫。
+     * 自動確保 Local Calendar 存在並列出所有可寫入日曆。
+     *
+     * @param title Dialog 標題資源 ID
+     * @param onCancel 取消時的 callback
+     * @param onSelected 選擇日曆後的 callback
+     */
+    fun showPickerDialog(
+        title: Int = R.string.calendar_picker_title,
+        onCancel: (() -> Unit)? = null,
+        onSelected: (CalendarInfo) -> Unit
+    ) {
+        getOrCreateLocalCalendar()
+        val calendars = getAvailableCalendars()
+
+        if (calendars.isEmpty()) {
+            Toast.makeText(context, R.string.filter_preview_calendar_no_calendar, Toast.LENGTH_SHORT).show()
+            onCancel?.invoke()
+            return
+        }
+
+        val adapter = object : ArrayAdapter<CalendarInfo>(
+            context,
+            android.R.layout.simple_list_item_2,
+            android.R.id.text1,
+            calendars
+        ) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val view = super.getView(position, convertView, parent)
+                val cal = getItem(position) ?: return view
+                val text1 = view.findViewById<TextView>(android.R.id.text1)
+                val text2 = view.findViewById<TextView>(android.R.id.text2)
+
+                val isOwnCalendar = cal.accountName == LOCAL_ACCOUNT_NAME
+                    && cal.accountType == LOCAL_ACCOUNT_TYPE
+                text1.text = if (isOwnCalendar) {
+                    context.getString(R.string.calendar_picker_own_label, cal.displayName)
+                } else {
+                    cal.displayName
+                }
+                text2.text = context.getString(R.string.calendar_picker_detail, cal.accountName, cal.accountType)
+
+                return view
+            }
+        }
+
+        AlertDialog.Builder(context)
+            .setTitle(title)
+            .setAdapter(adapter) { _, which -> onSelected(calendars[which]) }
+            .setNegativeButton(R.string.cancel) { _, _ -> onCancel?.invoke() }
+            .show()
     }
 }
 

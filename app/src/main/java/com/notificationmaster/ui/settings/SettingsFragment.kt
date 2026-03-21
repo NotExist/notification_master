@@ -11,7 +11,6 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,7 +34,6 @@ import com.notificationmaster.debug.DebugDumper
 import com.notificationmaster.export.archive.ArchiveExporter
 import com.notificationmaster.export.archive.ArchiveImporter
 import com.notificationmaster.export.calendar.CalendarExporter
-import com.notificationmaster.export.calendar.CalendarInfo
 import com.notificationmaster.export.ical.IcsExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -204,7 +202,7 @@ class SettingsFragment : Fragment() {
      */
     private fun updateRuleSummary(
         actionType: ActionType,
-        textView: android.widget.TextView,
+        textView: TextView,
         summaryRes: Int,
         countRes: Int
     ) {
@@ -652,12 +650,9 @@ class SettingsFragment : Fragment() {
     }
 
     private fun showCalendarPicker() {
-        val calendarExporter = CalendarExporter(requireContext())
-        showCalendarPickerDialog(
-            title = R.string.calendar_picker_title,
-            exporter = calendarExporter
-        ) { cal ->
-            showCalendarDetailLevelPicker(cal.id, calendarExporter)
+        val exporter = CalendarExporter(requireContext())
+        exporter.showPickerDialog { cal ->
+            showCalendarDetailLevelPicker(cal.id, exporter)
         }
     }
 
@@ -773,8 +768,7 @@ class SettingsFragment : Fragment() {
     }
 
     private fun showTargetCalendarPicker() {
-        showCalendarPickerDialog(
-            title = R.string.calendar_picker_title,
+        CalendarExporter(requireContext()).showPickerDialog(
             onCancel = { setRealtimeSwitchChecked(false) }
         ) { cal ->
             AppPreferences.setRealtimeCalendarTarget(requireContext(), cal.id, cal.displayName)
@@ -782,57 +776,6 @@ class SettingsFragment : Fragment() {
             setRealtimeSwitchChecked(true)
             updateRealtimeCalendarDisplay()
         }
-    }
-
-    /**
-     * 共用日曆選擇 Dialog（雙行佈局：displayName + accountName · accountType）
-     */
-    private fun showCalendarPickerDialog(
-        title: Int,
-        exporter: CalendarExporter = CalendarExporter(requireContext()),
-        onCancel: (() -> Unit)? = null,
-        onSelected: (CalendarInfo) -> Unit
-    ) {
-        exporter.getOrCreateLocalCalendar()
-        val calendars = exporter.getAvailableCalendars()
-
-        if (calendars.isEmpty()) {
-            Toast.makeText(requireContext(), "找不到可用的日曆", Toast.LENGTH_SHORT).show()
-            onCancel?.invoke()
-            return
-        }
-
-        val adapter = object : ArrayAdapter<CalendarInfo>(
-            requireContext(),
-            android.R.layout.simple_list_item_2,
-            android.R.id.text1,
-            calendars
-        ) {
-            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                val view = super.getView(position, convertView, parent)
-                val cal = getItem(position) ?: return view
-                val text1 = view.findViewById<TextView>(android.R.id.text1)
-                val text2 = view.findViewById<TextView>(android.R.id.text2)
-
-                val isOwnCalendar = cal.accountName == CalendarExporter.LOCAL_ACCOUNT_NAME
-                    && cal.accountType == CalendarExporter.LOCAL_ACCOUNT_TYPE
-                text1.text = if (isOwnCalendar) {
-                    getString(R.string.calendar_picker_own_label, cal.displayName)
-                } else {
-                    cal.displayName
-                }
-
-                text2.text = getString(R.string.calendar_picker_detail, cal.accountName, cal.accountType)
-
-                return view
-            }
-        }
-
-        AlertDialog.Builder(requireContext())
-            .setTitle(title)
-            .setAdapter(adapter) { _, which -> onSelected(calendars[which]) }
-            .setNegativeButton(R.string.cancel) { _, _ -> onCancel?.invoke() }
-            .show()
     }
 
 

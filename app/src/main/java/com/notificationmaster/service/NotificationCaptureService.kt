@@ -1,7 +1,5 @@
 package com.notificationmaster.service
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -16,9 +14,9 @@ import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.core.NotificationExtractor
 import com.notificationmaster.core.cache.PendingIntentCache
 import com.notificationmaster.core.alert.PersistentAlertManager
+import com.notificationmaster.core.action.ClipboardCopyHelper
 import com.notificationmaster.core.content.NotificationContentHelper
 import com.notificationmaster.core.filter.ActionType
-import com.notificationmaster.core.filter.KeywordField
 import com.notificationmaster.core.filter.MatchContext
 import com.notificationmaster.core.filter.Matcher
 import com.notificationmaster.core.filter.RuleAction
@@ -896,44 +894,11 @@ class NotificationCaptureService : NotificationListenerService() {
      */
     private fun checkClipboardCopy(entity: NotificationEntity, matchCtx: MatchContext) {
         val rule = RuleEngine.findMatchingRule(ActionType.CLIPBOARD_COPY, matchCtx) ?: return
-        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-
         val keywordMatcher = rule.matchers.filterIsInstance<Matcher.Keyword>().firstOrNull()
-
-        if (keywordMatcher != null && keywordMatcher.isRegex) {
-            // Regex 模式：對每個匹配欄位提取 capture group，各自獨立複製
-            val regex = try { Regex(keywordMatcher.pattern) } catch (_: Exception) { return }
-            val fieldTexts = keywordMatcher.fields.mapNotNull { field ->
-                when (field) {
-                    KeywordField.TITLE -> matchCtx.title
-                    KeywordField.TEXT -> matchCtx.text
-                    KeywordField.BIG_TEXT -> matchCtx.bigText
-                    KeywordField.SUB_TEXT -> matchCtx.subText
-                }?.let { field to it }
-            }
-            for ((field, text) in fieldTexts) {
-                val allMatches = regex.findAll(text).toList()
-                if (allMatches.isEmpty()) continue
-                // 所有 match 的所有 group values，空白分隔
-                val groups = allMatches.flatMap { result ->
-                    result.groupValues
-                }
-                val clipText = groups.joinToString(" ")
-                clipboard.setPrimaryClip(
-                    ClipData.newPlainText("NM:${field.name}", clipText)
-                )
-                Log.d(TAG, "Clipboard copy (regex ${field.name}): ${clipText.take(50)}")
-            }
-        } else {
-            // 非 regex：複製 title + 最完整內容
-            val clipText = NotificationContentHelper.titleAndContent(entity)
-            if (clipText.isNotEmpty()) {
-                clipboard.setPrimaryClip(
-                    ClipData.newPlainText("NotificationMaster", clipText)
-                )
-                Log.d(TAG, "Clipboard copy: ${clipText.take(50)}")
-            }
-        }
+        val count = ClipboardCopyHelper.copyFromMatchContext(
+            this, matchCtx.title, matchCtx.text, matchCtx.bigText, matchCtx.subText, keywordMatcher
+        )
+        if (count > 0) Log.d(TAG, "Clipboard copy: $count entries from ${entity.packageName}")
     }
 
     /**

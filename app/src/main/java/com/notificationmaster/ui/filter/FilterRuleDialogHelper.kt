@@ -1,7 +1,5 @@
 package com.notificationmaster.ui.filter
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.media.RingtoneManager
 import android.text.Editable
@@ -23,9 +21,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
-import com.notificationmaster.core.content.NotificationContentHelper
+import com.notificationmaster.core.action.ClipboardCopyHelper
 import com.notificationmaster.export.calendar.CalendarExporter
-import com.notificationmaster.export.calendar.CalendarInfo
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.core.filter.ActionType
 import com.notificationmaster.core.filter.KeywordField
@@ -711,39 +708,10 @@ object FilterRuleDialogHelper {
     ) {
         when (actionType) {
             ActionType.CLIPBOARD_COPY -> {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 val keywordMatcher = rule.matchers.filterIsInstance<Matcher.Keyword>().firstOrNull()
                 var copyCount = 0
-
                 for (notification in notifications) {
-                    if (keywordMatcher != null && keywordMatcher.isRegex) {
-                        val regex = try { Regex(keywordMatcher.pattern) } catch (_: Exception) { continue }
-                        val fieldTexts = keywordMatcher.fields.mapNotNull { field ->
-                            when (field) {
-                                KeywordField.TITLE -> notification.title
-                                KeywordField.TEXT -> notification.text
-                                KeywordField.BIG_TEXT -> notification.bigText
-                                KeywordField.SUB_TEXT -> notification.subText
-                            }?.let { field to it }
-                        }
-                        for ((field, text) in fieldTexts) {
-                            val allMatches = regex.findAll(text).toList()
-                            if (allMatches.isEmpty()) continue
-                            val groups = allMatches.flatMap { it.groupValues }
-                            clipboard.setPrimaryClip(
-                                ClipData.newPlainText("NM:${field.name}", groups.joinToString(" "))
-                            )
-                            copyCount++
-                        }
-                    } else {
-                        val clipText = NotificationContentHelper.titleAndContent(notification)
-                        if (clipText.isNotEmpty()) {
-                            clipboard.setPrimaryClip(
-                                ClipData.newPlainText("NotificationMaster", clipText)
-                            )
-                            copyCount++
-                        }
-                    }
+                    copyCount += ClipboardCopyHelper.copyToClipboard(context, notification, keywordMatcher)
                 }
                 Toast.makeText(context, context.getString(R.string.filter_preview_applied_clipboard, copyCount), Toast.LENGTH_SHORT).show()
             }
@@ -753,46 +721,13 @@ object FilterRuleDialogHelper {
                     Toast.makeText(context, R.string.filter_preview_calendar_no_permission, Toast.LENGTH_SHORT).show()
                     return
                 }
-                exporter.getOrCreateLocalCalendar()
-                val calendars = exporter.getAvailableCalendars()
-                if (calendars.isEmpty()) {
-                    Toast.makeText(context, R.string.filter_preview_calendar_no_calendar, Toast.LENGTH_SHORT).show()
-                    return
+                exporter.showPickerDialog { cal ->
+                    val result = exporter.exportToCalendar(notifications, cal.id, CalendarExporter.DETAIL_FULL)
+                    Toast.makeText(context,
+                        context.getString(R.string.filter_preview_applied_calendar, result.successCount),
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
-
-                // 日曆選擇 → 精細程度選擇 → 匯出
-                val calAdapter = object : ArrayAdapter<CalendarInfo>(
-                    context,
-                    android.R.layout.simple_list_item_2,
-                    android.R.id.text1,
-                    calendars
-                ) {
-                    override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
-                        val view = super.getView(position, convertView, parent)
-                        val cal = getItem(position) ?: return view
-                        view.findViewById<TextView>(android.R.id.text1).text =
-                            if (cal.accountName == CalendarExporter.LOCAL_ACCOUNT_NAME
-                                && cal.accountType == CalendarExporter.LOCAL_ACCOUNT_TYPE)
-                                context.getString(R.string.calendar_picker_own_label, cal.displayName)
-                            else cal.displayName
-                        view.findViewById<TextView>(android.R.id.text2).text =
-                            context.getString(R.string.calendar_picker_detail, cal.accountName, cal.accountType)
-                        return view
-                    }
-                }
-
-                AlertDialog.Builder(context)
-                    .setTitle(R.string.calendar_picker_title)
-                    .setAdapter(calAdapter) { _, which ->
-                        val calId = calendars[which].id
-                        val result = exporter.exportToCalendar(notifications, calId, CalendarExporter.DETAIL_FULL)
-                        Toast.makeText(context,
-                            context.getString(R.string.filter_preview_applied_calendar, result.successCount),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                    .setNegativeButton(R.string.cancel, null)
-                    .show()
             }
             else -> {
                 Toast.makeText(context, R.string.filter_preview_apply_unsupported, Toast.LENGTH_SHORT).show()
