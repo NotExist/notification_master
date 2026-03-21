@@ -1,5 +1,7 @@
 package com.notificationmaster.ui.filter
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.media.RingtoneManager
 import android.text.Editable
@@ -16,16 +18,23 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
+import android.widget.TextView
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.notificationmaster.core.content.NotificationContentHelper
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.core.filter.ActionType
 import com.notificationmaster.core.filter.KeywordField
+import com.notificationmaster.core.filter.MatchContext
 import com.notificationmaster.core.filter.Matcher
 import com.notificationmaster.core.filter.Rule
 import com.notificationmaster.core.filter.RuleAction
 import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.data.db.entity.EventType
+import com.notificationmaster.data.db.entity.NotificationEntity
+import com.notificationmaster.ui.search.NotificationAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -411,6 +420,7 @@ object FilterRuleDialogHelper {
             if (selectedImportance != null || gid != null) {
                 tempMatchers.add(Matcher.ChannelProperty(minImportance = selectedImportance, groupId = gid))
             }
+            val resolvedType = actionType ?: categoryValues[selectedCategoryIndex]
             val tempRule = Rule(matchers = tempMatchers, action = RuleAction.SkipRecord)
 
             val previewLimit = 200
@@ -419,7 +429,7 @@ object FilterRuleDialogHelper {
                     database.notificationDao().getNotificationsPaged(previewLimit, 0)
                 }
                 val matched = notifications.filter { n ->
-                    val mc = com.notificationmaster.core.filter.MatchContext(
+                    val mc = MatchContext(
                         packageName = n.packageName,
                         channelId = n.channelId,
                         title = n.title,
@@ -433,18 +443,7 @@ object FilterRuleDialogHelper {
                 if (matched.isEmpty()) {
                     Toast.makeText(context, R.string.filter_preview_empty, Toast.LENGTH_SHORT).show()
                 } else {
-                    val items = matched.take(20).map { n ->
-                        val title = n.title ?: context.getString(R.string.no_title)
-                        val text = n.text ?: ""
-                        if (text.isNotEmpty()) "$title — $text" else title
-                    }.toTypedArray<CharSequence>()
-
-                    AlertDialog.Builder(context)
-                        .setTitle(context.getString(R.string.filter_preview_title, previewLimit))
-                        .setMessage(context.getString(R.string.filter_preview_count, matched.size))
-                        .setItems(items, null)
-                        .setPositiveButton(R.string.ok, null)
-                        .show()
+                    showPreviewResultDialog(context, matched, previewLimit, resolvedType, tempRule)
                 }
             }
         }
@@ -645,5 +644,110 @@ object FilterRuleDialogHelper {
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    /**
+     * 顯示預覽結果 Dialog（RecyclerView + 套用按鈕）
+     */
+    private fun showPreviewResultDialog(
+        context: Context,
+        matched: List<NotificationEntity>,
+        previewLimit: Int,
+        actionType: ActionType,
+        tempRule: Rule
+    ) {
+        val dialogView = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 16, 0, 0)
+        }
+
+        // 摘要文字
+        val summary = TextView(context).apply {
+            text = context.getString(R.string.filter_preview_count, matched.size) +
+                "（最近 $previewLimit 筆中）"
+            setPadding(48, 0, 48, 16)
+        }
+        dialogView.addView(summary)
+
+        // RecyclerView 顯示匹配通知
+        val recyclerView = RecyclerView(context).apply {
+            layoutManager = LinearLayoutManager(context)
+            val previewAdapter = NotificationAdapter { /* 點擊不做事 */ }
+            adapter = previewAdapter
+            previewAdapter.submitList(matched.take(50))
+        }
+        dialogView.addView(recyclerView, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+
+        val canApply = actionType == ActionType.CLIPBOARD_COPY
+
+        val builder = AlertDialog.Builder(context)
+            .setTitle(R.string.filter_preview_result_title)
+            .setView(dialogView)
+            .setNegativeButton(R.string.cancel, null)
+
+        if (canApply) {
+            builder.setPositiveButton(R.string.filter_preview_apply) { _, _ ->
+                applyActionToResults(context, matched, actionType, tempRule)
+            }
+        } else {
+            builder.setPositiveButton(R.string.ok, null)
+        }
+
+        builder.show()
+    }
+
+    /**
+     * 對預覽結果套用實際動作
+     */
+    private fun applyActionToResults(
+        context: Context,
+        notifications: List<NotificationEntity>,
+        actionType: ActionType,
+        rule: Rule
+    ) {
+        when (actionType) {
+            ActionType.CLIPBOARD_COPY -> {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val keywordMatcher = rule.matchers.filterIsInstance<Matcher.Keyword>().firstOrNull()
+                var copyCount = 0
+
+                for (notification in notifications) {
+                    if (keywordMatcher != null && keywordMatcher.isRegex) {
+                        val regex = try { Regex(keywordMatcher.pattern) } catch (_: Exception) { continue }
+                        val fieldTexts = keywordMatcher.fields.mapNotNull { field ->
+                            when (field) {
+                                KeywordField.TITLE -> notification.title
+                                KeywordField.TEXT -> notification.text
+                                KeywordField.BIG_TEXT -> notification.bigText
+                                KeywordField.SUB_TEXT -> notification.subText
+                            }?.let { field to it }
+                        }
+                        for ((field, text) in fieldTexts) {
+                            val allMatches = regex.findAll(text).toList()
+                            if (allMatches.isEmpty()) continue
+                            val groups = allMatches.flatMap { it.groupValues }
+                            clipboard.setPrimaryClip(
+                                ClipData.newPlainText("NM:${field.name}", groups.joinToString(" "))
+                            )
+                            copyCount++
+                        }
+                    } else {
+                        val clipText = NotificationContentHelper.titleAndContent(notification)
+                        if (clipText.isNotEmpty()) {
+                            clipboard.setPrimaryClip(
+                                ClipData.newPlainText("NotificationMaster", clipText)
+                            )
+                            copyCount++
+                        }
+                    }
+                }
+                Toast.makeText(context, context.getString(R.string.filter_preview_applied_clipboard, copyCount), Toast.LENGTH_SHORT).show()
+            }
+            else -> {
+                Toast.makeText(context, R.string.filter_preview_apply_unsupported, Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 }
