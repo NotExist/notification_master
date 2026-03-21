@@ -298,6 +298,9 @@
     <string name="filter_preview_apply">套用</string>
     <string name="filter_preview_applied_clipboard">已複製 %d 筆到剪貼簿</string>
     <string name="filter_preview_apply_unsupported">此動作類型不支援預覽套用</string>
+    <string name="filter_preview_applied_calendar">已匯出 %d 筆到日曆</string>
+    <string name="filter_preview_calendar_no_permission">缺少日曆權限</string>
+    <string name="filter_preview_calendar_no_calendar">找不到可用的日曆</string>
 
     <!-- ChannelProperty matcher -->
     <string name="filter_channel_property_title">Channel 屬性匹配（選填）</string>

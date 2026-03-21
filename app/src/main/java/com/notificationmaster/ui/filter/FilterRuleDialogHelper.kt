@@ -24,6 +24,8 @@ import androidx.recyclerview.widget.RecyclerView
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.content.NotificationContentHelper
+import com.notificationmaster.export.calendar.CalendarExporter
+import com.notificationmaster.export.calendar.CalendarInfo
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.core.filter.ActionType
 import com.notificationmaster.core.filter.KeywordField
@@ -680,7 +682,7 @@ object FilterRuleDialogHelper {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         ))
 
-        val canApply = actionType == ActionType.CLIPBOARD_COPY
+        val canApply = actionType in setOf(ActionType.CLIPBOARD_COPY, ActionType.CALENDAR_EXPORT)
 
         val builder = AlertDialog.Builder(context)
             .setTitle(R.string.filter_preview_result_title)
@@ -744,6 +746,53 @@ object FilterRuleDialogHelper {
                     }
                 }
                 Toast.makeText(context, context.getString(R.string.filter_preview_applied_clipboard, copyCount), Toast.LENGTH_SHORT).show()
+            }
+            ActionType.CALENDAR_EXPORT -> {
+                val exporter = CalendarExporter(context)
+                if (!exporter.hasCalendarPermission()) {
+                    Toast.makeText(context, R.string.filter_preview_calendar_no_permission, Toast.LENGTH_SHORT).show()
+                    return
+                }
+                exporter.getOrCreateLocalCalendar()
+                val calendars = exporter.getAvailableCalendars()
+                if (calendars.isEmpty()) {
+                    Toast.makeText(context, R.string.filter_preview_calendar_no_calendar, Toast.LENGTH_SHORT).show()
+                    return
+                }
+
+                // 日曆選擇 → 精細程度選擇 → 匯出
+                val calAdapter = object : ArrayAdapter<CalendarInfo>(
+                    context,
+                    android.R.layout.simple_list_item_2,
+                    android.R.id.text1,
+                    calendars
+                ) {
+                    override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
+                        val view = super.getView(position, convertView, parent)
+                        val cal = getItem(position) ?: return view
+                        view.findViewById<TextView>(android.R.id.text1).text =
+                            if (cal.accountName == CalendarExporter.LOCAL_ACCOUNT_NAME
+                                && cal.accountType == CalendarExporter.LOCAL_ACCOUNT_TYPE)
+                                context.getString(R.string.calendar_picker_own_label, cal.displayName)
+                            else cal.displayName
+                        view.findViewById<TextView>(android.R.id.text2).text =
+                            context.getString(R.string.calendar_picker_detail, cal.accountName, cal.accountType)
+                        return view
+                    }
+                }
+
+                AlertDialog.Builder(context)
+                    .setTitle(R.string.calendar_picker_title)
+                    .setAdapter(calAdapter) { _, which ->
+                        val calId = calendars[which].id
+                        val result = exporter.exportToCalendar(notifications, calId, CalendarExporter.DETAIL_FULL)
+                        Toast.makeText(context,
+                            context.getString(R.string.filter_preview_applied_calendar, result.successCount),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    .setNegativeButton(R.string.cancel, null)
+                    .show()
             }
             else -> {
                 Toast.makeText(context, R.string.filter_preview_apply_unsupported, Toast.LENGTH_SHORT).show()
