@@ -16,6 +16,7 @@ import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.core.NotificationExtractor
 import com.notificationmaster.core.cache.PendingIntentCache
 import com.notificationmaster.core.alert.PersistentAlertManager
+import com.notificationmaster.core.content.NotificationContentHelper
 import com.notificationmaster.core.filter.ActionType
 import com.notificationmaster.core.filter.KeywordField
 import com.notificationmaster.core.filter.MatchContext
@@ -883,7 +884,7 @@ class NotificationCaptureService : NotificationListenerService() {
     private fun checkPersistentAlert(entity: NotificationEntity, matchCtx: MatchContext) {
         val rule = RuleEngine.findMatchingRule(ActionType.PERSISTENT_ALERT, matchCtx) ?: return
         val action = rule.action as RuleAction.PersistentAlert
-        val title = "[${entity.packageName.substringAfterLast('.')}] ${entity.title ?: "通知"}"
+        val title = "[${NotificationContentHelper.appName(entity.packageName)}] ${NotificationContentHelper.displayTitle(entity)}"
         alertManager.startAlert(entity.notificationKey, title, entity.text, action.soundUri, action.vibrate)
     }
 
@@ -925,13 +926,7 @@ class NotificationCaptureService : NotificationListenerService() {
             }
         } else {
             // 非 regex：複製 title + 最完整內容
-            val title = entity.title ?: ""
-            val content = entity.bigText ?: entity.text ?: ""
-            val clipText = if (title.isNotEmpty() && content.isNotEmpty()) {
-                "$title\n$content"
-            } else {
-                title.ifEmpty { content }
-            }
+            val clipText = NotificationContentHelper.titleAndContent(entity)
             if (clipText.isNotEmpty()) {
                 clipboard.setPrimaryClip(
                     ClipData.newPlainText("NotificationMaster", clipText)

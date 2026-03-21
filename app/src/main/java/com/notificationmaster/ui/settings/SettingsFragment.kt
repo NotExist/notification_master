@@ -176,22 +176,8 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupFilterSettings() {
-        binding.btnFilter.setOnClickListener {
-            findNavController().navigate(
-                R.id.action_settings_to_filter,
-                bundleOf("actionType" to ActionType.SKIP_RECORD.name)
-            )
-        }
-        updateFilterSummary()
-
-        binding.btnAutoDismiss.setOnClickListener {
-            findNavController().navigate(
-                R.id.action_settings_to_filter,
-                bundleOf("actionType" to ActionType.AUTO_DISMISS.name)
-            )
-        }
-        updateAutoDismissSummary()
-
+        setupFilterButton(binding.btnFilter, ActionType.SKIP_RECORD)
+        setupFilterButton(binding.btnAutoDismiss, ActionType.AUTO_DISMISS)
         binding.btnPersistentAlert.setOnClickListener {
             requestNotificationPermissionThen {
                 findNavController().navigate(
@@ -200,55 +186,39 @@ class SettingsFragment : Fragment() {
                 )
             }
         }
-        updatePersistentAlertSummary()
+        setupFilterButton(binding.btnClipboardCopy, ActionType.CLIPBOARD_COPY)
+        updateAllRuleSummaries()
+    }
 
-        binding.btnClipboardCopy.setOnClickListener {
+    private fun setupFilterButton(button: View, actionType: ActionType) {
+        button.setOnClickListener {
             findNavController().navigate(
                 R.id.action_settings_to_filter,
-                bundleOf("actionType" to ActionType.CLIPBOARD_COPY.name)
+                bundleOf("actionType" to actionType.name)
             )
         }
-        updateClipboardCopySummary()
     }
 
-    private fun updateFilterSummary() {
-        val b = _binding ?: return
-        val count = RuleEngine.getRules(ActionType.SKIP_RECORD).size
-        b.textFilterSummary.text = if (count > 0) {
-            getString(R.string.settings_filter_count, count)
-        } else {
-            getString(R.string.settings_filter_summary)
-        }
+    /**
+     * 共用規則摘要更新
+     */
+    private fun updateRuleSummary(
+        actionType: ActionType,
+        textView: android.widget.TextView,
+        summaryRes: Int,
+        countRes: Int
+    ) {
+        val count = RuleEngine.getRules(actionType).size
+        textView.text = if (count > 0) getString(countRes, count) else getString(summaryRes)
     }
 
-    private fun updateAutoDismissSummary() {
+    private fun updateAllRuleSummaries() {
         val b = _binding ?: return
-        val count = RuleEngine.getRules(ActionType.AUTO_DISMISS).size
-        b.textAutoDismissSummary.text = if (count > 0) {
-            getString(R.string.settings_auto_dismiss_count, count)
-        } else {
-            getString(R.string.settings_auto_dismiss_summary)
-        }
-    }
-
-    private fun updatePersistentAlertSummary() {
-        val b = _binding ?: return
-        val count = RuleEngine.getRules(ActionType.PERSISTENT_ALERT).size
-        b.textPersistentAlertSummary.text = if (count > 0) {
-            getString(R.string.settings_persistent_alert_count, count)
-        } else {
-            getString(R.string.settings_persistent_alert_summary)
-        }
-    }
-
-    private fun updateClipboardCopySummary() {
-        val b = _binding ?: return
-        val count = RuleEngine.getRules(ActionType.CLIPBOARD_COPY).size
-        b.textClipboardCopySummary.text = if (count > 0) {
-            getString(R.string.settings_clipboard_copy_count, count)
-        } else {
-            getString(R.string.settings_clipboard_copy_summary)
-        }
+        updateRuleSummary(ActionType.SKIP_RECORD, b.textFilterSummary, R.string.settings_filter_summary, R.string.settings_filter_count)
+        updateRuleSummary(ActionType.AUTO_DISMISS, b.textAutoDismissSummary, R.string.settings_auto_dismiss_summary, R.string.settings_auto_dismiss_count)
+        updateRuleSummary(ActionType.PERSISTENT_ALERT, b.textPersistentAlertSummary, R.string.settings_persistent_alert_summary, R.string.settings_persistent_alert_count)
+        updateRuleSummary(ActionType.CLIPBOARD_COPY, b.textClipboardCopySummary, R.string.settings_clipboard_copy_summary, R.string.settings_clipboard_copy_count)
+        updateCalendarWhitelistSummary()
     }
 
     override fun onResume() {
@@ -257,11 +227,7 @@ class SettingsFragment : Fragment() {
         updateStorageInfo()
         updateMediaDirDisplay()
         validateCustomMediaDir()
-        updateFilterSummary()
-        updateAutoDismissSummary()
-        updatePersistentAlertSummary()
-        updateClipboardCopySummary()
-        updateCalendarWhitelistSummary()
+        updateAllRuleSummaries()
         updateRealtimeCalendarDisplay()
         updateBackupDirDisplay()
     }
@@ -1095,10 +1061,7 @@ class SettingsFragment : Fragment() {
                 Toast.LENGTH_LONG
             ).show()
 
-            updateFilterSummary()
-            updateAutoDismissSummary()
-            updatePersistentAlertSummary()
-            updateCalendarWhitelistSummary()
+            updateAllRuleSummaries()
         } catch (e: Exception) {
             Toast.makeText(ctx, "匯入失敗：${e.message}", Toast.LENGTH_LONG).show()
         }
@@ -1170,10 +1133,7 @@ class SettingsFragment : Fragment() {
                     (if (alertCount > 0) "、持續提醒 ${alertCount} 條" else ""),
                 Toast.LENGTH_LONG
             ).show()
-            updateFilterSummary()
-            updateAutoDismissSummary()
-            updatePersistentAlertSummary()
-            updateCalendarWhitelistSummary()
+            updateAllRuleSummaries()
         } catch (e: Exception) {
             Toast.makeText(ctx, "匯入失敗：${e.message}", Toast.LENGTH_LONG).show()
         }

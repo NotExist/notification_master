@@ -10,6 +10,7 @@ import android.net.Uri
 import android.provider.CalendarContract
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.notificationmaster.core.content.NotificationContentHelper
 import com.notificationmaster.data.db.entity.NotificationEntity
 import java.util.TimeZone
 
@@ -353,8 +354,8 @@ class CalendarExporter(private val context: Context) {
     }
 
     private fun buildEventTitle(notification: NotificationEntity, @Suppress("UNUSED_PARAMETER") detailLevel: Int): String {
-        val appName = notification.packageName.substringAfterLast('.')
-        val title = notification.title ?: "通知"
+        val appName = NotificationContentHelper.appName(notification.packageName)
+        val title = NotificationContentHelper.displayTitle(notification)
         return "[$appName] $title"
     }
 
@@ -374,14 +375,10 @@ class CalendarExporter(private val context: Context) {
                     // 只有標題（已在 title 欄位），描述留空
                 }
                 DETAIL_WITH_CONTENT -> {
-                    // bigText 是 text 的完整版，優先使用避免重複
-                    val content = notification.bigText ?: notification.text
-                    content?.let { append(it) }
+                    NotificationContentHelper.fullContent(notification)?.let { append(it) }
                 }
                 DETAIL_FULL -> {
-                    // 主要內容：bigText 優先（text 的完整版），不帶前綴
-                    val mainContent = notification.bigText ?: notification.text
-                    mainContent?.let { append(it) }
+                    NotificationContentHelper.fullContent(notification)?.let { append(it) }
 
                     // subText 獨立於 text/bigText，有值時換行附加
                     notification.subText?.let {
