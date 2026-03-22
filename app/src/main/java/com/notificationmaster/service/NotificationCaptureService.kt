@@ -892,12 +892,15 @@ class NotificationCaptureService : NotificationListenerService() {
      * 無 regex：複製 title + 最完整內容（bigText ?: text）
      * 有 regex：對每個匹配欄位提取所有 capture group，各欄位獨立複製到剪貼簿
      */
-    private fun checkClipboardCopy(entity: NotificationEntity, matchCtx: MatchContext) {
+    private suspend fun checkClipboardCopy(entity: NotificationEntity, matchCtx: MatchContext) {
         val rule = RuleEngine.findMatchingRule(ActionType.CLIPBOARD_COPY, matchCtx) ?: return
         val keywordMatcher = rule.matchers.filterIsInstance<Matcher.Keyword>().firstOrNull()
-        val count = ClipboardCopyHelper.copyFromMatchContext(
-            this, matchCtx.title, matchCtx.text, matchCtx.bigText, matchCtx.subText, keywordMatcher
-        )
+        // ClipboardManager 操作需在主線程
+        val count = kotlinx.coroutines.withContext(Dispatchers.Main) {
+            ClipboardCopyHelper.copyFromMatchContext(
+                this@NotificationCaptureService, matchCtx.title, matchCtx.text, matchCtx.bigText, matchCtx.subText, keywordMatcher
+            )
+        }
         if (count > 0) Log.d(TAG, "Clipboard copy: $count entries from ${entity.packageName}")
     }
 
