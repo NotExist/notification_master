@@ -38,4 +38,56 @@ object NotificationContentHelper {
             else -> ""
         }
     }
+
+    // ========== 匯出用格式化（CalendarExporter / IcsExporter 共用） ==========
+
+    /** 匯出用事件標題：[appName] title */
+    fun exportTitle(notification: NotificationEntity): String {
+        return "[${appName(notification.packageName)}] ${displayTitle(notification)}"
+    }
+
+    /** 匯出用地點：channelId / packageName */
+    fun exportLocation(notification: NotificationEntity): String {
+        val channelId = notification.channelId
+        return if (channelId != null) "$channelId / ${notification.packageName}"
+        else notification.packageName
+    }
+
+    /**
+     * 匯出用描述（三個精細等級）
+     *
+     * @param detailLevel 0=僅標題, 1=含內容, 2=完整
+     */
+    fun exportDescription(notification: NotificationEntity, detailLevel: Int): String {
+        return buildString {
+            when (detailLevel) {
+                DETAIL_TITLE_ONLY -> { /* 標題在 title 欄位，描述留空 */ }
+                DETAIL_WITH_CONTENT -> {
+                    fullContent(notification)?.let { append(it) }
+                }
+                DETAIL_FULL -> {
+                    fullContent(notification)?.let { append(it) }
+
+                    notification.subText?.let {
+                        if (isNotEmpty()) append("\n")
+                        append(it)
+                    }
+
+                    val flags = mutableListOf<String>()
+                    if (notification.isOngoing) flags.add("Ongoing")
+                    if (notification.isForegroundService) flags.add("FG Service")
+                    if (flags.isNotEmpty()) {
+                        append("\n\n-- NotificationMaster --\n")
+                        append("Flags: ${flags.joinToString(", ")}")
+                        append("\n-- NotificationMaster --")
+                    }
+                }
+            }
+        }
+    }
+
+    /** 精細等級常數 */
+    const val DETAIL_TITLE_ONLY = 0
+    const val DETAIL_WITH_CONTENT = 1
+    const val DETAIL_FULL = 2
 }

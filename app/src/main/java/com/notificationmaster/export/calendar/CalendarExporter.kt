@@ -33,10 +33,10 @@ class CalendarExporter(private val context: Context) {
     companion object {
         private const val TAG = "CalendarExporter"
 
-        /** 匯出精細程度 */
-        const val DETAIL_TITLE_ONLY = 0
-        const val DETAIL_WITH_CONTENT = 1
-        const val DETAIL_FULL = 2
+        /** 匯出精細程度（委派至 NotificationContentHelper） */
+        const val DETAIL_TITLE_ONLY = NotificationContentHelper.DETAIL_TITLE_ONLY
+        const val DETAIL_WITH_CONTENT = NotificationContentHelper.DETAIL_WITH_CONTENT
+        const val DETAIL_FULL = NotificationContentHelper.DETAIL_FULL
 
         /** Local Calendar 常數 */
         const val LOCAL_CALENDAR_NAME = "Local SyncAdapter"
@@ -360,52 +360,14 @@ class CalendarExporter(private val context: Context) {
         }
     }
 
-    private fun buildEventTitle(notification: NotificationEntity, @Suppress("UNUSED_PARAMETER") detailLevel: Int): String {
-        val appName = NotificationContentHelper.appName(notification.packageName)
-        val title = NotificationContentHelper.displayTitle(notification)
-        return "[$appName] $title"
-    }
+    private fun buildEventTitle(notification: NotificationEntity, @Suppress("UNUSED_PARAMETER") detailLevel: Int): String =
+        NotificationContentHelper.exportTitle(notification)
 
-    private fun buildEventLocation(notification: NotificationEntity): String {
-        val channelId = notification.channelId
-        return if (channelId != null) {
-            "$channelId / ${notification.packageName}"
-        } else {
-            notification.packageName
-        }
-    }
+    private fun buildEventLocation(notification: NotificationEntity): String =
+        NotificationContentHelper.exportLocation(notification)
 
-    private fun buildEventDescription(notification: NotificationEntity, detailLevel: Int): String {
-        return buildString {
-            when (detailLevel) {
-                DETAIL_TITLE_ONLY -> {
-                    // 只有標題（已在 title 欄位），描述留空
-                }
-                DETAIL_WITH_CONTENT -> {
-                    NotificationContentHelper.fullContent(notification)?.let { append(it) }
-                }
-                DETAIL_FULL -> {
-                    NotificationContentHelper.fullContent(notification)?.let { append(it) }
-
-                    // subText 獨立於 text/bigText，有值時換行附加
-                    notification.subText?.let {
-                        if (isNotEmpty()) append("\n")
-                        append(it)
-                    }
-
-                    // Metadata 區塊（僅有 flags 時才顯示）
-                    val flags = mutableListOf<String>()
-                    if (notification.isOngoing) flags.add("Ongoing")
-                    if (notification.isForegroundService) flags.add("FG Service")
-                    if (flags.isNotEmpty()) {
-                        append("\n\n-- NotificationMaster --\n")
-                        append("Flags: ${flags.joinToString(", ")}")
-                        append("\n-- NotificationMaster --")
-                    }
-                }
-            }
-        }
-    }
+    private fun buildEventDescription(notification: NotificationEntity, detailLevel: Int): String =
+        NotificationContentHelper.exportDescription(notification, detailLevel)
 
     // ========== 日曆選擇器 UI ==========
 
