@@ -85,6 +85,6 @@ class IcsExporter {
     private fun buildEventTitle(notification: NotificationEntity): String =
         NotificationContentHelper.exportTitle(notification)
 
-    private fun buildEventDescription(notification: NotificationEntity, detailLevel: Int): String =
+    private fun buildEventDescription(notification: NotificationEntity, detailLevel: ExportDetailLevel): String =
         NotificationContentHelper.exportDescription(notification, detailLevel)
 }
