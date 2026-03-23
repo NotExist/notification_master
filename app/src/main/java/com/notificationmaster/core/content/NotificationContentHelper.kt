@@ -3,6 +3,24 @@ package com.notificationmaster.core.content
 import com.notificationmaster.data.db.entity.NotificationEntity
 
 /**
+ * 匯出精細程度
+ */
+enum class ExportDetailLevel {
+    /** 僅標題（描述留空） */
+    TITLE_ONLY,
+    /** 標題 + 主要內容 */
+    WITH_CONTENT,
+    /** 完整：內容 + subText + metadata flags */
+    FULL;
+
+    fun displayName(): String = when (this) {
+        TITLE_ONLY -> "僅標題"
+        WITH_CONTENT -> "含內容"
+        FULL -> "完整資訊"
+    }
+}
+
+/**
  * 通知內容提取的共用 helper
  *
  * 統一各處對 NotificationEntity 欄位的提取邏輯，
@@ -54,18 +72,16 @@ object NotificationContentHelper {
     }
 
     /**
-     * 匯出用描述（三個精細等級）
-     *
-     * @param detailLevel 0=僅標題, 1=含內容, 2=完整
+     * 匯出用描述
      */
-    fun exportDescription(notification: NotificationEntity, detailLevel: Int): String {
+    fun exportDescription(notification: NotificationEntity, level: ExportDetailLevel): String {
         return buildString {
-            when (detailLevel) {
-                DETAIL_TITLE_ONLY -> { /* 標題在 title 欄位，描述留空 */ }
-                DETAIL_WITH_CONTENT -> {
+            when (level) {
+                ExportDetailLevel.TITLE_ONLY -> { /* 標題在 title 欄位，描述留空 */ }
+                ExportDetailLevel.WITH_CONTENT -> {
                     fullContent(notification)?.let { append(it) }
                 }
-                DETAIL_FULL -> {
+                ExportDetailLevel.FULL -> {
                     fullContent(notification)?.let { append(it) }
 
                     notification.subText?.let {
@@ -85,9 +101,4 @@ object NotificationContentHelper {
             }
         }
     }
-
-    /** 精細等級常數 */
-    const val DETAIL_TITLE_ONLY = 0
-    const val DETAIL_WITH_CONTENT = 1
-    const val DETAIL_FULL = 2
 }

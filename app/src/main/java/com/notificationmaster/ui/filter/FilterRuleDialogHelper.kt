@@ -22,6 +22,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.action.ClipboardCopyHelper
+import com.notificationmaster.core.content.ExportDetailLevel
 import com.notificationmaster.export.calendar.CalendarExporter
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.core.filter.ActionType
@@ -722,7 +723,7 @@ object FilterRuleDialogHelper {
                     return
                 }
                 exporter.showPickerDialog { cal ->
-                    val result = exporter.exportToCalendar(notifications, cal.id, CalendarExporter.DETAIL_FULL)
+                    val result = exporter.exportToCalendar(notifications, cal.id, ExportDetailLevel.FULL)
                     Toast.makeText(context,
                         context.getString(R.string.filter_preview_applied_calendar, result.successCount),
                         Toast.LENGTH_SHORT

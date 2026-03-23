@@ -1,5 +1,6 @@
 package com.notificationmaster.export.ical
 
+import com.notificationmaster.core.content.ExportDetailLevel
 import com.notificationmaster.core.content.NotificationContentHelper
 import com.notificationmaster.data.db.entity.NotificationEntity
 import java.text.SimpleDateFormat
@@ -24,7 +25,7 @@ class IcsExporter {
      */
     fun export(
         notifications: List<NotificationEntity>,
-        detailLevel: Int = NotificationContentHelper.DETAIL_FULL
+        detailLevel: ExportDetailLevel = ExportDetailLevel.FULL
     ): String {
         return buildString {
             appendLine("BEGIN:VCALENDAR")
@@ -44,7 +45,7 @@ class IcsExporter {
     private fun appendVEvent(
         sb: StringBuilder,
         notification: NotificationEntity,
-        detailLevel: Int
+        detailLevel: ExportDetailLevel
     ) {
         val uid = "${notification.id}@notificationmaster"
         val dtStart = formatIcsDateTime(notification.postTime)

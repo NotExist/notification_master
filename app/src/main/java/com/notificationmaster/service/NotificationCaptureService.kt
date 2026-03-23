@@ -15,6 +15,7 @@ import com.notificationmaster.core.NotificationExtractor
 import com.notificationmaster.core.cache.PendingIntentCache
 import com.notificationmaster.core.alert.PersistentAlertManager
 import com.notificationmaster.core.action.ClipboardCopyHelper
+import com.notificationmaster.core.content.ExportDetailLevel
 import com.notificationmaster.core.content.NotificationContentHelper
 import com.notificationmaster.core.filter.ActionType
 import com.notificationmaster.core.filter.MatchContext
@@ -836,10 +837,10 @@ class NotificationCaptureService : NotificationListenerService() {
 
         if (existingEventId > 0) {
             // UPDATED: 更新既有事件內容
-            calendarExporter.updateCalendarEventContent(existingEventId, entity, CalendarExporter.DETAIL_FULL)
+            calendarExporter.updateCalendarEventContent(existingEventId, entity, ExportDetailLevel.FULL)
         } else {
             // 首次 POSTED: 插入新事件並記錄映射
-            val eventId = calendarExporter.exportSingleNotification(entity, calendarId, CalendarExporter.DETAIL_FULL)
+            val eventId = calendarExporter.exportSingleNotification(entity, calendarId, ExportDetailLevel.FULL)
             if (eventId > 0) {
                 calendarExportMap[key] = eventId
                 Log.d(TAG, "Realtime calendar export: ${entity.packageName}")

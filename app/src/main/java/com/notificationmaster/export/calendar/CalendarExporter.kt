@@ -17,6 +17,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import com.notificationmaster.R
+import com.notificationmaster.core.content.ExportDetailLevel
 import com.notificationmaster.core.content.NotificationContentHelper
 import com.notificationmaster.data.db.entity.NotificationEntity
 import java.util.TimeZone
@@ -32,11 +33,6 @@ class CalendarExporter(private val context: Context) {
 
     companion object {
         private const val TAG = "CalendarExporter"
-
-        /** 匯出精細程度（委派至 NotificationContentHelper） */
-        const val DETAIL_TITLE_ONLY = NotificationContentHelper.DETAIL_TITLE_ONLY
-        const val DETAIL_WITH_CONTENT = NotificationContentHelper.DETAIL_WITH_CONTENT
-        const val DETAIL_FULL = NotificationContentHelper.DETAIL_FULL
 
         /** Local Calendar 常數 */
         const val LOCAL_CALENDAR_NAME = "Local SyncAdapter"
@@ -205,7 +201,7 @@ class CalendarExporter(private val context: Context) {
     fun exportToCalendar(
         notifications: List<NotificationEntity>,
         calendarId: Long,
-        detailLevel: Int = DETAIL_WITH_CONTENT
+        detailLevel: ExportDetailLevel = ExportDetailLevel.WITH_CONTENT
     ): ExportResult {
         if (!hasCalendarPermission()) {
             return ExportResult(0, notifications.size, "缺少日曆權限")
@@ -241,7 +237,7 @@ class CalendarExporter(private val context: Context) {
     fun exportSingleNotification(
         notification: NotificationEntity,
         calendarId: Long,
-        detailLevel: Int = DETAIL_WITH_CONTENT
+        detailLevel: ExportDetailLevel = ExportDetailLevel.WITH_CONTENT
     ): Long {
         if (!hasCalendarPermission()) return -1L
         return try {
@@ -259,7 +255,7 @@ class CalendarExporter(private val context: Context) {
     private fun insertCalendarEvent(
         notification: NotificationEntity,
         calendarId: Long,
-        detailLevel: Int
+        detailLevel: ExportDetailLevel
     ): Long {
         val title = buildEventTitle(notification, detailLevel)
         val description = buildEventDescription(notification, detailLevel)
@@ -313,7 +309,7 @@ class CalendarExporter(private val context: Context) {
      * 更新日曆事件的標題和描述（UPDATED 通知用）
      * @return 是否成功
      */
-    fun updateCalendarEventContent(eventId: Long, notification: NotificationEntity, detailLevel: Int): Boolean {
+    fun updateCalendarEventContent(eventId: Long, notification: NotificationEntity, detailLevel: ExportDetailLevel): Boolean {
         if (!hasCalendarPermission()) return false
         return try {
             val title = buildEventTitle(notification, detailLevel)
@@ -360,13 +356,13 @@ class CalendarExporter(private val context: Context) {
         }
     }
 
-    private fun buildEventTitle(notification: NotificationEntity, @Suppress("UNUSED_PARAMETER") detailLevel: Int): String =
+    private fun buildEventTitle(notification: NotificationEntity, @Suppress("UNUSED_PARAMETER") detailLevel: ExportDetailLevel): String =
         NotificationContentHelper.exportTitle(notification)
 
     private fun buildEventLocation(notification: NotificationEntity): String =
         NotificationContentHelper.exportLocation(notification)
 
-    private fun buildEventDescription(notification: NotificationEntity, detailLevel: Int): String =
+    private fun buildEventDescription(notification: NotificationEntity, detailLevel: ExportDetailLevel): String =
         NotificationContentHelper.exportDescription(notification, detailLevel)
 
     // ========== 日曆選擇器 UI ==========

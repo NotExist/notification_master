@@ -33,6 +33,7 @@ import com.notificationmaster.databinding.FragmentSettingsBinding
 import com.notificationmaster.debug.DebugDumper
 import com.notificationmaster.export.archive.ArchiveExporter
 import com.notificationmaster.export.archive.ArchiveImporter
+import com.notificationmaster.core.content.ExportDetailLevel
 import com.notificationmaster.export.calendar.CalendarExporter
 import com.notificationmaster.export.ical.IcsExporter
 import kotlinx.coroutines.Dispatchers
@@ -657,18 +658,19 @@ class SettingsFragment : Fragment() {
     }
 
     private fun showCalendarDetailLevelPicker(calendarId: Long, exporter: CalendarExporter) {
-        val levels = arrayOf("僅標題", "含內容", "完整資訊")
+        val levels = ExportDetailLevel.entries
+        val labels = levels.map { it.displayName() }.toTypedArray<CharSequence>()
 
         AlertDialog.Builder(requireContext())
             .setTitle("選擇匯出精細程度")
-            .setItems(levels) { _, which ->
-                exportToCalendar(calendarId, which, exporter)
+            .setItems(labels) { _, which ->
+                exportToCalendar(calendarId, levels[which], exporter)
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
-    private fun exportToCalendar(calendarId: Long, detailLevel: Int, exporter: CalendarExporter) {
+    private fun exportToCalendar(calendarId: Long, detailLevel: ExportDetailLevel, exporter: CalendarExporter) {
         val ctx = context ?: return
         viewLifecycleOwner.lifecycleScope.launch {
             val database = NotificationMasterApp.getInstance().database
