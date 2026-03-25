@@ -33,6 +33,9 @@ class CalendarExporter(private val context: Context) {
     companion object {
         private const val TAG = "CalendarExporter"
 
+        /** ExtendedProperties URL name（ical4android 事實標準，Etar/aCalendar+ 可識別） */
+        const val EXT_PROP_URL_NAME = "vnd.android.cursor.item/vnd.ical4android.url"
+
         /** Local Calendar 常數 */
         const val LOCAL_CALENDAR_NAME = "InApp Calendar"
         const val LOCAL_ACCOUNT_TYPE = CalendarContract.ACCOUNT_TYPE_LOCAL
@@ -190,6 +193,34 @@ class CalendarExporter(private val context: Context) {
     }
 
     /**
+     * 查詢日曆的帳號資訊
+     *
+     * @return accountName to accountType，查詢失敗回傳 null
+     */
+    private fun getCalendarAccountInfo(calendarId: Long): Pair<String, String>? {
+        val projection = arrayOf(
+            CalendarContract.Calendars.ACCOUNT_NAME,
+            CalendarContract.Calendars.ACCOUNT_TYPE
+        )
+        val selection = "${CalendarContract.Calendars._ID} = ?"
+        val selectionArgs = arrayOf(calendarId.toString())
+
+        return context.contentResolver.query(
+            CalendarContract.Calendars.CONTENT_URI,
+            projection,
+            selection,
+            selectionArgs,
+            null
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val name = cursor.getString(0) ?: return@use null
+                val type = cursor.getString(1) ?: return@use null
+                name to type
+            } else null
+        }
+    }
+
+    /**
      * 匯出通知到指定日曆
      *
      * @param notifications 要匯出的通知清單
@@ -276,21 +307,34 @@ class CalendarExporter(private val context: Context) {
             ?: return -1L
         val eventId = ContentUris.parseId(eventUri)
 
-        // ExtendedProperties（URL）：需 CALLER_IS_SYNCADAPTER 身份
-        try {
-            val extUri = CalendarContract.ExtendedProperties.CONTENT_URI.buildUpon()
-                .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
-                .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, LOCAL_ACCOUNT_NAME)
-                .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_TYPE, LOCAL_ACCOUNT_TYPE)
-                .build()
-            val extValues = ContentValues().apply {
-                put(CalendarContract.ExtendedProperties.EVENT_ID, eventId)
-                put(CalendarContract.ExtendedProperties.NAME, "URL")
-                put(CalendarContract.ExtendedProperties.VALUE, notification.notificationKey)
+        // ExtendedProperties（URL）：用目標日曆的帳號資訊取得 SyncAdapter 身份
+        // NAME 採用 ical4android 事實標準，可被 Etar/aCalendar+ 等 App 識別
+        val extInserted = try {
+            val accountInfo = getCalendarAccountInfo(calendarId)
+            if (accountInfo != null) {
+                val (accName, accType) = accountInfo
+                val extUri = CalendarContract.ExtendedProperties.CONTENT_URI.buildUpon()
+                    .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
+                    .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, accName)
+                    .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_TYPE, accType)
+                    .build()
+                val extValues = ContentValues().apply {
+                    put(CalendarContract.ExtendedProperties.EVENT_ID, eventId)
+                    put(CalendarContract.ExtendedProperties.NAME, EXT_PROP_URL_NAME)
+                    put(CalendarContract.ExtendedProperties.VALUE, notification.notificationKey)
+                }
+                context.contentResolver.insert(extUri, extValues) != null
+            } else {
+                Log.w(TAG, "Could not resolve account info for calendar $calendarId")
+                false
             }
-            context.contentResolver.insert(extUri, extValues)
         } catch (e: Exception) {
-            Log.w(TAG, "ExtendedProperties failed, appending Key to description", e)
+            Log.w(TAG, "ExtendedProperties insert failed for event $eventId", e)
+            false
+        }
+
+        // Fallback：ExtendedProperties 寫入失敗時將 Key 追加到 description
+        if (!extInserted) {
             val fallbackDesc = "$description\n\n-- NotificationMaster --\nKey: ${notification.notificationKey}\n-- NotificationMaster --"
             val updateValues = ContentValues().apply {
                 put(CalendarContract.Events.DESCRIPTION, fallbackDesc)
