@@ -3,7 +3,6 @@ package com.notificationmaster.ui.main
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.doOnLayout
 import androidx.core.view.updatePadding
@@ -12,7 +11,6 @@ import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
 import com.notificationmaster.R
-import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.databinding.ActivityMainBinding
 import com.notificationmaster.ui.detail.NotificationDetailFragmentArgs
@@ -34,7 +32,14 @@ class MainActivity : AppCompatActivity() {
 
         setupNavigation()
         handleShortcutIntent(intent)
-        checkBackupOnStartup(savedInstanceState)
+
+        // 首次啟動且未設定備份目錄 → 靜默導航到設定頁
+        if (savedInstanceState == null && !hasRedirectedToSettings
+            && !AppPreferences.isBackupDirEnabled(this)
+        ) {
+            hasRedirectedToSettings = true
+            binding.bottomNav.selectedItemId = R.id.nav_settings
+        }
 
         // 根據 BottomNavigationView 實際高度動態設定 fragment 容器底部間距
         binding.bottomNav.doOnLayout { bottomNav ->
@@ -85,38 +90,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * App 啟動時檢查備份目錄設定
-     *
-     * 未設定備份目錄且未拒絕過 → 提示設定。
-     * 僅在首次 create 時執行（savedInstanceState == null），
-     * 避免螢幕旋轉等重建時重複提示。
-     */
-    private fun checkBackupOnStartup(savedInstanceState: Bundle?) {
-        if (savedInstanceState != null) return
-        if (AppPreferences.isBackupDirEnabled(this)) return
-        if (AppPreferences.isBackupSetupDeclined(this)) return
-
-        RuleEngine.load(this)
-
-        AlertDialog.Builder(this)
-            .setTitle(R.string.filter_backup_setup_title)
-            .setMessage(R.string.filter_backup_setup_message)
-            .setPositiveButton(R.string.ok) { _, _ ->
-                // 導航到設定頁，由設定頁處理目錄選擇
-                val navHostFragment = supportFragmentManager
-                    .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
-                binding.bottomNav.selectedItemId = R.id.nav_settings
-            }
-            .setNegativeButton(R.string.cancel) { _, _ ->
-                AppPreferences.setBackupSetupDeclined(this, true)
-            }
-            .show()
-    }
-
     companion object {
         const val ACTION_SHOW_DETAIL = "com.notificationmaster.action.SHOW_DETAIL"
         const val EXTRA_NOTIFICATION_ID = "notification_id"
+
+        /** Process 級 flag，App 被殺重啟才重置 */
+        private var hasRedirectedToSettings = false
     }
 
     override fun onSupportNavigateUp(): Boolean {
