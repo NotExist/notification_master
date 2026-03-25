@@ -103,12 +103,19 @@ object FilterRuleDialogHelper {
         val switchKeywordRegex = dialogView.findViewById<MaterialSwitch>(R.id.switch_keyword_regex)
 
         // Keyword 區塊收合/展開
+        val dialogScrollView = dialogView as android.widget.ScrollView
         btnToggleKeyword.setOnClickListener {
             val expanded = layoutKeywordSection.visibility == View.VISIBLE
             layoutKeywordSection.visibility = if (expanded) View.GONE else View.VISIBLE
             btnToggleKeyword.text = context.getString(
                 if (expanded) R.string.filter_keyword_expand else R.string.filter_keyword_collapse
             )
+            // 展開時清除焦點並捲動到按鈕位置，避免 ScrollView 跳回先前焦點
+            if (!expanded) {
+                btnToggleKeyword.post {
+                    dialogScrollView.smoothScrollTo(0, btnToggleKeyword.top)
+                }
+            }
         }
 
         // ChannelProperty 相關 views
