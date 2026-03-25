@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -69,7 +70,7 @@ class FilterSettingsFragment : Fragment() {
         context?.let { RuleEngine.load(it) }
 
         // 根據 actionType 設定標題和空白提示文字
-        activity?.title = when (actionType) {
+        (activity as? AppCompatActivity)?.supportActionBar?.title = when (actionType) {
             ActionType.SKIP_RECORD -> getString(R.string.settings_filter_title)
             ActionType.CALENDAR_EXPORT -> getString(R.string.settings_calendar_whitelist)
             ActionType.AUTO_DISMISS -> getString(R.string.settings_auto_dismiss_title)
