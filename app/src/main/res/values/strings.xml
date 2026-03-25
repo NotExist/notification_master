@@ -51,6 +51,7 @@
     <!-- 通知詳情 -->
     <string name="detail_title">通知詳情</string>
     <string name="detail_events">生命週期事件</string>
+    <string name="detail_events_help">通知的生命週期事件記錄了一則通知從出現到消失的完整歷程。\n\n分頁邏輯：同一個 notification_key 的通知可能對應多筆記錄（每次系統呼叫 notify() 都會建立一筆），以水平分頁呈現，每頁是一筆記錄及其事件。\n\n事件類型：\n• INITIAL — 服務啟動時已存在的通知，無法得知原始發布時間\n• POSTED — 新通知首次發布\n• UPDATED — 通知內容更新（App 對同一通知再次呼叫 notify()）\n• REMOVED — 通知被移除，附帶移除原因\n• RANKING — 系統重新排序或變更重要性，僅記錄有變動的欄位</string>
     <string name="detail_actions">動作按鈕</string>
     <string name="detail_media">媒體附件</string>
     <string name="detail_style_info">樣式資訊</string>

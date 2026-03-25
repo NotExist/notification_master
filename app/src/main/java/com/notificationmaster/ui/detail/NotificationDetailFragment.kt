@@ -74,6 +74,7 @@ class NotificationDetailFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        setupEventsHelp()
         setupEventPager()
         loadNotificationDetail()
     }
@@ -81,6 +82,16 @@ class NotificationDetailFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+    }
+
+    private fun setupEventsHelp() {
+        binding.labelEvents.setOnClickListener {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.detail_events)
+                .setMessage(R.string.detail_events_help)
+                .setPositiveButton(R.string.ok, null)
+                .show()
+        }
     }
 
     private fun setupEventPager() {
