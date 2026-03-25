@@ -421,25 +421,32 @@ object FilterRuleDialogHelper {
             val previewLimit = 200
             scope.launch {
                 val results = withContext(Dispatchers.IO) {
-                    database.notificationDao().getNotificationsWithLatestEventType(previewLimit, 0)
+                    database.notificationDao().getRecentEventsWithNotifications(previewLimit)
                 }
-                val matched = results.filter { r ->
-                    val mc = MatchContext(
-                        packageName = r.notification.packageName,
-                        channelId = r.notification.channelId,
-                        eventType = r.eventType?.let { EventType.valueOf(it) },
-                        title = r.notification.title,
-                        text = r.notification.text,
-                        bigText = r.notification.bigText,
-                        subText = r.notification.subText
-                    )
-                    tempRule.matches(mc)
-                }
+                // 事件優先：按通知分組，任一事件匹配即納入結果
+                val matched = results
+                    .groupBy { it.notification.id }
+                    .values
+                    .filter { events ->
+                        events.any { r ->
+                            val mc = MatchContext(
+                                packageName = r.notification.packageName,
+                                channelId = r.notification.channelId,
+                                eventType = r.eventType?.let { EventType.valueOf(it) },
+                                title = r.notification.title,
+                                text = r.notification.text,
+                                bigText = r.notification.bigText,
+                                subText = r.notification.subText
+                            )
+                            tempRule.matches(mc)
+                        }
+                    }
+                    .map { it.first().notification }
 
                 if (matched.isEmpty()) {
                     Toast.makeText(context, R.string.filter_preview_empty, Toast.LENGTH_SHORT).show()
                 } else {
-                    showPreviewResultDialog(context, matched.map { it.notification }, previewLimit, resolvedType, tempRule)
+                    showPreviewResultDialog(context, matched, previewLimit, resolvedType, tempRule)
                 }
             }
         }

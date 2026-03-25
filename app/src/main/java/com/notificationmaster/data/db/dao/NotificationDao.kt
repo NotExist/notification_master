@@ -11,11 +11,11 @@ import com.notificationmaster.data.db.entity.NotificationEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
- * 通知 + 最新事件類型的組合結果
+ * 通知 + 事件類型的組合結果（事件優先查詢用）
  */
 data class NotificationWithEventType(
     @Embedded val notification: NotificationEntity,
-    @ColumnInfo(name = "latest_event_type") val eventType: String?
+    @ColumnInfo(name = "event_type") val eventType: String?
 )
 
 /**
@@ -40,20 +40,21 @@ interface NotificationDao {
     @Query("SELECT * FROM notifications ORDER BY post_time DESC LIMIT :limit OFFSET :offset")
     suspend fun getNotificationsPaged(limit: Int, offset: Int): List<NotificationEntity>
 
-    /** 取得通知及其最新事件類型（預覽匹配用） */
+    /**
+     * 事件優先查詢：展開最近 :limit 筆通知的所有事件（預覽匹配用）
+     * 每筆結果為一個 (notification, event_type) 組合，同一通知可能出現多次。
+     * 呼叫端以 groupBy + any 判斷是否有任一事件匹配。
+     */
     @Query("""
-        SELECT n.*, e.event_type AS latest_event_type
+        SELECT n.*, e.event_type
         FROM notifications n
-        LEFT JOIN notification_events e ON e.id = (
-            SELECT e2.id FROM notification_events e2
-            WHERE e2.notification_id = n.id
-            ORDER BY e2.event_time DESC
-            LIMIT 1
+        INNER JOIN notification_events e ON e.notification_id = n.id
+        WHERE n.id IN (
+            SELECT id FROM notifications ORDER BY post_time DESC LIMIT :limit
         )
-        ORDER BY n.post_time DESC
-        LIMIT :limit OFFSET :offset
+        ORDER BY n.post_time DESC, e.event_time ASC
     """)
-    suspend fun getNotificationsWithLatestEventType(limit: Int, offset: Int): List<NotificationWithEventType>
+    suspend fun getRecentEventsWithNotifications(limit: Int): List<NotificationWithEventType>
 
     @Query("SELECT * FROM notifications WHERE id = :id")
     suspend fun getById(id: Long): NotificationEntity?
