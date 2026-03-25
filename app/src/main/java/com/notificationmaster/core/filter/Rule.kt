@@ -81,7 +81,11 @@ sealed interface Matcher {
     /** 匹配事件類型集合 */
     data class EventTypes(val types: Set<String>) : Matcher {
         override fun matches(context: MatchContext): Boolean {
-            val et = context.eventType ?: return true  // 未提供時視為通過
+            val et = context.eventType
+            if (et == null) {
+                android.util.Log.e("RuleEngine", "EventTypes.matches(): eventType is null, rejecting match")
+                return false
+            }
             return et.name in types
         }
 
