@@ -42,6 +42,17 @@ class CalendarExporter(private val context: Context) {
         const val LOCAL_ACCOUNT_NAME = "Notification Master"
     }
 
+    /** 目標日曆帳號資訊（ExtendedProperties 寫入時使用） */
+    var targetAccountName: String? = null
+        private set
+    var targetAccountType: String? = null
+        private set
+
+    fun setTargetAccount(name: String, type: String) {
+        targetAccountName = name
+        targetAccountType = type
+    }
+
     /**
      * 檢查日曆權限
      */
@@ -193,34 +204,6 @@ class CalendarExporter(private val context: Context) {
     }
 
     /**
-     * 查詢日曆的帳號資訊
-     *
-     * @return accountName to accountType，查詢失敗回傳 null
-     */
-    private fun getCalendarAccountInfo(calendarId: Long): Pair<String, String>? {
-        val projection = arrayOf(
-            CalendarContract.Calendars.ACCOUNT_NAME,
-            CalendarContract.Calendars.ACCOUNT_TYPE
-        )
-        val selection = "${CalendarContract.Calendars._ID} = ?"
-        val selectionArgs = arrayOf(calendarId.toString())
-
-        return context.contentResolver.query(
-            CalendarContract.Calendars.CONTENT_URI,
-            projection,
-            selection,
-            selectionArgs,
-            null
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val name = cursor.getString(0) ?: return@use null
-                val type = cursor.getString(1) ?: return@use null
-                name to type
-            } else null
-        }
-    }
-
-    /**
      * 匯出通知到指定日曆
      *
      * @param notifications 要匯出的通知清單
@@ -310,9 +293,9 @@ class CalendarExporter(private val context: Context) {
         // ExtendedProperties（URL）：用目標日曆的帳號資訊取得 SyncAdapter 身份
         // NAME 採用 ical4android 事實標準，可被 Etar/aCalendar+ 等 App 識別
         val extInserted = try {
-            val accountInfo = getCalendarAccountInfo(calendarId)
-            if (accountInfo != null) {
-                val (accName, accType) = accountInfo
+            val accName = targetAccountName
+            val accType = targetAccountType
+            if (accName != null && accType != null) {
                 val extUri = CalendarContract.ExtendedProperties.CONTENT_URI.buildUpon()
                     .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
                     .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, accName)
@@ -325,7 +308,7 @@ class CalendarExporter(private val context: Context) {
                 }
                 context.contentResolver.insert(extUri, extValues) != null
             } else {
-                Log.w(TAG, "Could not resolve account info for calendar $calendarId")
+                Log.w(TAG, "No target account info set for calendar $calendarId")
                 false
             }
         } catch (e: Exception) {
@@ -477,7 +460,11 @@ class CalendarExporter(private val context: Context) {
 
         AlertDialog.Builder(context)
             .setTitle(title)
-            .setAdapter(adapter) { _, which -> onSelected(calendars[which]) }
+            .setAdapter(adapter) { _, which ->
+                val selected = calendars[which]
+                setTargetAccount(selected.accountName, selected.accountType)
+                onSelected(selected)
+            }
             .setNegativeButton(R.string.cancel) { _, _ -> onCancel?.invoke() }
             .show()
     }

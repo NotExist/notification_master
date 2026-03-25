@@ -99,6 +99,8 @@ object AppPreferences {
     private const val KEY_REALTIME_CALENDAR_ENABLED = "realtime_calendar_enabled"
     private const val KEY_REALTIME_CALENDAR_ID = "realtime_calendar_id"
     private const val KEY_REALTIME_CALENDAR_NAME = "realtime_calendar_name"
+    private const val KEY_REALTIME_CALENDAR_ACCOUNT_NAME = "realtime_calendar_account_name"
+    private const val KEY_REALTIME_CALENDAR_ACCOUNT_TYPE = "realtime_calendar_account_type"
     fun isRealtimeCalendarEnabled(context: Context): Boolean =
         prefs(context).getBoolean(KEY_REALTIME_CALENDAR_ENABLED, false)
 
@@ -111,21 +113,37 @@ object AppPreferences {
     fun getRealtimeCalendarId(context: Context): Long =
         prefs(context).getLong(KEY_REALTIME_CALENDAR_ID, -1L)
 
-    fun setRealtimeCalendarTarget(context: Context, calendarId: Long, calendarName: String) {
+    fun setRealtimeCalendarTarget(
+        context: Context,
+        calendarId: Long,
+        calendarName: String,
+        accountName: String,
+        accountType: String
+    ) {
         prefs(context).edit()
             .putLong(KEY_REALTIME_CALENDAR_ID, calendarId)
             .putString(KEY_REALTIME_CALENDAR_NAME, calendarName)
+            .putString(KEY_REALTIME_CALENDAR_ACCOUNT_NAME, accountName)
+            .putString(KEY_REALTIME_CALENDAR_ACCOUNT_TYPE, accountType)
             .apply()
     }
 
     fun getRealtimeCalendarName(context: Context): String? =
         prefs(context).getString(KEY_REALTIME_CALENDAR_NAME, null)
 
+    fun getRealtimeCalendarAccountName(context: Context): String? =
+        prefs(context).getString(KEY_REALTIME_CALENDAR_ACCOUNT_NAME, null)
+
+    fun getRealtimeCalendarAccountType(context: Context): String? =
+        prefs(context).getString(KEY_REALTIME_CALENDAR_ACCOUNT_TYPE, null)
+
     fun clearRealtimeCalendar(context: Context) {
         prefs(context).edit()
             .remove(KEY_REALTIME_CALENDAR_ENABLED)
             .remove(KEY_REALTIME_CALENDAR_ID)
             .remove(KEY_REALTIME_CALENDAR_NAME)
+            .remove(KEY_REALTIME_CALENDAR_ACCOUNT_NAME)
+            .remove(KEY_REALTIME_CALENDAR_ACCOUNT_TYPE)
             .apply()
     }
 

@@ -92,6 +92,11 @@ class NotificationCaptureService : NotificationListenerService() {
         deviceStateCapture = DeviceStateCapture(this)
         mediaExtractor = MediaExtractor(this)
         calendarExporter = CalendarExporter(this)
+        val accName = AppPreferences.getRealtimeCalendarAccountName(this)
+        val accType = AppPreferences.getRealtimeCalendarAccountType(this)
+        if (accName != null && accType != null) {
+            calendarExporter.setTargetAccount(accName, accType)
+        }
         alertManager = PersistentAlertManager(this)
         RuleEngine.load(this)
         instance = this

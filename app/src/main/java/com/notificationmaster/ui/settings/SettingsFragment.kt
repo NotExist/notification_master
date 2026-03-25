@@ -773,7 +773,9 @@ class SettingsFragment : Fragment() {
         CalendarExporter(requireContext()).showPickerDialog(
             onCancel = { setRealtimeSwitchChecked(false) }
         ) { cal ->
-            AppPreferences.setRealtimeCalendarTarget(requireContext(), cal.id, cal.displayName)
+            AppPreferences.setRealtimeCalendarTarget(
+                requireContext(), cal.id, cal.displayName, cal.accountName, cal.accountType
+            )
             AppPreferences.setRealtimeCalendarEnabled(requireContext(), true)
             setRealtimeSwitchChecked(true)
             updateRealtimeCalendarDisplay()
