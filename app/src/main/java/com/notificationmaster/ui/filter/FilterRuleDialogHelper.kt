@@ -217,12 +217,7 @@ object FilterRuleDialogHelper {
         // === EventType 可選限制 ===
         /** 根據有效的 actionType 更新 EventType checkbox 可選狀態 */
         fun updateEventTypeAvailability(effectiveType: ActionType) {
-            val enabledTypes = when (effectiveType) {
-                ActionType.CALENDAR_EXPORT -> setOf(EventType.POSTED, EventType.UPDATED, EventType.REMOVED)
-                ActionType.PERSISTENT_ALERT -> setOf(EventType.POSTED, EventType.UPDATED)
-                ActionType.CLIPBOARD_COPY -> setOf(EventType.POSTED, EventType.UPDATED)
-                else -> EventType.entries.toSet()
-            }
+            val enabledTypes = effectiveType.allowedEventTypes
             eventTypes.forEachIndexed { i, et ->
                 checkBoxes[i].isEnabled = et in enabledTypes
                 if (et !in enabledTypes) checkBoxes[i].isChecked = false
@@ -425,17 +420,18 @@ object FilterRuleDialogHelper {
 
             val previewLimit = 200
             scope.launch {
-                val notifications = withContext(Dispatchers.IO) {
-                    database.notificationDao().getNotificationsPaged(previewLimit, 0)
+                val results = withContext(Dispatchers.IO) {
+                    database.notificationDao().getNotificationsWithLatestEventType(previewLimit, 0)
                 }
-                val matched = notifications.filter { n ->
+                val matched = results.filter { r ->
                     val mc = MatchContext(
-                        packageName = n.packageName,
-                        channelId = n.channelId,
-                        title = n.title,
-                        text = n.text,
-                        bigText = n.bigText,
-                        subText = n.subText
+                        packageName = r.notification.packageName,
+                        channelId = r.notification.channelId,
+                        eventType = r.eventType?.let { EventType.valueOf(it) },
+                        title = r.notification.title,
+                        text = r.notification.text,
+                        bigText = r.notification.bigText,
+                        subText = r.notification.subText
                     )
                     tempRule.matches(mc)
                 }
@@ -443,7 +439,7 @@ object FilterRuleDialogHelper {
                 if (matched.isEmpty()) {
                     Toast.makeText(context, R.string.filter_preview_empty, Toast.LENGTH_SHORT).show()
                 } else {
-                    showPreviewResultDialog(context, matched, previewLimit, resolvedType, tempRule)
+                    showPreviewResultDialog(context, matched.map { it.notification }, previewLimit, resolvedType, tempRule)
                 }
             }
         }

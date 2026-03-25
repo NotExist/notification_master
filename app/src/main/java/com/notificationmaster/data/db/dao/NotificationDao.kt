@@ -1,12 +1,22 @@
 package com.notificationmaster.data.db.dao
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import com.notificationmaster.data.db.entity.NotificationEntity
 import kotlinx.coroutines.flow.Flow
+
+/**
+ * 通知 + 最新事件類型的組合結果
+ */
+data class NotificationWithEventType(
+    @Embedded val notification: NotificationEntity,
+    @ColumnInfo(name = "latest_event_type") val eventType: String?
+)
 
 /**
  * 通知記錄 DAO
@@ -29,6 +39,21 @@ interface NotificationDao {
 
     @Query("SELECT * FROM notifications ORDER BY post_time DESC LIMIT :limit OFFSET :offset")
     suspend fun getNotificationsPaged(limit: Int, offset: Int): List<NotificationEntity>
+
+    /** 取得通知及其最新事件類型（預覽匹配用） */
+    @Query("""
+        SELECT n.*, e.event_type AS latest_event_type
+        FROM notifications n
+        LEFT JOIN notification_events e ON e.id = (
+            SELECT e2.id FROM notification_events e2
+            WHERE e2.notification_id = n.id
+            ORDER BY e2.event_time DESC
+            LIMIT 1
+        )
+        ORDER BY n.post_time DESC
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun getNotificationsWithLatestEventType(limit: Int, offset: Int): List<NotificationWithEventType>
 
     @Query("SELECT * FROM notifications WHERE id = :id")
     suspend fun getById(id: Long): NotificationEntity?

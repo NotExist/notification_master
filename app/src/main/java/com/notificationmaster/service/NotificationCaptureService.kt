@@ -378,10 +378,14 @@ class NotificationCaptureService : NotificationListenerService() {
             updateChannel(sbn.packageName, entity.channelId, captureTime, notificationChannel)
         }
 
-        // 7. 即時日曆匯出（僅 POSTED/UPDATED，INITIAL 不觸發）
-        if (eventType != EventType.INITIAL) {
+        // 7. 各 ActionType 獨立判斷 eventType 是否在允許範圍
+        if (eventType in ActionType.CALENDAR_EXPORT.allowedEventTypes) {
             checkRealtimeCalendarExport(entity, matchCtx)
+        }
+        if (eventType in ActionType.PERSISTENT_ALERT.allowedEventTypes) {
             checkPersistentAlert(entity, matchCtx)
+        }
+        if (eventType in ActionType.CLIPBOARD_COPY.allowedEventTypes) {
             checkClipboardCopy(entity, matchCtx)
         }
 

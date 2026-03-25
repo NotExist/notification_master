@@ -13,7 +13,17 @@ enum class ActionType {
     CALENDAR_EXPORT,
     AUTO_DISMISS,
     PERSISTENT_ALERT,
-    CLIPBOARD_COPY
+    CLIPBOARD_COPY;
+
+    /** 此 ActionType 允許的事件類型（UI checkbox 與預覽匹配共用） */
+    val allowedEventTypes: Set<EventType>
+        get() = when (this) {
+            SKIP_RECORD -> EventType.entries.toSet()
+            CALENDAR_EXPORT -> setOf(EventType.POSTED, EventType.UPDATED, EventType.REMOVED)
+            AUTO_DISMISS -> EventType.entries.toSet()
+            PERSISTENT_ALERT -> setOf(EventType.POSTED, EventType.UPDATED)
+            CLIPBOARD_COPY -> setOf(EventType.POSTED, EventType.UPDATED)
+        }
 }
 
 /**
