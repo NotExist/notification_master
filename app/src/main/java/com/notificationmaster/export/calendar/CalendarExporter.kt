@@ -34,7 +34,7 @@ class CalendarExporter(private val context: Context) {
         private const val TAG = "CalendarExporter"
 
         /** Local Calendar 常數 */
-        const val LOCAL_CALENDAR_NAME = "Local SyncAdapter"
+        const val LOCAL_CALENDAR_NAME = "InApp Calendar"
         const val LOCAL_ACCOUNT_TYPE = CalendarContract.ACCOUNT_TYPE_LOCAL
         const val LOCAL_ACCOUNT_NAME = "Notification Master"
     }
