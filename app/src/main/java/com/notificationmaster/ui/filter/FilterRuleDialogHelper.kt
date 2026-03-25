@@ -427,8 +427,11 @@ object FilterRuleDialogHelper {
 
             val previewLimit = 200
             scope.launch {
-                val results = withContext(Dispatchers.IO) {
-                    database.notificationDao().getRecentEventsWithNotifications(previewLimit)
+                val (results, channelGroupMap) = withContext(Dispatchers.IO) {
+                    val events = database.notificationDao().getRecentEventsWithNotifications(previewLimit)
+                    val groupMap = database.channelDao().getAllChannelsSync()
+                        .associate { (it.packageName to it.channelId) to it.groupId }
+                    events to groupMap
                 }
                 // 事件優先：按通知分組，任一事件匹配即納入結果
                 val matched = results
@@ -443,7 +446,11 @@ object FilterRuleDialogHelper {
                                 title = r.notification.title,
                                 text = r.notification.text,
                                 bigText = r.notification.bigText,
-                                subText = r.notification.subText
+                                subText = r.notification.subText,
+                                channelImportance = r.notification.importance.takeIf { it >= 0 },
+                                channelGroupId = r.notification.channelId?.let { chId ->
+                                    channelGroupMap[r.notification.packageName to chId]
+                                }
                             )
                             tempRule.matches(mc)
                         }
@@ -695,12 +702,12 @@ object FilterRuleDialogHelper {
         val builder = AlertDialog.Builder(context)
             .setTitle(R.string.filter_preview_result_title)
             .setView(dialogView)
-            .setNegativeButton(R.string.cancel, null)
 
         if (canApply) {
             builder.setPositiveButton(R.string.filter_preview_apply) { _, _ ->
                 applyActionToResults(context, matched, actionType, tempRule)
             }
+            builder.setNegativeButton(R.string.cancel, null)
         } else {
             builder.setPositiveButton(R.string.ok, null)
         }

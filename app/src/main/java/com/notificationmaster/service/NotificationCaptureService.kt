@@ -221,7 +221,7 @@ class NotificationCaptureService : NotificationListenerService() {
                 processNotification(sbn, eventType, rankingMap)
 
                 // 自動清除檢查（通知已記錄後執行）
-                checkAutoDismiss(sbn, rankingMap)
+                checkAutoDismiss(sbn, rankingMap, eventType)
 
                 // Debug dump
                 debugDumper.dumpNotification(sbn, eventType.name)
@@ -398,7 +398,7 @@ class NotificationCaptureService : NotificationListenerService() {
     private suspend fun processRemoval(
         sbn: StatusBarNotification,
         reason: Int,
-        @Suppress("UNUSED_PARAMETER") rankingMap: RankingMap?
+        rankingMap: RankingMap?
     ) {
         val captureTime = System.currentTimeMillis()
         val key = ApiVersionHelper.getNotificationKey(sbn)
@@ -406,6 +406,12 @@ class NotificationCaptureService : NotificationListenerService() {
         // 過濾檢查（被過濾的通知仍需清理 PendingIntentCache）
         val filterChannelId: String? = if (ApiVersionHelper.supportsNotificationChannel()) sbn.notification.channelId else null
         val removalExtras = sbn.notification.extras
+
+        // 從 DB 的 ChannelEntity 取得 channel 屬性（removal 時 rankingMap 中該 key 可能已被移除）
+        val channelEntity = if (filterChannelId != null) {
+            database.channelDao().getByPackageAndChannelId(sbn.packageName, filterChannelId)
+        } else null
+
         val removalMatchCtx = MatchContext(
             packageName = sbn.packageName,
             channelId = filterChannelId,
@@ -413,7 +419,9 @@ class NotificationCaptureService : NotificationListenerService() {
             title = removalExtras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString(),
             text = removalExtras?.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString(),
             bigText = removalExtras?.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString(),
-            subText = removalExtras?.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)?.toString()
+            subText = removalExtras?.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)?.toString(),
+            channelImportance = channelEntity?.importance,
+            channelGroupId = channelEntity?.groupId
         )
         if (RuleEngine.matches(ActionType.SKIP_RECORD, removalMatchCtx)) {
             PendingIntentCache.remove(key)
@@ -473,9 +481,22 @@ class NotificationCaptureService : NotificationListenerService() {
 
                 if (latestNotification != null) {
                     // 過濾檢查
+                    val channelEntity = latestNotification.channelId?.let { chId ->
+                        database.channelDao().getByPackageAndChannelId(latestNotification.packageName, chId)
+                    }
                     if (RuleEngine.matches(
                             ActionType.SKIP_RECORD,
-                            MatchContext(latestNotification.packageName, latestNotification.channelId, EventType.RANKING)
+                            MatchContext(
+                                packageName = latestNotification.packageName,
+                                channelId = latestNotification.channelId,
+                                eventType = EventType.RANKING,
+                                title = latestNotification.title,
+                                text = latestNotification.text,
+                                bigText = latestNotification.bigText,
+                                subText = latestNotification.subText,
+                                channelImportance = channelEntity?.importance,
+                                channelGroupId = channelEntity?.groupId
+                            )
                         )) continue
 
                     val newRank = ranking.rank
@@ -876,7 +897,7 @@ class NotificationCaptureService : NotificationListenerService() {
         val shouldUpdate = RuleEngine.getRules(ActionType.CALENDAR_EXPORT).any { rule ->
             rule.packageName == packageName &&
             (rule.channelId == null || rule.channelId == channelId) &&
-            "REMOVED" in rule.eventTypes
+            EventType.REMOVED.name in rule.eventTypes
         }
         if (!shouldUpdate) return
 
@@ -927,7 +948,7 @@ class NotificationCaptureService : NotificationListenerService() {
      * 通知已記錄到 DB 後呼叫，僅影響狀態列顯示。
      * POSTED 和 UPDATED 都檢查；UPDATED 時重設延遲計時器。
      */
-    private fun checkAutoDismiss(sbn: StatusBarNotification, rankingMap: RankingMap?) {
+    private fun checkAutoDismiss(sbn: StatusBarNotification, rankingMap: RankingMap?, eventType: EventType) {
         val key = ApiVersionHelper.getNotificationKey(sbn)
         val channelId = if (ApiVersionHelper.supportsNotificationChannel())
             sbn.notification.channelId else null
@@ -938,7 +959,7 @@ class NotificationCaptureService : NotificationListenerService() {
         val dismissMatchCtx = MatchContext(
             packageName = sbn.packageName,
             channelId = channelId,
-            eventType = EventType.POSTED,
+            eventType = eventType,
             title = dismissExtras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString(),
             text = dismissExtras?.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString(),
             bigText = dismissExtras?.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString(),
@@ -947,7 +968,6 @@ class NotificationCaptureService : NotificationListenerService() {
             channelGroupId = dismissGroupId
         )
 
-        // POSTED 和 UPDATED 都以 POSTED 類型匹配（AUTO_DISMISS 以 POSTED 為主要觸發）
         val rule = RuleEngine.findMatchingRule(
             ActionType.AUTO_DISMISS, dismissMatchCtx
         ) ?: return
