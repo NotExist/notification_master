@@ -276,14 +276,19 @@ class CalendarExporter(private val context: Context) {
             ?: return -1L
         val eventId = ContentUris.parseId(eventUri)
 
-        // ExtendedProperties（URL）：失敗時將 Key 追加到 description
+        // ExtendedProperties（URL）：需 CALLER_IS_SYNCADAPTER 身份
         try {
+            val extUri = CalendarContract.ExtendedProperties.CONTENT_URI.buildUpon()
+                .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
+                .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, LOCAL_ACCOUNT_NAME)
+                .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_TYPE, LOCAL_ACCOUNT_TYPE)
+                .build()
             val extValues = ContentValues().apply {
                 put(CalendarContract.ExtendedProperties.EVENT_ID, eventId)
                 put(CalendarContract.ExtendedProperties.NAME, "URL")
                 put(CalendarContract.ExtendedProperties.VALUE, notification.notificationKey)
             }
-            context.contentResolver.insert(CalendarContract.ExtendedProperties.CONTENT_URI, extValues)
+            context.contentResolver.insert(extUri, extValues)
         } catch (e: Exception) {
             Log.w(TAG, "ExtendedProperties failed, appending Key to description", e)
             val fallbackDesc = "$description\n\n-- NotificationMaster --\nKey: ${notification.notificationKey}\n-- NotificationMaster --"
