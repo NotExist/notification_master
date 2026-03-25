@@ -442,7 +442,7 @@ object FilterRuleDialogHelper {
                             val mc = MatchContext(
                                 packageName = r.notification.packageName,
                                 channelId = r.notification.channelId,
-                                eventType = r.eventType?.let { EventType.valueOf(it) },
+                                eventType = r.eventType,
                                 title = r.notification.title,
                                 text = r.notification.text,
                                 bigText = r.notification.bigText,

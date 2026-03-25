@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.os.Build
 import android.os.IBinder
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -180,7 +179,10 @@ class NotificationCaptureService : NotificationListenerService() {
 
             val rankingMap = try {
                 getCurrentRanking()
-            } catch (e: Exception) { null }
+            } catch (e: Exception) {
+                Log.w(TAG, "captureActiveNotifications: failed to get current ranking", e)
+                null
+            }
 
             var newCount = 0
             var skipCount = 0
@@ -219,9 +221,6 @@ class NotificationCaptureService : NotificationListenerService() {
                 val eventType = if (isUpdate) EventType.UPDATED else EventType.POSTED
 
                 processNotification(sbn, eventType, rankingMap)
-
-                // 自動清除檢查（通知已記錄後執行）
-                checkAutoDismiss(sbn, rankingMap, eventType)
 
                 // Debug dump
                 debugDumper.dumpNotification(sbn, eventType.name)
@@ -379,6 +378,9 @@ class NotificationCaptureService : NotificationListenerService() {
         }
 
         // 7. 各 ActionType 獨立判斷 eventType 是否在允許範圍
+        if (eventType in ActionType.AUTO_DISMISS.allowedEventTypes) {
+            checkAutoDismiss(sbn, rankingMap, eventType)
+        }
         if (eventType in ActionType.CALENDAR_EXPORT.allowedEventTypes) {
             checkRealtimeCalendarExport(entity, matchCtx)
         }
@@ -819,7 +821,7 @@ class NotificationCaptureService : NotificationListenerService() {
         val ranking = Ranking()
         if (!rankingMap.getRanking(key, ranking)) return null to null
         // Ranking.importance requires API 24+, Ranking.channel requires API 28+
-        val importance = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) ranking.importance else null
+        val importance = if (ApiVersionHelper.supportsDirectReply()) ranking.importance else null
         val groupId = if (ApiVersionHelper.supportsPerson()) ranking.channel?.group else null
         return importance to groupId
     }

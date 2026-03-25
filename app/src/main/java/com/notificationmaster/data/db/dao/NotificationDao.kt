@@ -7,6 +7,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.NotificationEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -15,7 +16,7 @@ import kotlinx.coroutines.flow.Flow
  */
 data class NotificationWithEventType(
     @Embedded val notification: NotificationEntity,
-    @ColumnInfo(name = "event_type") val eventType: String?
+    @ColumnInfo(name = "event_type") val eventType: EventType?
 )
 
 /**

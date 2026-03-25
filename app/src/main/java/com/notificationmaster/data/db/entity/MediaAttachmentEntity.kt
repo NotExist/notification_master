@@ -42,7 +42,8 @@ enum class MediaType {
     ],
     indices = [
         Index(value = ["notification_id"]),
-        Index(value = ["media_type"])
+        Index(value = ["media_type"]),
+        Index(value = ["content_hash"])
     ]
 )
 data class MediaAttachmentEntity(
