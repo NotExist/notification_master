@@ -68,7 +68,15 @@ class FilterSettingsFragment : Fragment() {
         // 確保已載入
         context?.let { RuleEngine.load(it) }
 
-        // 根據 actionType 設定空白提示文字
+        // 根據 actionType 設定標題和空白提示文字
+        activity?.title = when (actionType) {
+            ActionType.SKIP_RECORD -> getString(R.string.settings_filter_title)
+            ActionType.CALENDAR_EXPORT -> getString(R.string.settings_calendar_whitelist)
+            ActionType.AUTO_DISMISS -> getString(R.string.settings_auto_dismiss_title)
+            ActionType.PERSISTENT_ALERT -> getString(R.string.settings_persistent_alert_title)
+            ActionType.CLIPBOARD_COPY -> getString(R.string.settings_clipboard_copy_title)
+        }
+
         when (actionType) {
             ActionType.SKIP_RECORD -> {
                 binding.textEmptyTitle.setText(R.string.filter_empty)

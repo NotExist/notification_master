@@ -1,7 +1,6 @@
 package com.notificationmaster.export.calendar
 
 import android.Manifest
-import android.content.ContentProviderOperation
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
@@ -260,31 +259,42 @@ class CalendarExporter(private val context: Context) {
         val title = buildEventTitle(notification, detailLevel)
         val description = buildEventDescription(notification, detailLevel)
 
-        val ops = arrayListOf(
-            // Op 0: 插入事件
-            ContentProviderOperation.newInsert(CalendarContract.Events.CONTENT_URI)
-                .withValue(CalendarContract.Events.CALENDAR_ID, calendarId)
-                .withValue(CalendarContract.Events.TITLE, title)
-                .withValue(CalendarContract.Events.DESCRIPTION, description)
-                .withValue(CalendarContract.Events.EVENT_LOCATION, buildEventLocation(notification))
-                .withValue(CalendarContract.Events.DTSTART, notification.postTime)
-                .withValue(CalendarContract.Events.DTEND, notification.postTime)
-                .withValue(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
-                .withValue(CalendarContract.Events.HAS_ALARM, 0)
-                .withValue(CalendarContract.Events.STATUS, CalendarContract.Events.STATUS_TENTATIVE)
-                .withValue(CalendarContract.Events.CUSTOM_APP_URI, notification.notificationKey)
-                .build(),
-            // Op 1: 附加 URL 擴充屬性，EVENT_ID 回參 Op 0
-            ContentProviderOperation.newInsert(CalendarContract.ExtendedProperties.CONTENT_URI)
-                .withValueBackReference(CalendarContract.ExtendedProperties.EVENT_ID, 0)
-                .withValue(CalendarContract.ExtendedProperties.NAME, "URL")
-                .withValue(CalendarContract.ExtendedProperties.VALUE, notification.notificationKey)
-                .build()
-        )
+        val values = ContentValues().apply {
+            put(CalendarContract.Events.CALENDAR_ID, calendarId)
+            put(CalendarContract.Events.TITLE, title)
+            put(CalendarContract.Events.DESCRIPTION, description)
+            put(CalendarContract.Events.EVENT_LOCATION, buildEventLocation(notification))
+            put(CalendarContract.Events.DTSTART, notification.postTime)
+            put(CalendarContract.Events.DTEND, notification.postTime)
+            put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+            put(CalendarContract.Events.HAS_ALARM, 0)
+            put(CalendarContract.Events.STATUS, CalendarContract.Events.STATUS_TENTATIVE)
+            put(CalendarContract.Events.CUSTOM_APP_URI, notification.notificationKey)
+        }
 
-        val results = context.contentResolver.applyBatch(CalendarContract.AUTHORITY, ops)
-        val eventUri = results[0].uri
-        return if (eventUri != null) ContentUris.parseId(eventUri) else -1L
+        val eventUri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
+            ?: return -1L
+        val eventId = ContentUris.parseId(eventUri)
+
+        // ExtendedProperties（URL）：失敗時將 Key 追加到 description
+        try {
+            val extValues = ContentValues().apply {
+                put(CalendarContract.ExtendedProperties.EVENT_ID, eventId)
+                put(CalendarContract.ExtendedProperties.NAME, "URL")
+                put(CalendarContract.ExtendedProperties.VALUE, notification.notificationKey)
+            }
+            context.contentResolver.insert(CalendarContract.ExtendedProperties.CONTENT_URI, extValues)
+        } catch (e: Exception) {
+            Log.w(TAG, "ExtendedProperties failed, appending Key to description", e)
+            val fallbackDesc = "$description\n\n-- NotificationMaster --\nKey: ${notification.notificationKey}\n-- NotificationMaster --"
+            val updateValues = ContentValues().apply {
+                put(CalendarContract.Events.DESCRIPTION, fallbackDesc)
+            }
+            val updateUri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
+            context.contentResolver.update(updateUri, updateValues, null, null)
+        }
+
+        return eventId
     }
 
     /**
