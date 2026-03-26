@@ -21,6 +21,7 @@ import com.notificationmaster.core.filter.MatchContext
 import com.notificationmaster.core.filter.Matcher
 import com.notificationmaster.core.filter.RuleAction
 import com.notificationmaster.core.filter.RuleEngine
+import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.data.db.entity.AppSourceEntity
@@ -97,7 +98,7 @@ class NotificationCaptureService : NotificationListenerService() {
             calendarExporter.setTargetAccount(accName, accType)
         }
         alertManager = PersistentAlertManager(this)
-        RuleEngine.load(this)
+        RuleRepository.load(this)
         instance = this
     }
 

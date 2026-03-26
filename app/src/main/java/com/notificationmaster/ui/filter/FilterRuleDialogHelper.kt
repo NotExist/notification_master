@@ -31,7 +31,7 @@ import com.notificationmaster.core.filter.MatchContext
 import com.notificationmaster.core.filter.Matcher
 import com.notificationmaster.core.filter.Rule
 import com.notificationmaster.core.filter.RuleAction
-import com.notificationmaster.core.filter.RuleEngine
+import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.ui.search.NotificationAdapter
@@ -467,7 +467,7 @@ object FilterRuleDialogHelper {
 
         // === 建立 Dialog ===
         // 確保規則已載入
-        RuleEngine.load(context)
+        RuleRepository.load(context)
 
         val dialogTitle = if (isEditMode) R.string.filter_dialog_edit_title else R.string.filter_dialog_title
         val dialog = MaterialAlertDialogBuilder(context)
@@ -560,11 +560,11 @@ object FilterRuleDialogHelper {
                         action = action,
                         createdAt = existingRule.createdAt
                     )
-                    RuleEngine.updateRule(context, updatedRule)
+                    RuleRepository.updateRule(context, updatedRule)
                     Toast.makeText(context, R.string.filter_rule_updated, Toast.LENGTH_SHORT).show()
                 } else {
                     val rule = Rule(matchers = matchers, action = action)
-                    RuleEngine.addRule(context, rule)
+                    RuleRepository.addRule(context, rule)
                     Toast.makeText(context, R.string.filter_rule_added, Toast.LENGTH_SHORT).show()
                 }
                 onRuleAdded?.invoke()

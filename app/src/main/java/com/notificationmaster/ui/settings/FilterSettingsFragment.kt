@@ -19,6 +19,7 @@ import com.notificationmaster.core.filter.Matcher
 import com.notificationmaster.core.filter.Rule
 import com.notificationmaster.core.filter.RuleAction
 import com.notificationmaster.core.filter.RuleEngine
+import com.notificationmaster.core.filter.RuleRepository
 import android.content.Context
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.databinding.FragmentFilterSettingsBinding
@@ -67,7 +68,7 @@ class FilterSettingsFragment : Fragment() {
         }
 
         // 確保已載入
-        context?.let { RuleEngine.load(it) }
+        context?.let { RuleRepository.load(it) }
 
         // 根據 actionType 設定標題和空白提示文字
         (activity as? AppCompatActivity)?.supportActionBar?.title = when (actionType) {
@@ -155,7 +156,7 @@ class FilterSettingsFragment : Fragment() {
         AlertDialog.Builder(ctx)
             .setMessage(R.string.filter_delete_confirm)
             .setPositiveButton(R.string.ok) { _, _ ->
-                RuleEngine.removeRule(ctx, rule.id)
+                RuleRepository.removeRule(ctx, rule.id)
                 Toast.makeText(ctx, R.string.filter_rule_deleted, Toast.LENGTH_SHORT).show()
                 refreshList()
             }

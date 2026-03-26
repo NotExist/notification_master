@@ -1,107 +1,39 @@
 package com.notificationmaster.core.filter
 
-import android.content.Context
-import android.util.Log
-import androidx.documentfile.provider.DocumentFile
-import com.notificationmaster.core.prefs.AppPreferences
-import com.notificationmaster.data.db.entity.EventType
 import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * 規則引擎：管理過濾/處置規則的儲存、匹配與匯出匯入
+ * 規則引擎：純邏輯層，負責記憶體內規則管理、匹配與 JSON 序列化
  *
- * 支援多種 Matcher 組合和 Action 類型，儲存格式為 v2 JSON。
+ * 不依賴 Android API，可在 JVM 單元測試中直接使用。
+ * 持久化（SharedPreferences、檔案備份）由 [RuleRepository] 負責。
  */
 object RuleEngine {
 
-    private const val TAG = "RuleEngine"
-    private const val BACKUP_FILENAME = "notification_master_filter_rules.json"
     private const val EXPORT_VERSION = 2
 
     private var rules = listOf<Rule>()
-    private var loaded = false
 
-    // ========== 載入 / 儲存 ==========
-
-    /**
-     * 載入規則
-     */
-    fun load(context: Context) {
-        if (loaded) return
-
-        val v2Json = AppPreferences.getRulesV2Json(context)
-        rules = if (v2Json != null) {
-            try {
-                val arr = JSONArray(v2Json)
-                (0 until arr.length()).map { Rule.fromJson(arr.getJSONObject(it)) }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to parse rules", e)
-                emptyList()
-            }
-        } else {
-            // 首次啟動：建立預設規則（過濾自身通知）
-            listOf(createSelfFilterRule(context))
-        }
-
-        // 首次啟動時持久化預設規則
-        if (v2Json == null && rules.isNotEmpty()) {
-            save(context)
-        }
-
-        loaded = true
-        Log.d(TAG, "Loaded ${rules.size} rules")
-    }
+    // ========== 記憶體規則管理 ==========
 
     /**
-     * 強制重新載入（規則被外部修改時使用）
+     * 設定規則（供 [RuleRepository] 載入後呼叫）
      */
-    fun reload(context: Context) {
-        loaded = false
-        load(context)
+    fun setRules(newRules: List<Rule>) {
+        rules = newRules
     }
 
-    private fun save(context: Context) {
-        val arr = JSONArray(rules.map { it.toJson() })
-        AppPreferences.setRulesV2Json(context, arr.toString())
-        autoBackup(context)
-    }
-
-    /**
-     * 建立預設的自身過濾規則
-     *
-     * 將 Notification Master 自身的通知加入黑名單，
-     * 避免記錄 App 自己發出的通知（如持續提醒的 heads-up 通知）。
-     * 同時作為使用者理解過濾規則的範例。
-     */
-    private fun createSelfFilterRule(context: Context): Rule {
-        return Rule(
-            matchers = listOf(
-                Matcher.Package(context.packageName),
-                Matcher.EventTypes(EventType.entries.map { it.name }.toSet())
-            ),
-            action = RuleAction.SkipRecord
-        )
-    }
-
-    // ========== CRUD ==========
-
-    fun addRule(context: Context, rule: Rule) {
+    fun addRule(rule: Rule) {
         rules = rules + rule
-        save(context)
-        Log.d(TAG, "Added rule: ${rule.action.actionType} ${rule.packageName}")
     }
 
-    fun updateRule(context: Context, rule: Rule) {
+    fun updateRule(rule: Rule) {
         rules = rules.map { if (it.id == rule.id) rule else it }
-        save(context)
-        Log.d(TAG, "Updated rule: ${rule.id}")
     }
 
-    fun removeRule(context: Context, ruleId: String) {
+    fun removeRule(ruleId: String) {
         rules = rules.filter { it.id != ruleId }
-        save(context)
-        Log.d(TAG, "Removed rule: $ruleId")
     }
 
     // ========== 查詢 ==========
@@ -203,24 +135,22 @@ object RuleEngine {
     }
 
     /**
-     * 匯入 JSON 字串（v2 格式）
+     * 匯入 JSON 字串（v2 格式），替換記憶體中的規則
      *
      * @return 各 ActionType 匯入的規則數
      */
-    fun importAllFromJson(context: Context, json: String): Map<ActionType, Int> {
+    fun importAllFromJson(json: String): Map<ActionType, Int> {
         val root = JSONObject(json)
         val arr = root.getJSONArray("rules")
         val imported = (0 until arr.length()).map { Rule.fromJson(arr.getJSONObject(it)) }
 
         rules = imported
-        save(context)
 
         val result = mutableMapOf<ActionType, Int>()
         for (type in ActionType.entries) {
             val count = imported.count { it.action.actionType == type }
             if (count > 0) result[type] = count
         }
-        Log.d(TAG, "Imported ${imported.size} rules")
         return result
     }
 
@@ -244,8 +174,7 @@ object RuleEngine {
             val backupRules = (0 until arr.length()).map { Rule.fromJson(arr.getJSONObject(it)) }
             val localContentKeys = rules.map { it.contentKey() }.toSet()
             backupRules.count { it.contentKey() !in localContentKeys }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to count new rules in backup", e)
+        } catch (_: Exception) {
             0
         }
     }
@@ -256,9 +185,9 @@ object RuleEngine {
      * 以備份規則為主體，保留本機中備份沒有的獨有規則。
      * 內容相同（matchers + action）但 id/createdAt 不同的規則視為重複。
      *
-     * @return 各 ActionType 從備份新增的規則數
+     * @return 各 ActionType 從備份新增的規則數；無變更時回傳空 Map
      */
-    fun mergeFromJson(context: Context, json: String): Map<ActionType, Int> {
+    fun mergeFromJson(json: String): Map<ActionType, Int> {
         val root = JSONObject(json)
         val arr = root.getJSONArray("rules")
         val backupRules = (0 until arr.length()).map { Rule.fromJson(arr.getJSONObject(it)) }
@@ -273,67 +202,28 @@ object RuleEngine {
 
         // 備份規則為主 + 本機獨有規則
         rules = backupRules + localOnlyRules
-        save(context)
 
         val result = mutableMapOf<ActionType, Int>()
         for (type in ActionType.entries) {
             val count = newFromBackup.count { it.action.actionType == type }
             if (count > 0) result[type] = count
         }
-        Log.d(TAG, "Merged: ${backupRules.size} from backup + ${localOnlyRules.size} local-only (${newFromBackup.size} new)")
         return result
     }
 
-    // ========== 自動備份 ==========
-
-    fun autoBackup(context: Context) {
-        val treeUri = AppPreferences.getBackupDirUri(context) ?: return
-        try {
-            val dir = DocumentFile.fromTreeUri(context, treeUri) ?: return
-            val existing = dir.findFile(BACKUP_FILENAME)
-            val file = existing ?: dir.createFile("application/json", BACKUP_FILENAME)
-            if (file == null) {
-                Log.w(TAG, "Failed to create backup file")
-                return
-            }
-            val json = exportAllToJson()
-            context.contentResolver.openOutputStream(file.uri, "wt")?.use {
-                it.write(json.toByteArray())
-            }
-            Log.d(TAG, "Auto backup completed")
-        } catch (e: Exception) {
-            Log.w(TAG, "Auto backup failed", e)
-        }
-    }
-
-    fun readBackupFromDir(context: Context): String? {
-        val treeUri = AppPreferences.getBackupDirUri(context) ?: return null
-        return try {
-            val dir = DocumentFile.fromTreeUri(context, treeUri) ?: return null
-            val file = dir.findFile(BACKUP_FILENAME) ?: return null
-            if (!file.canRead()) return null
-            context.contentResolver.openInputStream(file.uri)?.use {
-                it.bufferedReader().readText()
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to read backup file", e)
-            null
-        }
-    }
+    // ========== 測試輔助 ==========
 
     /**
      * 清除所有規則（僅供測試使用）
      */
     internal fun clearForTesting() {
         rules = emptyList()
-        loaded = false
     }
 
     /**
-     * 直接設定規則（僅供測試使用，跳過 SharedPreferences）
+     * 直接設定規則（僅供測試使用，跳過持久化）
      */
     internal fun setRulesForTesting(testRules: List<Rule>) {
         rules = testRules
-        loaded = true
     }
 }

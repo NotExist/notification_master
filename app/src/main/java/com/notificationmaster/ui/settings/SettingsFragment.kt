@@ -26,6 +26,7 @@ import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.filter.ActionType
 import com.notificationmaster.core.filter.RuleEngine
+import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.data.db.NotificationDatabase
@@ -156,7 +157,7 @@ class SettingsFragment : Fragment() {
         debugDumper = DebugDumper(requireContext())
 
         // 確保規則已載入
-        RuleEngine.load(requireContext())
+        RuleRepository.load(requireContext())
 
         setupEnvironmentCard()
         setupFilterSettings()
@@ -817,7 +818,7 @@ class SettingsFragment : Fragment() {
         notifications: List<com.notificationmaster.data.db.entity.NotificationEntity>
     ): List<com.notificationmaster.data.db.entity.NotificationEntity> {
         val ctx = context ?: return notifications
-        RuleEngine.load(ctx)
+        RuleRepository.load(ctx)
         val whitelistRules = RuleEngine.getRules(ActionType.CALENDAR_EXPORT)
         return if (whitelistRules.isEmpty()) {
             notifications  // 無白名單 → 全部
@@ -994,7 +995,7 @@ class SettingsFragment : Fragment() {
                 it.bufferedReader().readText()
             } ?: throw IllegalStateException("無法開啟輸入串流")
 
-            val result = RuleEngine.importAllFromJson(ctx, json)
+            val result = RuleRepository.importAllFromJson(ctx, json)
             val notifCount = result[ActionType.SKIP_RECORD] ?: 0
             val calCount = result[ActionType.CALENDAR_EXPORT] ?: 0
             val dismissCount = result[ActionType.AUTO_DISMISS] ?: 0
@@ -1031,7 +1032,7 @@ class SettingsFragment : Fragment() {
         val ctx = context ?: return
         if (AppPreferences.isBackupDirEnabled(ctx)) {
             // 有備份目錄 → 檢查是否有未同步規則
-            val json = RuleEngine.readBackupFromDir(ctx) ?: return
+            val json = RuleRepository.readBackupFromDir(ctx) ?: return
             val newCount = RuleEngine.countNewRulesInBackup(json)
             if (newCount > 0) {
                 AlertDialog.Builder(ctx)
@@ -1064,7 +1065,7 @@ class SettingsFragment : Fragment() {
     private fun mergeBackupJson(json: String) {
         val ctx = context ?: return
         try {
-            val result = RuleEngine.mergeFromJson(ctx, json)
+            val result = RuleRepository.mergeFromJson(ctx, json)
             if (result.isEmpty()) {
                 Toast.makeText(ctx, "備份規則已全部同步，無需匯入", Toast.LENGTH_SHORT).show()
                 return
@@ -1106,7 +1107,7 @@ class SettingsFragment : Fragment() {
             updateBackupDirDisplay()
 
             // 備份檔案存在且有未同步規則 → 建議合併匯入
-            val json = RuleEngine.readBackupFromDir(ctx)
+            val json = RuleRepository.readBackupFromDir(ctx)
             if (json != null) {
                 val newCount = RuleEngine.countNewRulesInBackup(json)
                 if (newCount > 0) {
@@ -1121,7 +1122,7 @@ class SettingsFragment : Fragment() {
                 }
             } else {
                 // 無備份檔案 → 立即執行一次自動備份
-                RuleEngine.autoBackup(ctx)
+                RuleRepository.autoBackup(ctx)
             }
         } catch (e: SecurityException) {
             Log.w(TAG, "Failed to take persistable URI permission for backup dir", e)
