@@ -65,10 +65,10 @@ class RuleTest {
     }
 
     @Test
-    fun `EventTypes matcher passes when eventType is null`() {
+    fun `EventTypes matcher rejects when eventType is null`() {
         val m = Matcher.EventTypes(setOf("POSTED"))
         val ctx = MatchContext(packageName = "x", channelId = null, eventType = null)
-        assertTrue(m.matches(ctx))
+        assertFalse(m.matches(ctx))
     }
 
     @Test
