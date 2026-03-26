@@ -1,7 +1,6 @@
 package com.notificationmaster.ui.archive
 
 import android.os.Bundle
-import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -30,15 +29,6 @@ class ArchiveDetailFragment : Fragment() {
 
     private val args: ArchiveDetailFragmentArgs by navArgs()
     private lateinit var adapter: TimelineAdapter
-    private var layoutManagerState: Parcelable? = null
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        if (savedInstanceState != null) {
-            @Suppress("DEPRECATION")
-            layoutManagerState = savedInstanceState.getParcelable(KEY_LAYOUT_STATE)
-        }
-    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -56,17 +46,7 @@ class ArchiveDetailFragment : Fragment() {
         loadNotifications()
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        val state = _binding?.recyclerView?.layoutManager?.onSaveInstanceState()
-            ?: layoutManagerState
-        if (state != null) {
-            outState.putParcelable(KEY_LAYOUT_STATE, state)
-        }
-    }
-
     override fun onDestroyView() {
-        layoutManagerState = binding.recyclerView.layoutManager?.onSaveInstanceState()
         super.onDestroyView()
         _binding = null
     }
@@ -98,12 +78,7 @@ class ArchiveDetailFragment : Fragment() {
                 } else {
                     binding.emptyState.visibility = View.GONE
                     binding.recyclerView.visibility = View.VISIBLE
-                    adapter.submitList(buildTimelineItems(notifications)) {
-                        layoutManagerState?.let { state ->
-                            _binding?.recyclerView?.layoutManager?.onRestoreInstanceState(state)
-                            layoutManagerState = null
-                        }
-                    }
+                    adapter.submitList(buildTimelineItems(notifications))
                 }
             }
         }
@@ -137,7 +112,4 @@ class ArchiveDetailFragment : Fragment() {
         return cal.timeInMillis
     }
 
-    companion object {
-        private const val KEY_LAYOUT_STATE = "layout_manager_state"
-    }
 }

@@ -1,7 +1,6 @@
 package com.notificationmaster.ui.archive
 
 import android.os.Bundle
-import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -30,7 +29,6 @@ class ArchiveFragment : Fragment() {
     private lateinit var appSourceAdapter: AppSourceAdapter
     private lateinit var channelAdapter: ChannelAdapter
     private var currentTab = Tab.BY_APP
-    private var layoutManagerState: Parcelable? = null
 
     /** Channel 功能是否可用 (API 26+) */
     private val isChannelSupported: Boolean
@@ -41,8 +39,6 @@ class ArchiveFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState != null) {
-            @Suppress("DEPRECATION")
-            layoutManagerState = savedInstanceState.getParcelable(KEY_LAYOUT_STATE)
             currentTab = Tab.values()[savedInstanceState.getInt(KEY_CURRENT_TAB, 0)]
         }
     }
@@ -74,16 +70,10 @@ class ArchiveFragment : Fragment() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        val state = _binding?.recyclerView?.layoutManager?.onSaveInstanceState()
-            ?: layoutManagerState
-        if (state != null) {
-            outState.putParcelable(KEY_LAYOUT_STATE, state)
-        }
         outState.putInt(KEY_CURRENT_TAB, currentTab.ordinal)
     }
 
     override fun onDestroyView() {
-        layoutManagerState = binding.recyclerView.layoutManager?.onSaveInstanceState()
         super.onDestroyView()
         _binding = null
     }
@@ -176,12 +166,7 @@ class ArchiveFragment : Fragment() {
                 Tab.BY_APP -> {
                     binding.recyclerView.adapter = appSourceAdapter
                     database.appSourceDao().getAllAppSources().collectLatest { apps ->
-                        appSourceAdapter.submitList(apps) {
-                            layoutManagerState?.let { state ->
-                                _binding?.recyclerView?.layoutManager?.onRestoreInstanceState(state)
-                                layoutManagerState = null
-                            }
-                        }
+                        appSourceAdapter.submitList(apps)
                         _binding?.textEmpty?.text = getString(R.string.timeline_empty)
                         _binding?.textEmpty?.visibility = if (apps.isEmpty()) View.VISIBLE else View.GONE
                     }
@@ -194,12 +179,7 @@ class ArchiveFragment : Fragment() {
 
                     binding.recyclerView.adapter = channelAdapter
                     database.channelDao().getAllChannels().collectLatest { channels ->
-                        channelAdapter.submitList(channels) {
-                            layoutManagerState?.let { state ->
-                                _binding?.recyclerView?.layoutManager?.onRestoreInstanceState(state)
-                                layoutManagerState = null
-                            }
-                        }
+                        channelAdapter.submitList(channels)
                         _binding?.textEmpty?.text = getString(R.string.timeline_empty)
                         _binding?.textEmpty?.visibility = if (channels.isEmpty()) View.VISIBLE else View.GONE
                     }
@@ -209,7 +189,6 @@ class ArchiveFragment : Fragment() {
     }
 
     companion object {
-        private const val KEY_LAYOUT_STATE = "layout_manager_state"
         private const val KEY_CURRENT_TAB = "current_tab"
     }
 }

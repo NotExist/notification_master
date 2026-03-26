@@ -24,6 +24,10 @@ class NotificationAdapter(
     private val onItemClick: (NotificationEntity) -> Unit
 ) : ListAdapter<NotificationEntity, NotificationAdapter.ViewHolder>(DiffCallback()) {
 
+    init {
+        stateRestorationPolicy = StateRestorationPolicy.PREVENT_WHEN_EMPTY
+    }
+
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {

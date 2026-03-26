@@ -180,6 +180,10 @@ class FilterSettingsFragment : Fragment() {
         private val onDeleteClick: (Rule) -> Unit
     ) : ListAdapter<Rule, FilterRuleAdapter.ViewHolder>(RuleDiffCallback()) {
 
+        init {
+            stateRestorationPolicy = StateRestorationPolicy.PREVENT_WHEN_EMPTY
+        }
+
         inner class ViewHolder(
             private val binding: ItemFilterRuleBinding
         ) : RecyclerView.ViewHolder(binding.root) {

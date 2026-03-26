@@ -5,7 +5,6 @@ import android.content.ComponentName
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.os.Parcelable
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.text.Editable
@@ -51,7 +50,6 @@ class TimelineFragment : Fragment() {
     private var isDeduplicatedMode = true
     private var isAudibleMode = false
     private var isDismissedMode = false
-    private var layoutManagerState: Parcelable? = null
     private var currentFilterText = ""
     private var allNotifications: List<NotificationEntity> = emptyList()
     private var loadJob: Job? = null
@@ -134,7 +132,6 @@ class TimelineFragment : Fragment() {
     }
 
     override fun onDestroyView() {
-        layoutManagerState = binding.recyclerView.layoutManager?.onSaveInstanceState()
         super.onDestroyView()
         _binding = null
     }
@@ -395,12 +392,7 @@ class TimelineFragment : Fragment() {
                     }
                 }
 
-                adapter?.submitList(timelineItems) {
-                    layoutManagerState?.let { state ->
-                        _binding?.recyclerView?.layoutManager?.onRestoreInstanceState(state)
-                        layoutManagerState = null
-                    }
-                }
+                adapter?.submitList(timelineItems)
                 _binding?.textCount?.text = getString(R.string.timeline_count_format, filtered.size)
             }
         }

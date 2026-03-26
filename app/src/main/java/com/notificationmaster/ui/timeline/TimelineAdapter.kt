@@ -29,6 +29,10 @@ class TimelineAdapter(
     private val onItemLongClick: (NotificationEntity) -> Unit = {}
 ) : ListAdapter<TimelineItem, RecyclerView.ViewHolder>(DiffCallback()) {
 
+    init {
+        stateRestorationPolicy = StateRestorationPolicy.PREVENT_WHEN_EMPTY
+    }
+
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     private val dateFormat = SimpleDateFormat("yyyy年M月d日 EEEE", Locale.getDefault())
 

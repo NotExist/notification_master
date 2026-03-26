@@ -24,6 +24,10 @@ class ChannelAdapter(
     private val onItemLongClick: (ChannelEntity) -> Unit = {}
 ) : ListAdapter<ChannelEntity, ChannelAdapter.ViewHolder>(DiffCallback()) {
 
+    init {
+        stateRestorationPolicy = StateRestorationPolicy.PREVENT_WHEN_EMPTY
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = ItemChannelBinding.inflate(
             LayoutInflater.from(parent.context),

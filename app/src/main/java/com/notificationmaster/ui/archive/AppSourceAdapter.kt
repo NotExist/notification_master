@@ -17,6 +17,10 @@ class AppSourceAdapter(
     private val onItemLongClick: (AppSourceEntity) -> Unit = {}
 ) : ListAdapter<AppSourceEntity, AppSourceAdapter.ViewHolder>(DiffCallback()) {
 
+    init {
+        stateRestorationPolicy = StateRestorationPolicy.PREVENT_WHEN_EMPTY
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = ItemAppSourceBinding.inflate(
             LayoutInflater.from(parent.context),
