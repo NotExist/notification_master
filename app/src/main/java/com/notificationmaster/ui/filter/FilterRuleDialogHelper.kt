@@ -395,33 +395,52 @@ object FilterRuleDialogHelper {
             loadGroupIdSuggestions(scope, database, initPackageName, editGroupId)
         }
 
-        // === 預覽匹配結果 ===
-        val btnPreviewMatch = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_preview_match)
-        btnPreviewMatch.setOnClickListener {
+        // === 共用：從 Dialog 表單驗證並建構 Matcher 列表 ===
+        /**
+         * 驗證表單欄位並建構 Matcher 列表。
+         * 驗證失敗時顯示 Toast/error 並回傳 null。
+         */
+        fun buildMatchersFromDialog(): List<Matcher>? {
             val packageName = editPackageName.text.toString().trim()
             if (packageName.isEmpty()) {
-                Toast.makeText(context, R.string.filter_preview_package_required, Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+                layoutPackageName.error = context.getString(R.string.filter_package_name_required)
+                return null
+            }
+            layoutPackageName.error = null
+
+            val selectedEventTypes = eventTypes.filterIndexed { i, _ -> checkBoxes[i].isChecked && checkBoxes[i].isEnabled }
+                .map { it.name }.toSet()
+            if (selectedEventTypes.isEmpty()) {
+                Toast.makeText(context, R.string.filter_event_type_required, Toast.LENGTH_SHORT).show()
+                return null
             }
 
-            // 建構臨時 matcher 列表
-            val tempMatchers = mutableListOf<Matcher>(Matcher.Package(packageName))
+            val matchers = mutableListOf<Matcher>(Matcher.Package(packageName))
             val channelId = editChannelId.text.toString().trim().ifEmpty { null }
-            if (channelId != null) tempMatchers.add(Matcher.Channel(channelId))
-            val selectedETs = eventTypes.filterIndexed { i, _ -> checkBoxes[i].isChecked && checkBoxes[i].isEnabled }
-                .map { it.name }.toSet()
-            if (selectedETs.isNotEmpty()) tempMatchers.add(Matcher.EventTypes(selectedETs))
+            if (channelId != null) matchers.add(Matcher.Channel(channelId))
+            matchers.add(Matcher.EventTypes(selectedEventTypes))
+
             val kwPattern = editKeywordPattern.text?.toString()?.trim().orEmpty()
             if (kwPattern.isNotEmpty()) {
                 val selectedFields = keywordFieldCheckBoxes.filter { it.value.isChecked }.keys
-                if (selectedFields.isNotEmpty()) {
-                    tempMatchers.add(Matcher.Keyword(kwPattern, selectedFields, switchKeywordRegex.isChecked))
+                if (selectedFields.isEmpty()) {
+                    Toast.makeText(context, R.string.filter_keyword_field_required, Toast.LENGTH_SHORT).show()
+                    return null
                 }
+                matchers.add(Matcher.Keyword(kwPattern, selectedFields, switchKeywordRegex.isChecked))
             }
+
             val gid = editGroupId.text?.toString()?.trim()?.ifEmpty { null }
             if (selectedImportance != null || gid != null) {
-                tempMatchers.add(Matcher.ChannelProperty(minImportance = selectedImportance, groupId = gid))
+                matchers.add(Matcher.ChannelProperty(minImportance = selectedImportance, groupId = gid))
             }
+            return matchers
+        }
+
+        // === 預覽匹配結果 ===
+        val btnPreviewMatch = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_preview_match)
+        btnPreviewMatch.setOnClickListener {
+            val tempMatchers = buildMatchersFromDialog() ?: return@setOnClickListener
             val resolvedType = actionType ?: categoryValues[selectedCategoryIndex]
             val tempRule = Rule(matchers = tempMatchers, action = RuleAction.SkipRecord)
 
@@ -481,24 +500,7 @@ object FilterRuleDialogHelper {
 
         dialog.setOnShowListener {
             dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                // 驗證 packageName
-                val packageName = editPackageName.text.toString().trim()
-                if (packageName.isEmpty()) {
-                    layoutPackageName.error = context.getString(R.string.filter_package_name_required)
-                    return@setOnClickListener
-                }
-                layoutPackageName.error = null
-
-                // 驗證至少選一個已啟用的 EventType
-                val selectedEventTypes = eventTypes.filterIndexed { i, _ -> checkBoxes[i].isChecked && checkBoxes[i].isEnabled }
-                    .map { it.name }
-                    .toSet()
-                if (selectedEventTypes.isEmpty()) {
-                    Toast.makeText(context, R.string.filter_event_type_required, Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
-
-                val channelId = editChannelId.text.toString().trim().ifEmpty { null }
+                val matchers = buildMatchersFromDialog() ?: return@setOnClickListener
 
                 // 決定 actionType
                 val resolvedActionType = actionType ?: categoryValues[selectedCategoryIndex]
@@ -516,30 +518,6 @@ object FilterRuleDialogHelper {
                         DELAY_OPTIONS[selectedDelayIndex].delayMs
                     }
                 } else 0L
-
-                // 建構 Matcher 列表
-                val matchers = mutableListOf<Matcher>(Matcher.Package(packageName))
-                if (channelId != null) {
-                    matchers.add(Matcher.Channel(channelId))
-                }
-                matchers.add(Matcher.EventTypes(selectedEventTypes))
-
-                // Keyword matcher（pattern 非空時才加入）
-                val keywordPattern = editKeywordPattern.text?.toString()?.trim().orEmpty()
-                if (keywordPattern.isNotEmpty()) {
-                    val selectedFields = keywordFieldCheckBoxes.filter { it.value.isChecked }.keys
-                    if (selectedFields.isEmpty()) {
-                        Toast.makeText(context, R.string.filter_keyword_field_required, Toast.LENGTH_SHORT).show()
-                        return@setOnClickListener
-                    }
-                    matchers.add(Matcher.Keyword(keywordPattern, selectedFields, switchKeywordRegex.isChecked))
-                }
-
-                // ChannelProperty matcher（有選擇時才加入）
-                val groupId = editGroupId.text?.toString()?.trim()?.ifEmpty { null }
-                if (selectedImportance != null || groupId != null) {
-                    matchers.add(Matcher.ChannelProperty(minImportance = selectedImportance, groupId = groupId))
-                }
 
                 // 建構 RuleAction
                 val action: RuleAction = when (resolvedActionType) {

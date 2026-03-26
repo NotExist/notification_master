@@ -294,7 +294,6 @@
     <string name="filter_preview_title">匹配結果（最近 %d 筆中）</string>
     <string name="filter_preview_count">符合 %d 筆</string>
     <string name="filter_preview_empty">無符合的通知</string>
-    <string name="filter_preview_package_required">請先填寫 Package Name</string>
     <string name="filter_preview_result_title">匹配結果</string>
     <string name="filter_preview_apply">套用</string>
     <string name="filter_preview_applied_clipboard">已複製 %d 筆到剪貼簿</string>
