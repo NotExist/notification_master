@@ -83,7 +83,7 @@ sealed interface Matcher {
         override fun matches(context: MatchContext): Boolean {
             val et = context.eventType
             if (et == null) {
-                android.util.Log.e("RuleEngine", "EventTypes.matches(): eventType is null, rejecting match")
+                System.err.println("RuleEngine: EventTypes.matches(): eventType is null, rejecting match")
                 return false
             }
             return et.name in types
