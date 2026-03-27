@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.databinding.FragmentArchiveDetailBinding
+import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import com.notificationmaster.ui.timeline.TimelineAdapter
 import com.notificationmaster.ui.timeline.TimelineItem
 import kotlinx.coroutines.flow.collectLatest
@@ -52,10 +53,20 @@ class ArchiveDetailFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        adapter = TimelineAdapter(onItemClick = { notification ->
-            val action = ArchiveDetailFragmentDirections.actionArchiveDetailToDetail(notification.id)
-            findNavController().navigate(action)
-        })
+        adapter = TimelineAdapter(
+            onItemClick = { notification ->
+                val action = ArchiveDetailFragmentDirections.actionArchiveDetailToDetail(notification.id)
+                findNavController().navigate(action)
+            },
+            onItemLongClick = { notification ->
+                FilterRuleDialogHelper.showAddRuleDialog(
+                    context = requireContext(),
+                    actionType = null,
+                    prefillPackageName = notification.packageName,
+                    prefillChannelId = notification.channelId
+                )
+            }
+        )
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
     }

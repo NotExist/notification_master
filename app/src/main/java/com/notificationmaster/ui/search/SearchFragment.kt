@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.databinding.FragmentSearchBinding
+import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -59,12 +60,22 @@ class SearchFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        notificationAdapter = NotificationAdapter { notification ->
-            findNavController().navigate(
-                R.id.action_search_to_detail,
-                bundleOf("notificationId" to notification.id)
-            )
-        }
+        notificationAdapter = NotificationAdapter(
+            onItemClick = { notification ->
+                findNavController().navigate(
+                    R.id.action_search_to_detail,
+                    bundleOf("notificationId" to notification.id)
+                )
+            },
+            onItemLongClick = { notification ->
+                FilterRuleDialogHelper.showAddRuleDialog(
+                    context = requireContext(),
+                    actionType = null,
+                    prefillPackageName = notification.packageName,
+                    prefillChannelId = notification.channelId
+                )
+            }
+        )
 
         binding.recyclerView.apply {
             layoutManager = LinearLayoutManager(requireContext())

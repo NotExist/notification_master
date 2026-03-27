@@ -21,7 +21,8 @@ import java.util.Locale
  * 通知列表 Adapter
  */
 class NotificationAdapter(
-    private val onItemClick: (NotificationEntity) -> Unit
+    private val onItemClick: (NotificationEntity) -> Unit,
+    private val onItemLongClick: (NotificationEntity) -> Unit = {}
 ) : ListAdapter<NotificationEntity, NotificationAdapter.ViewHolder>(DiffCallback()) {
 
     init {
@@ -54,6 +55,13 @@ class NotificationAdapter(
                     onItemClick(getItem(position))
                 }
             }
+            binding.root.setOnLongClickListener {
+                val position = bindingAdapterPosition
+                if (position != RecyclerView.NO_POSITION) {
+                    onItemLongClick(getItem(position))
+                }
+                true
+            }
         }
 
         fun bind(item: NotificationEntity) {
@@ -84,27 +92,27 @@ class NotificationAdapter(
             binding.tagsContainer.removeAllViews()
 
             if (item.isMessagingStyle) {
-                addTag(binding.tagsContainer, "MessagingStyle", R.color.tag_messaging_style, R.string.tag_messaging_style_desc)
+                addTag(binding.tagsContainer, "Msg", R.color.tag_messaging_style, R.string.tag_messaging_style_desc, "MessagingStyle")
             }
 
             if (item.isOngoing) {
-                addTag(binding.tagsContainer, "Ongoing", R.color.event_initial, R.string.tag_ongoing_desc)
+                addTag(binding.tagsContainer, "OG", R.color.event_initial, R.string.tag_ongoing_desc, "Ongoing")
             }
 
             if (item.isForegroundService) {
-                addTag(binding.tagsContainer, "FG Service", R.color.event_ranking, R.string.tag_fg_service_desc)
+                addTag(binding.tagsContainer, "FGS", R.color.event_ranking, R.string.tag_fg_service_desc, "FG Service")
             }
 
             if (item.likelyHeadsup) {
-                addTag(binding.tagsContainer, "Heads-up", R.color.status_warning, R.string.tag_headsup_desc)
+                addTag(binding.tagsContainer, "HU", R.color.status_warning, R.string.tag_headsup_desc, "Heads-up")
             }
 
             if (item.isGroupSummary) {
-                addTag(binding.tagsContainer, "Summary", R.color.event_updated, R.string.tag_summary_desc)
+                addTag(binding.tagsContainer, "Sum", R.color.event_updated, R.string.tag_summary_desc, "Summary")
             }
         }
 
-        private fun addTag(container: ViewGroup, text: String, colorRes: Int, descriptionRes: Int) {
+        private fun addTag(container: ViewGroup, text: String, colorRes: Int, descriptionRes: Int, fullName: String = text) {
             val context = container.context
             val tag = TextView(context).apply {
                 this.text = text
@@ -120,7 +128,7 @@ class NotificationAdapter(
                 }
                 setOnClickListener {
                     MaterialAlertDialogBuilder(context)
-                        .setTitle(text)
+                        .setTitle(fullName)
                         .setMessage(descriptionRes)
                         .setPositiveButton(R.string.ok, null)
                         .show()
