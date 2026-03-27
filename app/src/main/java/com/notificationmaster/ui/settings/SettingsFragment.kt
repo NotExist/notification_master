@@ -15,6 +15,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.core.content.ContextCompat
 import androidx.core.os.bundleOf
 import androidx.documentfile.provider.DocumentFile
@@ -693,12 +694,11 @@ class SettingsFragment : Fragment() {
                 exporter.exportToCalendar(filteredNotifications, calendarId, detailLevel)
             }
 
-            Toast.makeText(
-                ctx,
+            showResultDialog(
+                "日曆匯出完成",
                 "匯出完成：${result.successCount} 筆成功" +
-                    if (result.failCount > 0) "，${result.failCount} 筆失敗" else "",
-                Toast.LENGTH_LONG
-            ).show()
+                    if (result.failCount > 0) "，${result.failCount} 筆失敗" else ""
+            )
         }
     }
 
@@ -742,7 +742,7 @@ class SettingsFragment : Fragment() {
                 }
 
                 _binding ?: return@launch
-                Toast.makeText(ctx, "已匯出 ${filtered.size} 筆通知到 .ics", Toast.LENGTH_SHORT).show()
+                showResultDialog("ICS 匯出完成", "已匯出 ${filtered.size} 筆通知到 .ics")
             } catch (e: Exception) {
                 _binding ?: return@launch
                 Toast.makeText(ctx, "匯出失敗：${e.message}", Toast.LENGTH_LONG).show()
@@ -876,11 +876,10 @@ class SettingsFragment : Fragment() {
                 )
                 outputStream.close()
 
-                Toast.makeText(
-                    ctx,
-                    "匯出完成：${stats.notificationCount} 筆通知、${stats.eventCount} 筆事件",
-                    Toast.LENGTH_LONG
-                ).show()
+                showResultDialog(
+                    "封存匯出完成",
+                    "匯出完成：${stats.notificationCount} 筆通知、${stats.eventCount} 筆事件"
+                )
             } catch (e: Exception) {
                 Toast.makeText(
                     ctx,
@@ -919,11 +918,10 @@ class SettingsFragment : Fragment() {
                     "\n來源：${it.deviceManufacturer} ${it.deviceModel} (API ${it.apiLevel})"
                 } ?: ""
 
-                Toast.makeText(
-                    ctx,
-                    "匯入完成：${data.notifications.size} 筆通知${envText}",
-                    Toast.LENGTH_LONG
-                ).show()
+                showResultDialog(
+                    "封存匯入完成",
+                    "匯入完成：${data.notifications.size} 筆通知${envText}"
+                )
             } catch (e: Exception) {
                 Toast.makeText(
                     ctx,
@@ -966,11 +964,10 @@ class SettingsFragment : Fragment() {
                 ?: throw IllegalStateException("無法開啟輸出串流")
 
             val totalRules = RuleEngine.getRules().size
-            Toast.makeText(
-                ctx,
-                getString(R.string.filter_export_success, totalRules),
-                Toast.LENGTH_SHORT
-            ).show()
+            showResultDialog(
+                "規則匯出完成",
+                getString(R.string.filter_export_success, totalRules)
+            )
         } catch (e: Exception) {
             Toast.makeText(ctx, "匯出失敗：${e.message}", Toast.LENGTH_LONG).show()
         }
@@ -1001,13 +998,12 @@ class SettingsFragment : Fragment() {
             val dismissCount = result[ActionType.AUTO_DISMISS] ?: 0
             val alertCount = result[ActionType.PERSISTENT_ALERT] ?: 0
 
-            Toast.makeText(
-                ctx,
+            showResultDialog(
+                "規則匯入完成",
                 getString(R.string.filter_import_success, notifCount, calCount) +
                     (if (dismissCount > 0) "、自動清除 ${dismissCount} 條" else "") +
-                    (if (alertCount > 0) "、持續提醒 ${alertCount} 條" else ""),
-                Toast.LENGTH_LONG
-            ).show()
+                    (if (alertCount > 0) "、持續提醒 ${alertCount} 條" else "")
+            )
 
             updateAllRuleSummaries()
         } catch (e: Exception) {
@@ -1067,20 +1063,19 @@ class SettingsFragment : Fragment() {
         try {
             val result = RuleRepository.mergeFromJson(ctx, json)
             if (result.isEmpty()) {
-                Toast.makeText(ctx, "備份規則已全部同步，無需匯入", Toast.LENGTH_SHORT).show()
+                showResultDialog("備份同步", "備份規則已全部同步，無需匯入")
                 return
             }
             val notifCount = result[ActionType.SKIP_RECORD] ?: 0
             val calCount = result[ActionType.CALENDAR_EXPORT] ?: 0
             val dismissCount = result[ActionType.AUTO_DISMISS] ?: 0
             val alertCount = result[ActionType.PERSISTENT_ALERT] ?: 0
-            Toast.makeText(
-                ctx,
+            showResultDialog(
+                "備份匯入完成",
                 getString(R.string.filter_import_success, notifCount, calCount) +
                     (if (dismissCount > 0) "、自動清除 ${dismissCount} 條" else "") +
-                    (if (alertCount > 0) "、持續提醒 ${alertCount} 條" else ""),
-                Toast.LENGTH_LONG
-            ).show()
+                    (if (alertCount > 0) "、持續提醒 ${alertCount} 條" else "")
+            )
             updateAllRuleSummaries()
         } catch (e: Exception) {
             Toast.makeText(ctx, "匯入失敗：${e.message}", Toast.LENGTH_LONG).show()
@@ -1166,6 +1161,15 @@ class SettingsFragment : Fragment() {
             b.textBackupDirPath.text = getString(R.string.settings_filter_backup_dir_not_set)
             b.btnResetBackupDir.visibility = View.GONE
         }
+    }
+
+    private fun showResultDialog(title: String, message: String) {
+        val ctx = context ?: return
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton(R.string.ok, null)
+            .show()
     }
 
     companion object {
