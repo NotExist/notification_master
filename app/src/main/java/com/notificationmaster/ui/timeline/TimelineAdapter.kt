@@ -171,47 +171,47 @@ class TimelineAdapter(
             // 系統通知抽屜分類標籤
             if (notification.isConversation ||
                 (notification.isMessagingStyle && !notification.shortcutId.isNullOrEmpty())) {
-                addTag(binding.tagsContainer, "Conversation", R.color.tag_conversation, R.string.tag_conversation_desc)
+                addTag(binding.tagsContainer, "Conv", R.color.tag_conversation, R.string.tag_conversation_desc, "Conversation")
             }
 
             if (notification.importance in 1..2) {
-                addTag(binding.tagsContainer, "Silent", R.color.tag_silent, R.string.tag_silent_desc)
+                addTag(binding.tagsContainer, "Sil", R.color.tag_silent, R.string.tag_silent_desc, "Silent")
             }
             if (notification.isMessagingStyle) {
-                addTag(binding.tagsContainer, "MessagingStyle", R.color.tag_messaging_style, R.string.tag_messaging_style_desc)
+                addTag(binding.tagsContainer, "Msg", R.color.tag_messaging_style, R.string.tag_messaging_style_desc, "MessagingStyle")
             }
 
             // 通知屬性標籤
             if (notification.isOngoing) {
-                addTag(binding.tagsContainer, "Ongoing", R.color.event_initial, R.string.tag_ongoing_desc)
+                addTag(binding.tagsContainer, "OG", R.color.event_initial, R.string.tag_ongoing_desc, "Ongoing")
             }
 
             if (notification.isForegroundService) {
-                addTag(binding.tagsContainer, "FG Service", R.color.event_ranking, R.string.tag_fg_service_desc)
+                addTag(binding.tagsContainer, "FGS", R.color.event_ranking, R.string.tag_fg_service_desc, "FG Service")
             }
 
             if (notification.likelyHeadsup) {
-                addTag(binding.tagsContainer, "Heads-up", R.color.status_warning, R.string.tag_headsup_desc)
+                addTag(binding.tagsContainer, "HU", R.color.status_warning, R.string.tag_headsup_desc, "Heads-up")
             }
 
             if (notification.isAudible) {
-                addTag(binding.tagsContainer, "Audible", R.color.tag_audible, R.string.tag_audible_desc)
+                addTag(binding.tagsContainer, "Audi", R.color.tag_audible, R.string.tag_audible_desc, "Audible")
             }
 
             if (notification.isAutoCancel) {
-                addTag(binding.tagsContainer, "AutoCancel", R.color.event_updated, R.string.tag_auto_cancel_desc)
+                addTag(binding.tagsContainer, "AC", R.color.event_updated, R.string.tag_auto_cancel_desc, "AutoCancel")
             }
 
             if (notification.isGroupSummary) {
-                addTag(binding.tagsContainer, "Summary", R.color.event_updated, R.string.tag_summary_desc)
+                addTag(binding.tagsContainer, "Sum", R.color.event_updated, R.string.tag_summary_desc, "Summary")
             }
 
             if (notification.hasBubbleMetadata) {
-                addTag(binding.tagsContainer, "Bubble", R.color.status_enabled, R.string.tag_bubble_desc)
+                addTag(binding.tagsContainer, "Bub", R.color.status_enabled, R.string.tag_bubble_desc, "Bubble")
             }
 
             if (notification.hasCustomContentView || notification.hasCustomBigContentView || notification.hasCustomHeadsUpContentView) {
-                addTag(binding.tagsContainer, "Custom View", R.color.text_secondary, R.string.tag_custom_view_desc)
+                addTag(binding.tagsContainer, "CV", R.color.text_secondary, R.string.tag_custom_view_desc, "Custom View")
             }
 
             // Style 標籤（基於 template 尾綴匹配）
@@ -219,15 +219,15 @@ class TimelineAdapter(
             when {
                 style == null -> { /* 無 Style，不加標籤 */ }
                 style.endsWith("BigTextStyle") ->
-                    addTag(binding.tagsContainer, "BigTextStyle", R.color.tag_big_text_style, R.string.tag_big_text_style_desc)
+                    addTag(binding.tagsContainer, "BTS", R.color.tag_big_text_style, R.string.tag_big_text_style_desc, "BigTextStyle")
                 style.endsWith("BigPictureStyle") ->
-                    addTag(binding.tagsContainer, "BigPictureStyle", R.color.tag_big_picture_style, R.string.tag_big_picture_style_desc)
+                    addTag(binding.tagsContainer, "BPS", R.color.tag_big_picture_style, R.string.tag_big_picture_style_desc, "BigPictureStyle")
                 style.endsWith("InboxStyle") ->
-                    addTag(binding.tagsContainer, "InboxStyle", R.color.tag_inbox_style, R.string.tag_inbox_style_desc)
+                    addTag(binding.tagsContainer, "Inbox", R.color.tag_inbox_style, R.string.tag_inbox_style_desc, "InboxStyle")
                 style.endsWith("MediaStyle") || style.endsWith("DecoratedMediaCustomViewStyle") ->
-                    addTag(binding.tagsContainer, "MediaStyle", R.color.tag_media_style, R.string.tag_media_style_desc)
+                    addTag(binding.tagsContainer, "Media", R.color.tag_media_style, R.string.tag_media_style_desc, "MediaStyle")
                 style.endsWith("CallStyle") ->
-                    addTag(binding.tagsContainer, "CallStyle", R.color.tag_call_style, R.string.tag_call_style_desc)
+                    addTag(binding.tagsContainer, "Call", R.color.tag_call_style, R.string.tag_call_style_desc, "CallStyle")
                 // MessagingStyle 和 DecoratedCustomViewStyle 已被其他標籤涵蓋
             }
 
@@ -247,7 +247,7 @@ class TimelineAdapter(
             }
         }
 
-        private fun addTag(container: ViewGroup, text: String, colorRes: Int, descriptionRes: Int) {
+        private fun addTag(container: ViewGroup, text: String, colorRes: Int, descriptionRes: Int, fullName: String = text) {
             val context = container.context
             val tag = TextView(context).apply {
                 this.text = text
@@ -263,7 +263,7 @@ class TimelineAdapter(
                 }
                 setOnClickListener {
                     MaterialAlertDialogBuilder(context)
-                        .setTitle(text)
+                        .setTitle(fullName)
                         .setMessage(descriptionRes)
                         .setPositiveButton(R.string.ok, null)
                         .show()
