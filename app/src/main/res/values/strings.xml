@@ -220,8 +220,6 @@
 
     <!-- 事件分頁 -->
     <string name="event_pager_indicator">%1$d / %2$d</string>
-    <string name="event_pager_single">單一快照</string>
-    <string name="event_pager_hint">← 左右滑動切換組別 →</string>
 
     <!-- 過濾規則匯出匯入 -->
     <string name="settings_export_filter_rules">匯出過濾規則</string>

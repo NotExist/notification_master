@@ -117,13 +117,11 @@ class NotificationDetailFragment : Fragment() {
         val binding = _binding ?: return
         val total = pagerAdapter.itemCount
         if (total <= 1) {
-            binding.textEventPagerIndicator.text = getString(R.string.event_pager_single)
+            binding.textEventPagerIndicator.visibility = View.GONE
         } else {
-            binding.textEventPagerIndicator.text = buildString {
-                append(getString(R.string.event_pager_indicator, position + 1, total))
-                append("  ")
-                append(getString(R.string.event_pager_hint))
-            }
+            binding.textEventPagerIndicator.visibility = View.VISIBLE
+            binding.textEventPagerIndicator.text =
+                getString(R.string.event_pager_indicator, position + 1, total)
         }
     }
 
