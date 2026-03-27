@@ -1,5 +1,7 @@
 package com.notificationmaster.core.content
 
+import android.content.Context
+import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.data.db.entity.NotificationEntity
 
 /**
@@ -41,9 +43,9 @@ object NotificationContentHelper {
     fun fullContent(notification: NotificationEntity): String? =
         notification.bigText ?: notification.text
 
-    /** 從 packageName 提取簡短 App 名稱（最後一段） */
-    fun appName(packageName: String): String =
-        packageName.substringAfterLast('.')
+    /** 取得 App 顯示名稱（透過 PackageManager），需要 Context */
+    fun appName(context: Context, packageName: String): String =
+        AppLabelCache.getLabel(context, packageName)
 
     /** 組合標題和內容（用於剪貼簿等單一文字輸出） */
     fun titleAndContent(notification: NotificationEntity, fallbackTitle: String = ""): String {
@@ -60,8 +62,8 @@ object NotificationContentHelper {
     // ========== 匯出用格式化（CalendarExporter / IcsExporter 共用） ==========
 
     /** 匯出用事件標題：[appName] title */
-    fun exportTitle(notification: NotificationEntity): String {
-        return "[${appName(notification.packageName)}] ${displayTitle(notification)}"
+    fun exportTitle(context: Context, notification: NotificationEntity): String {
+        return "[${appName(context, notification.packageName)}] ${displayTitle(notification)}"
     }
 
     /** 匯出用地點：channelId / packageName */

@@ -1,5 +1,6 @@
 package com.notificationmaster.export.ical
 
+import android.content.Context
 import com.notificationmaster.core.content.ExportDetailLevel
 import com.notificationmaster.core.content.NotificationContentHelper
 import com.notificationmaster.data.db.entity.NotificationEntity
@@ -14,7 +15,7 @@ import java.util.TimeZone
  * 純 Kotlin 手工建構，不依賴第三方套件。
  * 時間格式使用 UTC（yyyyMMdd'T'HHmmss'Z'）。
  */
-class IcsExporter {
+class IcsExporter(private val context: Context) {
 
     private val utcDateFormat = SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'", Locale.US).apply {
         timeZone = TimeZone.getTimeZone("UTC")
@@ -83,7 +84,7 @@ class IcsExporter {
     }
 
     private fun buildEventTitle(notification: NotificationEntity): String =
-        NotificationContentHelper.exportTitle(notification)
+        NotificationContentHelper.exportTitle(context, notification)
 
     private fun buildEventDescription(notification: NotificationEntity, detailLevel: ExportDetailLevel): String =
         NotificationContentHelper.exportDescription(notification, detailLevel)

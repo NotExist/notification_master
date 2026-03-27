@@ -922,7 +922,7 @@ class NotificationCaptureService : NotificationListenerService() {
     ) {
         val rule = RuleEngine.findMatchingRule(ActionType.PERSISTENT_ALERT, matchCtx) ?: return
         val action = rule.action as RuleAction.PersistentAlert
-        val appName = NotificationContentHelper.appName(entity.packageName)
+        val appName = NotificationContentHelper.appName(this, entity.packageName)
         val actions = sbn.notification.actions
             ?.filter { it.remoteInputs.isNullOrEmpty() }
             ?.toTypedArray()

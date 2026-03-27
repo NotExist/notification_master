@@ -760,7 +760,7 @@ class SettingsFragment : Fragment() {
                 val filtered = applyCalendarWhitelist(notifications)
 
                 val icsContent = withContext(Dispatchers.IO) {
-                    IcsExporter().export(filtered)
+                    IcsExporter(requireContext()).export(filtered)
                 }
 
                 withContext(Dispatchers.IO) {

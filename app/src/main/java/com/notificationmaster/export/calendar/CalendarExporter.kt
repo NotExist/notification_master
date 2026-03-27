@@ -399,7 +399,7 @@ class CalendarExporter(private val context: Context) {
     }
 
     private fun buildEventTitle(notification: NotificationEntity, @Suppress("UNUSED_PARAMETER") detailLevel: ExportDetailLevel): String =
-        NotificationContentHelper.exportTitle(notification)
+        NotificationContentHelper.exportTitle(context, notification)
 
     private fun buildEventLocation(notification: NotificationEntity): String =
         NotificationContentHelper.exportLocation(notification)
