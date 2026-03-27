@@ -906,7 +906,11 @@ class SettingsFragment : Fragment() {
 
                 showResultDialog(
                     "封存匯出完成",
-                    "匯出完成：${stats.notificationCount} 筆通知、${stats.eventCount} 筆事件"
+                    buildString {
+                        append("通知：${stats.notificationCount} 筆")
+                        append("\n事件：${stats.eventCount} 筆")
+                        if (stats.mediaCount > 0) append("\n媒體：${stats.mediaCount} 筆")
+                    }
                 )
             } catch (e: Exception) {
                 Toast.makeText(
@@ -942,13 +946,16 @@ class SettingsFragment : Fragment() {
                     database.notificationEventDao().insertAll(events)
                 }
 
-                val envText = data.environment?.let {
-                    "\n來源：${it.deviceManufacturer} ${it.deviceModel} (API ${it.apiLevel})"
-                } ?: ""
-
                 showResultDialog(
                     "封存匯入完成",
-                    "匯入完成：${data.notifications.size} 筆通知${envText}"
+                    buildString {
+                        append("通知：${data.notifications.size} 筆")
+                        append("\n事件：${data.events.size} 筆")
+                        data.environment?.let {
+                            append("\n\n來源裝置：${it.deviceManufacturer} ${it.deviceModel}")
+                            append("\nAPI：${it.apiLevel}")
+                        }
+                    }
                 )
             } catch (e: Exception) {
                 Toast.makeText(
