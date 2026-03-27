@@ -16,6 +16,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.notificationmaster.R
+import com.notificationmaster.ui.alert.PersistentAlertActivity
 
 /**
  * 持續提醒管理器
@@ -53,13 +54,7 @@ class PersistentAlertManager(private val context: Context) {
         }
     }
 
-    fun startAlert(
-        notificationKey: String,
-        title: String,
-        text: String?,
-        soundUri: String?,
-        vibrate: Boolean
-    ) {
+    fun startAlert(data: AlertData) {
         // API 33+: 若無 POST_NOTIFICATIONS 權限則跳過（無法顯示停止按鈕，提醒將無法被停止）
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
@@ -73,7 +68,7 @@ class PersistentAlertManager(private val context: Context) {
         stopAlert()  // 一次一個
 
         // 鈴聲（循環）
-        val uri = if (soundUri != null) Uri.parse(soundUri)
+        val uri = if (data.soundUri != null) Uri.parse(data.soundUri)
                   else RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
         ringtone = RingtoneManager.getRingtone(context, uri)?.apply {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isLooping = true
@@ -81,7 +76,7 @@ class PersistentAlertManager(private val context: Context) {
         }
 
         // 振動（循環）
-        if (vibrate) {
+        if (data.vibrate) {
             val vib = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager)
                     .defaultVibrator
@@ -100,8 +95,8 @@ class PersistentAlertManager(private val context: Context) {
             }
         }
 
-        // Heads-up 通知
-        postAlertNotification(notificationKey, title, text)
+        // Heads-up 通知（含 fullScreenIntent）
+        postAlertNotification(data)
         isAlerting = true
     }
 
@@ -115,25 +110,44 @@ class PersistentAlertManager(private val context: Context) {
         isAlerting = false
     }
 
-    private fun postAlertNotification(notificationKey: String, title: String, text: String?) {
+    private fun postAlertNotification(data: AlertData) {
         val stopIntent = Intent(ACTION_STOP_ALERT).apply {
             setPackage(context.packageName)
-            putExtra(EXTRA_NOTIFICATION_KEY, notificationKey)
+            putExtra(EXTRA_NOTIFICATION_KEY, data.notificationKey)
         }
         val stopPi = PendingIntent.getBroadcast(
             context, 0, stopIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(title)
-            .setContentText(text)
+            .setContentTitle(data.title)
+            .setContentText(data.text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(false)
             .setOngoing(true)
             .addAction(0, context.getString(R.string.alert_stop), stopPi)
-            .build()
+
+        // fullScreenIntent: API 34+ 需檢查權限，低版本直接設定
+        val activityIntent = PersistentAlertActivity.createIntent(context, data)
+        val fullScreenPi = PendingIntent.getActivity(
+            context, NOTIFICATION_ID, activityIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (nm.canUseFullScreenIntent()) {
+                builder.setFullScreenIntent(fullScreenPi, true)
+            }
+            // 無權限時 graceful degradation 為現有 heads-up 行為
+        } else {
+            builder.setFullScreenIntent(fullScreenPi, true)
+        }
+
+        val notification = builder.build()
+
         // 權限已在 startAlert() 入口檢查；此處為 lint 滿足條件的雙重保護
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(

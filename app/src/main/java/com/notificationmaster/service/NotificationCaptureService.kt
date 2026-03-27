@@ -12,6 +12,7 @@ import androidx.room.withTransaction
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.core.NotificationExtractor
 import com.notificationmaster.core.cache.PendingIntentCache
+import com.notificationmaster.core.alert.AlertData
 import com.notificationmaster.core.alert.PersistentAlertManager
 import com.notificationmaster.core.action.ClipboardCopyHelper
 import com.notificationmaster.core.content.ExportDetailLevel
@@ -386,7 +387,7 @@ class NotificationCaptureService : NotificationListenerService() {
             checkRealtimeCalendarExport(entity, matchCtx)
         }
         if (eventType in ActionType.PERSISTENT_ALERT.allowedEventTypes) {
-            checkPersistentAlert(entity, matchCtx)
+            checkPersistentAlert(entity, matchCtx, sbn, eventType)
         }
         if (eventType in ActionType.CLIPBOARD_COPY.allowedEventTypes) {
             checkClipboardCopy(entity, matchCtx)
@@ -913,11 +914,34 @@ class NotificationCaptureService : NotificationListenerService() {
      *
      * 僅 POSTED/UPDATED 觸發（在 processNotification 的 eventType != INITIAL 區塊呼叫）。
      */
-    private fun checkPersistentAlert(entity: NotificationEntity, matchCtx: MatchContext) {
+    private fun checkPersistentAlert(
+        entity: NotificationEntity,
+        matchCtx: MatchContext,
+        sbn: StatusBarNotification,
+        eventType: EventType
+    ) {
         val rule = RuleEngine.findMatchingRule(ActionType.PERSISTENT_ALERT, matchCtx) ?: return
         val action = rule.action as RuleAction.PersistentAlert
-        val title = "[${NotificationContentHelper.appName(entity.packageName)}] ${NotificationContentHelper.displayTitle(entity)}"
-        alertManager.startAlert(entity.notificationKey, title, entity.text, action.soundUri, action.vibrate)
+        val appName = NotificationContentHelper.appName(entity.packageName)
+        val actions = sbn.notification.actions
+            ?.filter { it.remoteInputs.isNullOrEmpty() }
+            ?.toTypedArray()
+
+        alertManager.startAlert(AlertData(
+            notificationKey = entity.notificationKey,
+            title = "[$appName] ${NotificationContentHelper.displayTitle(entity)}",
+            text = entity.text,
+            soundUri = action.soundUri,
+            vibrate = action.vibrate,
+            appName = appName,
+            packageName = entity.packageName,
+            eventType = eventType.name,
+            timestamp = entity.captureTime,
+            subText = entity.subText,
+            bigText = entity.bigText,
+            contentIntent = sbn.notification.contentIntent,
+            actions = actions
+        ))
     }
 
     /**

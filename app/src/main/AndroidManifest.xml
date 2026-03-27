@@ -23,6 +23,9 @@
     <!-- 發送通知（Android 13+，持續提醒 heads-up 通知） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- 全螢幕 Intent（持續提醒鎖屏全螢幕顯示） -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <!-- 日曆（匯出到日曆功能，預設關閉） -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
@@ -97,6 +100,17 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <!-- 持續提醒全螢幕 Activity -->
+        <activity
+            android:name=".ui.alert.PersistentAlertActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:theme="@style/Theme.NotificationMaster.FullScreenAlert" />
 
         <!-- NotificationListenerService -->
         <service

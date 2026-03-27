@@ -341,4 +341,9 @@
     <string name="filter_alert_vibrate">振動</string>
     <string name="alert_stop">停止提醒</string>
     <string name="alert_channel_name">持續提醒</string>
+    <string name="settings_fullscreen_intent_hint">未授權全螢幕通知權限，鎖屏時將無法顯示全螢幕提醒。點擊前往設定。</string>
+    <string name="alert_open_original">開啟原始通知</string>
+    <string name="alert_open_failed">來源通知已不存在</string>
+    <string name="alert_action_failed">無法執行此動作</string>
+    <string name="alert_event_type">觸發事件: %s</string>
 </resources>
