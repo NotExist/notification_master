@@ -151,8 +151,15 @@
     <string name="label_time">時間</string>
     <string name="label_tags_and_status">標籤與狀態</string>
     <string name="label_detail_info">詳細資訊</string>
-    <string name="label_channel">Channel</string>
-    <string name="label_group">Group</string>
+    <string name="label_channel">channel_id</string>
+    <string name="label_group">groupKey</string>
+    <string name="label_notification_id">notificationId</string>
+    <string name="label_tag">tag</string>
+    <string name="label_category">category</string>
+    <string name="label_visibility">visibility</string>
+    <string name="label_sort_key">sortKey</string>
+    <string name="label_shortcut_id">shortcutId</string>
+    <string name="label_override_group_key">overrideGroupKey</string>
     <string name="label_key">Key</string>
     <string name="label_content_hash">Content Hash</string>
     <string name="label_intents">Intent 資訊</string>

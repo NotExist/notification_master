@@ -1,5 +1,6 @@
 package com.notificationmaster.ui.detail
 
+import android.app.Notification
 import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -253,21 +254,21 @@ class NotificationDetailFragment : Fragment() {
             // MessagingStyle 和 DecoratedCustomViewStyle 已被其他標籤涵蓋
         }
 
-        // Channel（API 26+）
-        if (!notification.channelId.isNullOrEmpty()) {
-            binding.layoutChannel.visibility = View.VISIBLE
-            binding.textChannel.text = notification.channelId
-        } else {
-            binding.layoutChannel.visibility = View.GONE
+        // 詳細資訊欄位（全部永遠顯示，null 顯示 "null"）
+        binding.textChannel.text = notification.channelId ?: "null"
+        binding.textGroup.text = notification.groupKey ?: "null"
+        binding.textNotificationId.text = notification.notificationId.toString()
+        binding.textTag.text = notification.tag ?: "null"
+        binding.textCategory.text = notification.category ?: "null"
+        binding.textVisibility.text = when (notification.visibility) {
+            Notification.VISIBILITY_PUBLIC -> "PUBLIC"
+            Notification.VISIBILITY_PRIVATE -> "PRIVATE"
+            Notification.VISIBILITY_SECRET -> "SECRET"
+            else -> notification.visibility.toString()
         }
-
-        // Group
-        if (!notification.groupKey.isNullOrEmpty()) {
-            binding.layoutGroup.visibility = View.VISIBLE
-            binding.textGroup.text = notification.groupKey
-        } else {
-            binding.layoutGroup.visibility = View.GONE
-        }
+        binding.textSortKey.text = notification.sortKey ?: "null"
+        binding.textShortcutId.text = notification.shortcutId ?: "null"
+        binding.textOverrideGroupKey.text = notification.overrideGroupKey ?: "null"
 
         // Key 和 Hash
         binding.textKey.text = notification.notificationKey
