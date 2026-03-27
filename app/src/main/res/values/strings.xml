@@ -299,6 +299,7 @@
     <string name="filter_preview_title">匹配結果（最近 %d 筆中）</string>
     <string name="filter_preview_count">符合 %d 筆</string>
     <string name="filter_preview_empty">無符合的通知</string>
+    <string name="filter_preview_empty_initial_hint">無符合通知(另有 %d 筆 INITIAL 符合條件)</string>
     <string name="filter_preview_result_title">匹配結果</string>
     <string name="filter_preview_apply">套用</string>
     <string name="filter_preview_applied_clipboard">已複製 %d 筆到剪貼簿</string>

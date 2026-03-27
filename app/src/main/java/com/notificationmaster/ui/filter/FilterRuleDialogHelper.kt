@@ -477,7 +477,46 @@ object FilterRuleDialogHelper {
                     .map { it.first().notification }
 
                 if (matched.isEmpty()) {
-                    Toast.makeText(context, R.string.filter_preview_empty, Toast.LENGTH_SHORT).show()
+                    // 檢查是否有 INITIAL 事件符合（忽略 EventType 條件）
+                    val hasEventTypeMatcher = tempMatchers.any { it is Matcher.EventTypes }
+                    val initialCount = if (hasEventTypeMatcher) {
+                        val relaxedRule = Rule(
+                            matchers = tempMatchers.filter { it !is Matcher.EventTypes },
+                            action = RuleAction.SkipRecord
+                        )
+                        results
+                            .filter { it.eventType == EventType.INITIAL }
+                            .groupBy { it.notification.id }
+                            .values
+                            .count { events ->
+                                events.any { r ->
+                                    val mc = MatchContext(
+                                        packageName = r.notification.packageName,
+                                        channelId = r.notification.channelId,
+                                        eventType = r.eventType,
+                                        title = r.notification.title,
+                                        text = r.notification.text,
+                                        bigText = r.notification.bigText,
+                                        subText = r.notification.subText,
+                                        channelImportance = r.notification.importance.takeIf { it >= 0 },
+                                        channelGroupId = r.notification.channelId?.let { chId ->
+                                            channelGroupMap[r.notification.packageName to chId]
+                                        }
+                                    )
+                                    relaxedRule.matches(mc)
+                                }
+                            }
+                    } else 0
+
+                    if (initialCount > 0) {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.filter_preview_empty_initial_hint, initialCount),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } else {
+                        Toast.makeText(context, R.string.filter_preview_empty, Toast.LENGTH_SHORT).show()
+                    }
                 } else {
                     showPreviewResultDialog(context, matched, previewLimit, resolvedType, tempRule)
                 }
