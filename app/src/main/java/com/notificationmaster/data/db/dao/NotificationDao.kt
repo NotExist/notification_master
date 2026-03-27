@@ -78,9 +78,11 @@ interface NotificationDao {
     @Query("""
         SELECT * FROM notifications
         WHERE id IN (
-            SELECT MAX(id) FROM notifications
-            WHERE post_time BETWEEN :startTime AND :endTime
-            GROUP BY notification_key
+            SELECT id FROM (
+                SELECT id, MAX(post_time) FROM notifications
+                WHERE post_time BETWEEN :startTime AND :endTime
+                GROUP BY notification_key
+            )
         )
         ORDER BY post_time DESC
     """)
@@ -90,9 +92,11 @@ interface NotificationDao {
     @Query("""
         SELECT * FROM notifications
         WHERE id IN (
-            SELECT MAX(id) FROM notifications
-            WHERE post_time BETWEEN :startTime AND :endTime
-            GROUP BY notification_key
+            SELECT id FROM (
+                SELECT id, MAX(post_time) FROM notifications
+                WHERE post_time BETWEEN :startTime AND :endTime
+                GROUP BY notification_key
+            )
         )
         ORDER BY post_time DESC
     """)
@@ -121,13 +125,17 @@ interface NotificationDao {
     @Query("""
         SELECT * FROM notifications
         WHERE id IN (
-            SELECT MAX(id) FROM notifications
-            WHERE id IN (
-                SELECT MAX(id) FROM notifications
-                WHERE post_time BETWEEN :startTime AND :endTime
-                GROUP BY notification_key
+            SELECT id FROM (
+                SELECT id, MAX(post_time) FROM notifications
+                WHERE id IN (
+                    SELECT id FROM (
+                        SELECT id, MAX(post_time) FROM notifications
+                        WHERE post_time BETWEEN :startTime AND :endTime
+                        GROUP BY notification_key
+                    )
+                )
+                GROUP BY content_hash
             )
-            GROUP BY content_hash
         )
         ORDER BY post_time DESC
     """)
@@ -137,13 +145,17 @@ interface NotificationDao {
     @Query("""
         SELECT * FROM notifications
         WHERE id IN (
-            SELECT MAX(id) FROM notifications
-            WHERE id IN (
-                SELECT MAX(id) FROM notifications
-                WHERE post_time BETWEEN :startTime AND :endTime
-                GROUP BY notification_key
+            SELECT id FROM (
+                SELECT id, MAX(post_time) FROM notifications
+                WHERE id IN (
+                    SELECT id FROM (
+                        SELECT id, MAX(post_time) FROM notifications
+                        WHERE post_time BETWEEN :startTime AND :endTime
+                        GROUP BY notification_key
+                    )
+                )
+                GROUP BY content_hash
             )
-            GROUP BY content_hash
         )
         ORDER BY post_time DESC
     """)
@@ -156,9 +168,11 @@ interface NotificationDao {
     @Query("""
         SELECT * FROM notifications
         WHERE id IN (
-            SELECT MAX(id) FROM notifications
-            WHERE post_time BETWEEN :startTime AND :endTime
-            GROUP BY notification_key
+            SELECT id FROM (
+                SELECT id, MAX(post_time) FROM notifications
+                WHERE post_time BETWEEN :startTime AND :endTime
+                GROUP BY notification_key
+            )
         )
         AND content_hash = :hash
         ORDER BY post_time DESC
@@ -180,9 +194,11 @@ interface NotificationDao {
     @Query("""
         SELECT COUNT(DISTINCT notification_key) FROM notifications
         WHERE id IN (
-            SELECT MAX(id) FROM notifications
-            WHERE post_time BETWEEN :startTime AND :endTime
-            GROUP BY notification_key
+            SELECT id FROM (
+                SELECT id, MAX(post_time) FROM notifications
+                WHERE post_time BETWEEN :startTime AND :endTime
+                GROUP BY notification_key
+            )
         )
         AND content_hash = :hash
     """)
@@ -196,9 +212,11 @@ interface NotificationDao {
     @Query("""
         SELECT * FROM notifications
         WHERE id IN (
-            SELECT MAX(id) FROM notifications
-            WHERE is_audible = 1
-            GROUP BY notification_key
+            SELECT id FROM (
+                SELECT id, MAX(post_time) FROM notifications
+                WHERE is_audible = 1
+                GROUP BY notification_key
+            )
         )
         ORDER BY post_time DESC
         LIMIT :limit
@@ -213,9 +231,11 @@ interface NotificationDao {
     @Query("""
         SELECT * FROM notifications
         WHERE id IN (
-            SELECT MAX(id) FROM notifications
-            WHERE likely_headsup = 1
-            GROUP BY notification_key
+            SELECT id FROM (
+                SELECT id, MAX(post_time) FROM notifications
+                WHERE likely_headsup = 1
+                GROUP BY notification_key
+            )
         )
         ORDER BY post_time DESC
         LIMIT :limit
@@ -237,10 +257,12 @@ interface NotificationDao {
             GROUP BY e.notification_id
         ) r ON n.id = r.notification_id
         WHERE n.id IN (
-            SELECT MAX(n2.id) FROM notifications n2
-            INNER JOIN notification_events e2 ON n2.id = e2.notification_id
-            WHERE e2.event_type = 'REMOVED'
-            GROUP BY n2.notification_key
+            SELECT id FROM (
+                SELECT n2.id, MAX(n2.post_time) FROM notifications n2
+                INNER JOIN notification_events e2 ON n2.id = e2.notification_id
+                WHERE e2.event_type = 'REMOVED'
+                GROUP BY n2.notification_key
+            )
         )
         ORDER BY r.removal_time DESC
         LIMIT :limit
@@ -267,9 +289,11 @@ interface NotificationDao {
     @Query("""
         SELECT * FROM notifications
         WHERE id IN (
-            SELECT MAX(id) FROM notifications
-            WHERE package_name = :packageName
-            GROUP BY notification_key
+            SELECT id FROM (
+                SELECT id, MAX(post_time) FROM notifications
+                WHERE package_name = :packageName
+                GROUP BY notification_key
+            )
         )
         ORDER BY post_time DESC
     """)
@@ -279,9 +303,11 @@ interface NotificationDao {
     @Query("""
         SELECT * FROM notifications
         WHERE id IN (
-            SELECT MAX(id) FROM notifications
-            WHERE package_name = :packageName AND channel_id = :channelId
-            GROUP BY notification_key
+            SELECT id FROM (
+                SELECT id, MAX(post_time) FROM notifications
+                WHERE package_name = :packageName AND channel_id = :channelId
+                GROUP BY notification_key
+            )
         )
         ORDER BY post_time DESC
     """)
