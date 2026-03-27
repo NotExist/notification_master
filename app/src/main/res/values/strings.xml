@@ -21,7 +21,7 @@
     <string name="nav_settings">設定</string>
 
     <!-- 設定 -->
-    <string name="settings_environment_summary">檢視裝置資訊、權限狀態和支援功能</string>
+    <string name="settings_environment_summary">裝置資訊、權限狀態、儲存空間和支援功能</string>
     <string name="settings_debug_section">Debug</string>
     <string name="settings_debug_mode">Debug 模式</string>
     <string name="settings_debug_mode_summary">將原始通知資料 dump 到外部儲存</string>

@@ -29,9 +29,7 @@ import com.notificationmaster.R
 import com.notificationmaster.core.filter.ActionType
 import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.filter.RuleRepository
-import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.core.prefs.AppPreferences
-import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.databinding.FragmentSettingsBinding
 import com.notificationmaster.debug.DebugDumper
 import com.notificationmaster.export.archive.ArchiveExporter
@@ -42,11 +40,9 @@ import com.notificationmaster.export.ical.IcsExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.security.MessageDigest
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
-import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -252,7 +248,6 @@ class SettingsFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         updateDebugInfo()
-        updateStorageInfo()
         updateMediaDirDisplay()
         validateCustomMediaDir()
         updateAllRuleSummaries()
@@ -301,7 +296,7 @@ class SettingsFragment : Fragment() {
     private fun updateDebugInfo() {
         val fileCount = debugDumper.getDumpFileCount()
         val totalSize = debugDumper.getDumpTotalSize()
-        val sizeStr = formatFileSize(totalSize)
+        val sizeStr = android.text.format.Formatter.formatShortFileSize(requireContext(), totalSize)
 
         binding.textDebugInfo.text = buildString {
             append("路徑: ${debugDumper.dumpDir.absolutePath}\n")
@@ -371,52 +366,7 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    /**
-     * 更新儲存空間資訊
-     */
-    private fun updateStorageInfo() {
-        val ctx = context ?: return
-        viewLifecycleOwner.lifecycleScope.launch {
-            val dbSize = withContext(Dispatchers.IO) {
-                val dbFile = ctx.getDatabasePath(NotificationDatabase.DATABASE_NAME)
-                val walFile = File(dbFile.path + "-wal")
-                val shmFile = File(dbFile.path + "-shm")
-                val db = if (dbFile.exists()) dbFile.length() else 0L
-                val wal = if (walFile.exists()) walFile.length() else 0L
-                val shm = if (shmFile.exists()) shmFile.length() else 0L
-                Triple(db, wal, shm)
-            }
 
-            val mediaSize = withContext(Dispatchers.IO) {
-                MediaExtractor(ctx).getMediaDirSize()
-            }
-
-            val totalSize = dbSize.first + dbSize.second + dbSize.third + mediaSize
-
-            _binding?.textStorageInfo?.text = buildString {
-                append("資料庫: ${formatFileSize(dbSize.first)}")
-                if (dbSize.second > 0) append(" (WAL: ${formatFileSize(dbSize.second)})")
-                append("\n媒體: ${formatFileSize(mediaSize)}")
-                append("\n總計: ${formatFileSize(totalSize)}")
-            }
-        }
-    }
-
-    private fun formatFileSize(bytes: Long): String {
-        if (bytes < 1024) return "$bytes B"
-
-        val units = arrayOf("KB", "MB", "GB")
-        var value = bytes.toDouble() / 1024
-        var unitIndex = 0
-
-        while (value >= 1024 && unitIndex < units.lastIndex) {
-            value /= 1024
-            unitIndex++
-        }
-
-        val df = DecimalFormat("#.##")
-        return "${df.format(value)} ${units[unitIndex]}"
-    }
 
     private fun setupCalendarIntegration() {
         // 匯出到系統日曆（既有的批次匯出）
@@ -985,7 +935,6 @@ class SettingsFragment : Fragment() {
             }
 
             Toast.makeText(ctx, "已清除通知記錄資料庫", Toast.LENGTH_SHORT).show()
-            updateStorageInfo()
         }
     }
 

@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import java.io.File
 import com.notificationmaster.data.db.dao.ActionDao
 import com.notificationmaster.data.db.dao.AppSourceDao
 import com.notificationmaster.data.db.dao.ChannelDao
@@ -68,6 +69,21 @@ abstract class NotificationDatabase : RoomDatabase() {
                 DATABASE_NAME
             )
             .build()
+        }
+
+        /**
+         * 取得資料庫檔案大小（db + WAL + SHM）
+         * @return Triple(db, wal, shm) in bytes
+         */
+        fun getDatabaseFileSize(context: Context): Triple<Long, Long, Long> {
+            val dbFile = context.getDatabasePath(DATABASE_NAME)
+            val walFile = File(dbFile.path + "-wal")
+            val shmFile = File(dbFile.path + "-shm")
+            return Triple(
+                if (dbFile.exists()) dbFile.length() else 0L,
+                if (walFile.exists()) walFile.length() else 0L,
+                if (shmFile.exists()) shmFile.length() else 0L
+            )
         }
     }
 }

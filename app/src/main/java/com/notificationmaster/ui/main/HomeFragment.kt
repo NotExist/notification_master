@@ -19,12 +19,15 @@ import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.permission.PermissionDescriptions
 import com.notificationmaster.core.permission.PermissionInfo
+import com.notificationmaster.core.media.MediaExtractor
+import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.data.model.EnvironmentInfo
 import com.notificationmaster.databinding.FragmentHomeBinding
 import com.notificationmaster.databinding.ItemPermissionInfoBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.text.format.Formatter
 import java.text.NumberFormat
 import java.util.Calendar
 
@@ -62,6 +65,7 @@ class HomeFragment : Fragment() {
         super.onResume()
         displayPermissions()
         loadStatistics()
+        updateStorageInfo()
     }
 
     override fun onDestroyView() {
@@ -236,6 +240,31 @@ class HomeFragment : Fragment() {
                     }
                 }
                 container.addView(descText)
+            }
+        }
+    }
+
+    /**
+     * 更新儲存空間資訊
+     */
+    private fun updateStorageInfo() {
+        val ctx = context ?: return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val dbSize = withContext(Dispatchers.IO) {
+                NotificationDatabase.getDatabaseFileSize(ctx)
+            }
+            val mediaSize = withContext(Dispatchers.IO) {
+                MediaExtractor(ctx).getMediaDirSize()
+            }
+
+            val fmt = { bytes: Long -> Formatter.formatShortFileSize(ctx, bytes) }
+            val totalSize = dbSize.first + dbSize.second + dbSize.third + mediaSize
+
+            _binding?.textStorageInfo?.text = buildString {
+                append("資料庫: ${fmt(dbSize.first)}")
+                if (dbSize.second > 0) append(" (WAL: ${fmt(dbSize.second)})")
+                append("\n媒體: ${fmt(mediaSize)}")
+                append("\n總計: ${fmt(totalSize)}")
             }
         }
     }
