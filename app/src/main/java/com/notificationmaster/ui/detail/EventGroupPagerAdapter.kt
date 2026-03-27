@@ -40,7 +40,7 @@ class EventGroupPagerAdapter(
     }
 
     override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-        holder.bind(entityIds[position], position + 1, entityIds.size)
+        holder.bind(entityIds[position])
     }
 
     inner class PageViewHolder(
@@ -58,7 +58,7 @@ class EventGroupPagerAdapter(
             }
         }
 
-        fun bind(entityId: Long, groupIndex: Int, groupTotal: Int) {
+        fun bind(entityId: Long) {
             lifecycleScope.launch {
                 val events = withContext(Dispatchers.IO) {
                     eventDao.getEventsByNotificationIdSync(entityId)
@@ -69,11 +69,8 @@ class EventGroupPagerAdapter(
                     if (events.isNotEmpty()) {
                         add(EventListItem.GroupHeader(
                             notificationId = entityId,
-                            groupIndex = groupIndex,
-                            groupTotal = groupTotal,
                             firstEventTime = events.first().eventTime,
-                            lastEventTime = events.last().eventTime,
-                            isCurrent = true // 在 pager 中始終標記為目前頁
+                            lastEventTime = events.last().eventTime
                         ))
                     }
                     addAll(events.map { EventListItem.EventItem(it) })

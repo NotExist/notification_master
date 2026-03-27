@@ -1,9 +1,11 @@
 package com.notificationmaster.core.compat
 
 import android.app.Notification
+import android.content.Context
 import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import com.notificationmaster.R
 
 /**
  * API 版本相容性輔助類別
@@ -156,7 +158,7 @@ object ApiVersionHelper {
     }
 
     /**
-     * 移除原因的人類可讀描述（用於 debug log）
+     * 移除原因的人類可讀描述（用於 debug log，不需 Context）
      */
     fun getRemovalReasonDescription(reason: Int): String {
         return when (reason) {
@@ -170,7 +172,7 @@ object ApiVersionHelper {
             NotificationListenerService.REASON_APP_CANCEL -> "App 程式取消"
             NotificationListenerService.REASON_APP_CANCEL_ALL -> "App 程式取消全部"
             NotificationListenerService.REASON_LISTENER_CANCEL -> "監聽器取消"
-            NotificationListenerService.REASON_LISTENER_CANCEL_ALL -> "監聽器取消全部"
+            NotificationListenerService.REASON_LISTENER_CANCEL_ALL -> "監聯器取消全部"
             NotificationListenerService.REASON_GROUP_SUMMARY_CANCELED -> "群組摘要取消"
             NotificationListenerService.REASON_GROUP_OPTIMIZATION -> "群組最佳化"
             NotificationListenerService.REASON_PACKAGE_SUSPENDED -> "App 被暫停"
@@ -183,6 +185,85 @@ object ApiVersionHelper {
             REASON_CLEAR_DATA_INT -> "使用者清除 App 資料"
             REASON_ASSISTANT_CANCEL_INT -> "數位助理取消"
             else -> "未知 (#$reason)"
+        }
+    }
+
+    /** 所有移除原因碼（按編號 1–22 排列） */
+    val allRemovalReasonCodes = intArrayOf(
+        NotificationListenerService.REASON_CLICK,                   // 1
+        NotificationListenerService.REASON_CANCEL,                  // 2
+        NotificationListenerService.REASON_CANCEL_ALL,              // 3
+        NotificationListenerService.REASON_ERROR,                   // 4
+        REASON_PACKAGE_CHANGED_INT,                                 // 5
+        NotificationListenerService.REASON_USER_STOPPED,            // 6
+        NotificationListenerService.REASON_PACKAGE_BANNED,          // 7
+        NotificationListenerService.REASON_APP_CANCEL,              // 8
+        NotificationListenerService.REASON_APP_CANCEL_ALL,          // 9
+        NotificationListenerService.REASON_LISTENER_CANCEL,         // 10
+        NotificationListenerService.REASON_LISTENER_CANCEL_ALL,     // 11
+        NotificationListenerService.REASON_GROUP_SUMMARY_CANCELED,  // 12
+        NotificationListenerService.REASON_GROUP_OPTIMIZATION,      // 13
+        NotificationListenerService.REASON_PACKAGE_SUSPENDED,       // 14
+        NotificationListenerService.REASON_PROFILE_TURNED_OFF,      // 15
+        REASON_UNINSTALLED_INT,                                     // 16
+        NotificationListenerService.REASON_CHANNEL_BANNED,          // 17
+        NotificationListenerService.REASON_SNOOZED,                 // 18
+        NotificationListenerService.REASON_TIMEOUT,                 // 19
+        REASON_CHANNEL_REMOVED_INT,                                 // 20
+        REASON_CLEAR_DATA_INT,                                      // 21
+        REASON_ASSISTANT_CANCEL_INT                                 // 22
+    )
+
+    /**
+     * 移除原因的本地化顯示文字（UI 用，需 Context）
+     */
+    fun getRemovalReasonText(context: Context, reason: Int): String {
+        return when (reason) {
+            NotificationListenerService.REASON_CLICK ->
+                context.getString(R.string.removal_user_click)
+            NotificationListenerService.REASON_CANCEL ->
+                context.getString(R.string.removal_user_dismiss)
+            NotificationListenerService.REASON_CANCEL_ALL ->
+                context.getString(R.string.removal_user_clear_all)
+            NotificationListenerService.REASON_USER_STOPPED ->
+                context.getString(R.string.removal_user_stopped)
+            NotificationListenerService.REASON_SNOOZED ->
+                context.getString(R.string.removal_user_snooze)
+            REASON_CLEAR_DATA_INT ->
+                context.getString(R.string.removal_clear_data)
+            NotificationListenerService.REASON_APP_CANCEL ->
+                context.getString(R.string.removal_app_cancel)
+            NotificationListenerService.REASON_APP_CANCEL_ALL ->
+                context.getString(R.string.removal_app_cancel_all)
+            NotificationListenerService.REASON_LISTENER_CANCEL ->
+                context.getString(R.string.removal_listener_cancel)
+            NotificationListenerService.REASON_LISTENER_CANCEL_ALL ->
+                context.getString(R.string.removal_listener_cancel_all)
+            REASON_ASSISTANT_CANCEL_INT ->
+                context.getString(R.string.removal_assistant_cancel)
+            NotificationListenerService.REASON_ERROR ->
+                context.getString(R.string.removal_error)
+            REASON_PACKAGE_CHANGED_INT ->
+                context.getString(R.string.removal_package_changed)
+            NotificationListenerService.REASON_PACKAGE_BANNED ->
+                context.getString(R.string.removal_package_banned)
+            NotificationListenerService.REASON_GROUP_SUMMARY_CANCELED ->
+                context.getString(R.string.removal_group_summary_canceled)
+            NotificationListenerService.REASON_GROUP_OPTIMIZATION ->
+                context.getString(R.string.removal_group_optimization)
+            NotificationListenerService.REASON_PACKAGE_SUSPENDED ->
+                context.getString(R.string.removal_package_suspended)
+            NotificationListenerService.REASON_PROFILE_TURNED_OFF ->
+                context.getString(R.string.removal_profile_turned_off)
+            REASON_UNINSTALLED_INT ->
+                context.getString(R.string.removal_uninstalled)
+            NotificationListenerService.REASON_CHANNEL_BANNED ->
+                context.getString(R.string.removal_channel_banned)
+            NotificationListenerService.REASON_TIMEOUT ->
+                context.getString(R.string.removal_timeout)
+            REASON_CHANNEL_REMOVED_INT ->
+                context.getString(R.string.removal_channel_removed)
+            else -> context.getString(R.string.removal_other, reason)
         }
     }
 

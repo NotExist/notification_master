@@ -7,7 +7,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import android.service.notification.NotificationListenerService
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notificationmaster.R
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.data.db.entity.EventType
@@ -25,11 +25,8 @@ sealed class EventListItem {
     /** 分組標題 */
     data class GroupHeader(
         val notificationId: Long,
-        val groupIndex: Int,
-        val groupTotal: Int,
         val firstEventTime: Long,
-        val lastEventTime: Long,
-        val isCurrent: Boolean
+        val lastEventTime: Long
     ) : EventListItem()
 
     /** 事件項目 */
@@ -96,9 +93,9 @@ class NotificationEventAdapter(
         fun bind(header: EventListItem.GroupHeader) {
             val context = binding.root.context
 
-            // 標籤文字：「第 N 次」
+            // 標籤文字：「快照 #id」
             binding.textGroupLabel.text = context.getString(
-                R.string.event_group_header, header.groupIndex
+                R.string.event_group_header, header.notificationId
             )
 
             // 時間範圍
@@ -160,70 +157,32 @@ class NotificationEventAdapter(
                 binding.textRemovalReason.visibility = View.VISIBLE
                 binding.textRemovalReason.text = context.getString(
                     R.string.format_removal_reason,
-                    getRemovalReasonText(context, event.removalReason),
+                    ApiVersionHelper.getRemovalReasonText(context, event.removalReason),
                     event.removalReason
                 )
+                binding.textRemovalReason.setOnClickListener {
+                    showAllRemovalReasons(context, event.removalReason)
+                }
             } else {
                 binding.textRemovalReason.visibility = View.GONE
+                binding.textRemovalReason.setOnClickListener(null)
             }
         }
 
-        private fun getRemovalReasonText(context: android.content.Context, reason: Int): String {
-            return when (reason) {
-                // 使用者操作
-                NotificationListenerService.REASON_CLICK ->
-                    context.getString(R.string.removal_user_click)
-                NotificationListenerService.REASON_CANCEL ->
-                    context.getString(R.string.removal_user_dismiss)
-                NotificationListenerService.REASON_CANCEL_ALL ->
-                    context.getString(R.string.removal_user_clear_all)
-                NotificationListenerService.REASON_USER_STOPPED ->
-                    context.getString(R.string.removal_user_stopped)
-                NotificationListenerService.REASON_SNOOZED ->
-                    context.getString(R.string.removal_user_snooze)
-                ApiVersionHelper.REASON_CLEAR_DATA_INT ->
-                    context.getString(R.string.removal_clear_data)
+        private fun showAllRemovalReasons(context: android.content.Context, currentReason: Int) {
+            val text = buildString {
+                for (code in ApiVersionHelper.allRemovalReasonCodes) {
+                    val desc = ApiVersionHelper.getRemovalReasonText(context, code)
+                    val marker = if (code == currentReason) "  ◀" else ""
+                    appendLine("#$code — $desc$marker")
+                }
+            }.trimEnd()
 
-                // App 操作
-                NotificationListenerService.REASON_APP_CANCEL ->
-                    context.getString(R.string.removal_app_cancel)
-                NotificationListenerService.REASON_APP_CANCEL_ALL ->
-                    context.getString(R.string.removal_app_cancel_all)
-
-                // 監聽器操作
-                NotificationListenerService.REASON_LISTENER_CANCEL ->
-                    context.getString(R.string.removal_listener_cancel)
-                NotificationListenerService.REASON_LISTENER_CANCEL_ALL ->
-                    context.getString(R.string.removal_listener_cancel_all)
-                ApiVersionHelper.REASON_ASSISTANT_CANCEL_INT ->
-                    context.getString(R.string.removal_assistant_cancel)
-
-                // 系統操作
-                NotificationListenerService.REASON_ERROR ->
-                    context.getString(R.string.removal_error)
-                ApiVersionHelper.REASON_PACKAGE_CHANGED_INT ->
-                    context.getString(R.string.removal_package_changed)
-                NotificationListenerService.REASON_PACKAGE_BANNED ->
-                    context.getString(R.string.removal_package_banned)
-                NotificationListenerService.REASON_GROUP_SUMMARY_CANCELED ->
-                    context.getString(R.string.removal_group_summary_canceled)
-                NotificationListenerService.REASON_GROUP_OPTIMIZATION ->
-                    context.getString(R.string.removal_group_optimization)
-                NotificationListenerService.REASON_PACKAGE_SUSPENDED ->
-                    context.getString(R.string.removal_package_suspended)
-                NotificationListenerService.REASON_PROFILE_TURNED_OFF ->
-                    context.getString(R.string.removal_profile_turned_off)
-                ApiVersionHelper.REASON_UNINSTALLED_INT ->
-                    context.getString(R.string.removal_uninstalled)
-                NotificationListenerService.REASON_CHANNEL_BANNED ->
-                    context.getString(R.string.removal_channel_banned)
-                NotificationListenerService.REASON_TIMEOUT ->
-                    context.getString(R.string.removal_timeout)
-                ApiVersionHelper.REASON_CHANNEL_REMOVED_INT ->
-                    context.getString(R.string.removal_channel_removed)
-
-                else -> context.getString(R.string.removal_other, reason)
-            }
+            MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.removal_reason_list_title)
+                .setMessage(text)
+                .setPositiveButton(R.string.ok, null)
+                .show()
         }
     }
 

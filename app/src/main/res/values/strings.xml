@@ -51,7 +51,7 @@
     <!-- 通知詳情 -->
     <string name="detail_title">通知詳情</string>
     <string name="detail_events">生命週期事件</string>
-    <string name="detail_events_help">通知的生命週期事件記錄了一則通知從出現到消失的完整歷程。\n\n分頁邏輯：同一個 notification_key 的通知可能對應多筆記錄（每次系統呼叫 notify() 都會建立一筆），以水平分頁呈現，每頁是一筆記錄及其事件。\n\n事件類型：\n• INITIAL — 服務啟動時已存在的通知，無法得知原始發布時間\n• POSTED — 新通知首次發布\n• UPDATED — 通知內容更新（App 對同一通知再次呼叫 notify()）\n• REMOVED — 通知被移除，附帶移除原因\n• RANKING — 系統重新排序或變更重要性，僅記錄有變動的欄位</string>
+    <string name="detail_events_help">展示相同 notification_key 下各版快照的事件紀錄。\n\n每當 App 呼叫 notify() 發布或更新通知，系統都會保存一份獨立的通知快照。每個快照以 INITIAL、POSTED 或 UPDATED 事件做為起點，包含該次 notify() 呼叫當下的完整通知狀態及其後續事件（如 REMOVED、RANKING）。左右滑動可切換不同版本的快照。\n\n事件類型：\n• INITIAL — 監聽服務啟動時系統通知欄中已存在的通知\n• POSTED — 新通知首次發布\n• UPDATED — 通知內容更新，附帶與前一版本的變動內容\n• REMOVED — 通知從通知欄消失，附帶移除原因\n• RANKING — 系統重新排序或變更通知屬性，僅在有變動時記錄</string>
     <string name="detail_actions">動作按鈕</string>
     <string name="detail_media">媒體附件</string>
     <string name="detail_style_info">樣式資訊</string>
@@ -83,6 +83,7 @@
     <string name="removal_timeout">超時自動移除</string>
     <string name="removal_channel_removed">Channel 已移除</string>
     <string name="removal_other">未知 #%1$d</string>
+    <string name="removal_reason_list_title">移除原因碼一覽</string>
 
     <!-- 搜尋 -->
     <string name="search_hint">搜尋通知內容…</string>
@@ -214,12 +215,12 @@
     <string name="filter_event_type_required">請至少選擇一種事件類型</string>
 
     <!-- 事件分組 -->
-    <string name="event_group_header">第 %1$d 次</string>
+    <string name="event_group_header">快照 #%1$d</string>
     <string name="event_group_time_range">%1$s — %2$s</string>
 
     <!-- 事件分頁 -->
-    <string name="event_pager_indicator">第 %1$d 次（共 %2$d 次）</string>
-    <string name="event_pager_single">單次生命週期</string>
+    <string name="event_pager_indicator">%1$d / %2$d</string>
+    <string name="event_pager_single">單一快照</string>
     <string name="event_pager_hint">← 左右滑動切換組別 →</string>
 
     <!-- 過濾規則匯出匯入 -->
