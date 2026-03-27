@@ -118,6 +118,7 @@ class FilterSettingsFragment : Fragment() {
 
     private fun refreshList() {
         val rules = RuleEngine.getRules(actionType)
+            .sortedWith(compareBy<Rule> { it.packageName }.thenBy { it.channelId ?: "" })
         adapter.submitList(rules)
 
         val b = _binding ?: return
