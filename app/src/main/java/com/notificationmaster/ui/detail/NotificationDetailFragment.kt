@@ -162,15 +162,12 @@ class NotificationDetailFragment : Fragment() {
                 // 顯示樣式資訊
                 displayStyleInfo(notification)
 
-                // 載入動作按鈕
+                // 載入動作按鈕與 Intent 資訊
                 val actionDao = database.actionDao()
                 val actions = withContext(Dispatchers.IO) {
                     actionDao.getActionsByNotificationIdSync(args.notificationId)
                 }
-                displayActions(actions, notification.notificationKey)
-
-                // 顯示 Intent 資訊
-                displayIntentInfo(notification)
+                displayIntents(actions, notification)
 
                 // 顯示自訂 View 資訊
                 displayRemoteViewsInfo(notification)
@@ -589,9 +586,14 @@ class NotificationDetailFragment : Fragment() {
         container.addView(tv)
     }
 
-    private fun displayActions(actions: List<ActionEntity>, notificationKey: String) {
+    /**
+     * 顯示動作按鈕與 Intent 資訊（合併至同一張 Card）
+     */
+    private fun displayIntents(actions: List<ActionEntity>, notification: NotificationEntity) {
         val _binding = _binding ?: return
-        if (actions.isEmpty()) {
+        val hasAnyIntent = notification.hasContentIntent || notification.hasDeleteIntent || notification.hasFullScreenIntent
+
+        if (actions.isEmpty() && !hasAnyIntent) {
             _binding.cardActions.visibility = View.GONE
             return
         }
@@ -600,10 +602,10 @@ class NotificationDetailFragment : Fragment() {
         val container = _binding.layoutActionsContainer
         container.removeAllViews()
 
-        val intentSet = PendingIntentCache.get(notificationKey)
+        val intentSet = PendingIntentCache.get(notification.notificationKey)
 
+        // 動作按鈕區塊
         for ((index, action) in actions.withIndex()) {
-            // 動作間分隔線
             if (index > 0) {
                 val divider = View(container.context).apply {
                     layoutParams = LinearLayout.LayoutParams(
@@ -618,18 +620,15 @@ class NotificationDetailFragment : Fragment() {
                 container.addView(divider)
             }
 
-            // 動作標題行（含狀態圓點）
             val titleText = action.title ?: "(無標題)"
             val actionPi = intentSet?.actionIntents?.get(action.actionIndex)
             addIntentRow(container, "[${action.actionIndex}] $titleText", actionPi)
 
-            // 語意動作（Semantic Action, API 28+）
             val semanticName = semanticActionName(action.semanticAction)
             if (semanticName != null) {
                 addStyleInfoText(container, "語意動作: $semanticName")
             }
 
-            // 回覆資訊
             if (action.isReplyAction) {
                 val replyInfo = buildString {
                     append("直接回覆")
@@ -639,7 +638,6 @@ class NotificationDetailFragment : Fragment() {
                 }
                 addStyleInfoText(container, replyInfo)
 
-                // 預設回覆選項
                 if (!action.replyChoices.isNullOrEmpty()) {
                     try {
                         val choices = JSONArray(action.replyChoices)
@@ -649,7 +647,6 @@ class NotificationDetailFragment : Fragment() {
                 }
             }
 
-            // 標記
             val flags = mutableListOf<String>()
             if (action.isContextual) flags.add("Contextual")
             if (action.isAuthenticationRequired) flags.add("需認證")
@@ -658,43 +655,36 @@ class NotificationDetailFragment : Fragment() {
                 addStyleInfoText(container, flags.joinToString(" · "))
             }
         }
-    }
 
-    /**
-     * 顯示 Intent 資訊區塊（contentIntent / deleteIntent / fullScreenIntent）
-     */
-    private fun displayIntentInfo(notification: NotificationEntity) {
-        val _binding = _binding ?: return
-        if (!notification.hasContentIntent && !notification.hasDeleteIntent && !notification.hasFullScreenIntent) {
-            _binding.layoutIntents.visibility = View.GONE
-            return
-        }
+        // Intent 資訊區塊（contentIntent / deleteIntent / fullScreenIntent）
+        if (hasAnyIntent) {
+            val intentsContainer = _binding.layoutIntentsContainer
+            intentsContainer.removeAllViews()
 
-        _binding.layoutIntents.visibility = View.VISIBLE
-        val container = _binding.layoutIntentsContainer
-        container.removeAllViews()
-
-        val intentSet = PendingIntentCache.get(notification.notificationKey)
-
-        // 從 rawDataJson 解析 intent 元資料
-        val intentMeta = try {
-            notification.rawDataJson?.let { raw ->
-                JSONObject(raw).optJSONObject("notification")?.optJSONObject("intents")
+            if (actions.isNotEmpty()) {
+                _binding.layoutIntentsDivider.visibility = View.VISIBLE
+                _binding.labelIntents.visibility = View.VISIBLE
             }
-        } catch (_: Exception) { null }
+            intentsContainer.visibility = View.VISIBLE
 
-        // 依序顯示各 intent
-        if (notification.hasContentIntent) {
-            val desc = buildIntentDescription("contentIntent", intentMeta?.optJSONObject("contentIntent"))
-            addIntentRow(container, desc, intentSet?.contentIntent)
-        }
-        if (notification.hasDeleteIntent) {
-            val desc = buildIntentDescription("deleteIntent", intentMeta?.optJSONObject("deleteIntent"))
-            addIntentRow(container, desc, intentSet?.deleteIntent)
-        }
-        if (notification.hasFullScreenIntent) {
-            val desc = buildIntentDescription("fullScreenIntent", intentMeta?.optJSONObject("fullScreenIntent"))
-            addIntentRow(container, desc, intentSet?.fullScreenIntent)
+            val intentMeta = try {
+                notification.rawDataJson?.let { raw ->
+                    JSONObject(raw).optJSONObject("notification")?.optJSONObject("intents")
+                }
+            } catch (_: Exception) { null }
+
+            if (notification.hasContentIntent) {
+                val desc = buildIntentDescription("contentIntent", intentMeta?.optJSONObject("contentIntent"))
+                addIntentRow(intentsContainer, desc, intentSet?.contentIntent)
+            }
+            if (notification.hasDeleteIntent) {
+                val desc = buildIntentDescription("deleteIntent", intentMeta?.optJSONObject("deleteIntent"))
+                addIntentRow(intentsContainer, desc, intentSet?.deleteIntent)
+            }
+            if (notification.hasFullScreenIntent) {
+                val desc = buildIntentDescription("fullScreenIntent", intentMeta?.optJSONObject("fullScreenIntent"))
+                addIntentRow(intentsContainer, desc, intentSet?.fullScreenIntent)
+            }
         }
     }
 

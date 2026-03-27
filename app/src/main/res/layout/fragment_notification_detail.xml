@@ -323,6 +323,34 @@
                     android:layout_marginTop="8dp"
                     android:orientation="vertical" />
 
+                <!-- Intent 分隔線與子標題 -->
+                <View
+                    android:id="@+id/layout_intents_divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginVertical="12dp"
+                    android:background="?android:attr/listDivider"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+                <TextView
+                    android:id="@+id/label_intents"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_intents"
+                    android:textAppearance="?attr/textAppearanceLabelMedium"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+                <LinearLayout
+                    android:id="@+id/layout_intents_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
             </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>
@@ -447,32 +475,6 @@
                         android:fontFamily="monospace"
                         android:textIsSelectable="true"
                         tools:text="a1b2c3d4e5f6..." />
-
-                </LinearLayout>
-
-                <!-- Intent 資訊 -->
-                <LinearLayout
-                    android:id="@+id/layout_intents"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:orientation="vertical"
-                    android:visibility="gone"
-                    tools:visibility="visible">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/label_intents"
-                        android:textAppearance="?attr/textAppearanceLabelMedium"
-                        android:textColor="?android:attr/textColorSecondary" />
-
-                    <LinearLayout
-                        android:id="@+id/layout_intents_container"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:orientation="vertical" />
 
                 </LinearLayout>
 
