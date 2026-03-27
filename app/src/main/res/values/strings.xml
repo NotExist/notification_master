@@ -345,5 +345,5 @@
     <string name="alert_open_original">開啟原始通知</string>
     <string name="alert_open_failed">來源通知已不存在</string>
     <string name="alert_action_failed">無法執行此動作</string>
-    <string name="alert_event_type">觸發事件: %s</string>
+    <string name="alert_event_type">觸發事件: %1$s · %2$s</string>
 </resources>

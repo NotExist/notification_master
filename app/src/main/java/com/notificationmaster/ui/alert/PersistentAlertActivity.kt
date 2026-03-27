@@ -12,6 +12,7 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.addCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
 import com.notificationmaster.R
 import com.notificationmaster.core.alert.AlertData
@@ -102,7 +103,7 @@ class PersistentAlertActivity : AppCompatActivity() {
 
         // 觸發事件 + 時間
         val timeStr = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(timestamp))
-        binding.textEventInfo.text = getString(R.string.alert_event_type, eventType) + " · $timeStr"
+        binding.textEventInfo.text = getString(R.string.alert_event_type, eventType, timeStr)
 
         // 通知標題
         binding.textTitle.text = title
@@ -184,11 +185,7 @@ class PersistentAlertActivity : AppCompatActivity() {
 
     private fun registerStopReceiver() {
         val filter = IntentFilter(PersistentAlertManager.ACTION_STOP_ALERT)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(stopReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(stopReceiver, filter)
-        }
+        ContextCompat.registerReceiver(this, stopReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
     private fun stopAlertAndFinish() {
