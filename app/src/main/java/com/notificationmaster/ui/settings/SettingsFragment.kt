@@ -2,6 +2,7 @@ package com.notificationmaster.ui.settings
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -222,6 +223,32 @@ class SettingsFragment : Fragment() {
         updateCalendarWhitelistSummary()
     }
 
+    /**
+     * API 34+: 檢查 fullScreenIntent 權限，未授權時顯示提示
+     */
+    private fun updateFullScreenIntentHint() {
+        val b = _binding ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val nm = requireContext().getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            if (!nm.canUseFullScreenIntent()) {
+                b.textFullscreenIntentHint.visibility = View.VISIBLE
+                b.textFullscreenIntentHint.setOnClickListener {
+                    try {
+                        startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                            data = android.net.Uri.parse("package:${requireContext().packageName}")
+                        })
+                    } catch (_: Exception) {
+                        startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                            putExtra(Settings.EXTRA_APP_PACKAGE, requireContext().packageName)
+                        })
+                    }
+                }
+                return
+            }
+        }
+        b.textFullscreenIntentHint.visibility = View.GONE
+    }
+
     override fun onResume() {
         super.onResume()
         updateDebugInfo()
@@ -231,6 +258,7 @@ class SettingsFragment : Fragment() {
         updateAllRuleSummaries()
         updateRealtimeCalendarDisplay()
         updateBackupDirDisplay()
+        updateFullScreenIntentHint()
     }
 
     override fun onDestroyView() {

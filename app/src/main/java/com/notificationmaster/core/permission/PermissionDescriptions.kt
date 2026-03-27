@@ -109,6 +109,15 @@ object PermissionDescriptions {
             isRequired = false,
             minApi = 33
         ),
+        PermissionInfo(
+            permission = "android.permission.USE_FULL_SCREEN_INTENT",
+            displayName = "全螢幕通知",
+            type = "特殊權限",
+            relatedFeature = "持續提醒功能（鎖屏全螢幕顯示）",
+            rationale = "持續提醒觸發時以全螢幕 Activity 顯示，鎖屏時喚醒螢幕，確保使用者不會錯過提醒。API 34 以前自動授予，API 34+ 需使用者手動授權。",
+            deniedImpact = "鎖屏時無法顯示全螢幕提醒，退回一般 heads-up 通知（約 5 秒後自動縮回）。",
+            isRequired = false
+        ),
         // === 未實作（預留） ===
         PermissionInfo(
             permission = "android.permission.BIND_ACCESSIBILITY_SERVICE",
@@ -143,6 +152,13 @@ object PermissionDescriptions {
             info.permission == "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" -> {
                 NotificationManagerCompat.getEnabledListenerPackages(context)
                     .contains(context.packageName)
+            }
+            // 全螢幕通知 — API 34+ 需透過 NotificationManager 檢查
+            info.permission == "android.permission.USE_FULL_SCREEN_INTENT" -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    (context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager)
+                        .canUseFullScreenIntent()
+                } else true  // API 34 以下自動授予
             }
             // 普通權限 — 安裝時自動授予
             info.type == "普通權限" -> true
