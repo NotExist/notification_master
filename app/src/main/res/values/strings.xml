@@ -227,8 +227,14 @@
     <string name="settings_import_filter_rules">匯入過濾規則</string>
     <string name="filter_export_success">已匯出 %1$d 條規則</string>
     <string name="filter_export_empty">目前沒有過濾規則可匯出</string>
-    <string name="filter_import_success">已匯入規則（黑名單 %1$d 條、白名單 %2$d 條）</string>
+    <string name="filter_import_success">已匯入 %1$d 條規則</string>
     <string name="filter_import_confirm">匯入將取代現有的所有過濾規則，確定繼續嗎？</string>
+    <string name="filter_rule_category_skip_record">通知過濾黑名單</string>
+    <string name="filter_rule_category_calendar_export">日曆匯出白名單</string>
+    <string name="filter_rule_category_auto_dismiss">通知自動清除</string>
+    <string name="filter_rule_category_persistent_alert">持續提醒</string>
+    <string name="filter_rule_category_clipboard_copy">複製到剪貼簿</string>
+    <string name="filter_rule_count_line">%1$s：%2$d 條</string>
 
     <!-- Audible / Shortcut -->
     <string name="timeline_audible_only">有聲</string>

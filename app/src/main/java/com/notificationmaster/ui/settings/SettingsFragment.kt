@@ -991,10 +991,13 @@ class SettingsFragment : Fragment() {
             ctx.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
                 ?: throw IllegalStateException("無法開啟輸出串流")
 
-            val totalRules = RuleEngine.getRules().size
+            val counts = ActionType.entries.associateWith { RuleEngine.getRules(it).size }
+            val total = counts.values.sum()
+            val breakdown = formatRuleBreakdown(counts)
             showResultDialog(
                 "規則匯出完成",
-                getString(R.string.filter_export_success, totalRules)
+                getString(R.string.filter_export_success, total) +
+                    if (breakdown.isNotEmpty()) "\n\n$breakdown" else ""
             )
         } catch (e: Exception) {
             Toast.makeText(ctx, "匯出失敗：${e.message}", Toast.LENGTH_LONG).show()
@@ -1021,16 +1024,13 @@ class SettingsFragment : Fragment() {
             } ?: throw IllegalStateException("無法開啟輸入串流")
 
             val result = RuleRepository.importAllFromJson(ctx, json)
-            val notifCount = result[ActionType.SKIP_RECORD] ?: 0
-            val calCount = result[ActionType.CALENDAR_EXPORT] ?: 0
-            val dismissCount = result[ActionType.AUTO_DISMISS] ?: 0
-            val alertCount = result[ActionType.PERSISTENT_ALERT] ?: 0
+            val total = result.values.sum()
+            val breakdown = formatRuleBreakdown(result)
 
             showResultDialog(
                 "規則匯入完成",
-                getString(R.string.filter_import_success, notifCount, calCount) +
-                    (if (dismissCount > 0) "、自動清除 ${dismissCount} 條" else "") +
-                    (if (alertCount > 0) "、持續提醒 ${alertCount} 條" else "")
+                getString(R.string.filter_import_success, total) +
+                    if (breakdown.isNotEmpty()) "\n\n$breakdown" else ""
             )
 
             updateAllRuleSummaries()
@@ -1094,15 +1094,12 @@ class SettingsFragment : Fragment() {
                 showResultDialog("備份同步", "備份規則已全部同步，無需匯入")
                 return
             }
-            val notifCount = result[ActionType.SKIP_RECORD] ?: 0
-            val calCount = result[ActionType.CALENDAR_EXPORT] ?: 0
-            val dismissCount = result[ActionType.AUTO_DISMISS] ?: 0
-            val alertCount = result[ActionType.PERSISTENT_ALERT] ?: 0
+            val total = result.values.sum()
+            val breakdown = formatRuleBreakdown(result)
             showResultDialog(
                 "備份匯入完成",
-                getString(R.string.filter_import_success, notifCount, calCount) +
-                    (if (dismissCount > 0) "、自動清除 ${dismissCount} 條" else "") +
-                    (if (alertCount > 0) "、持續提醒 ${alertCount} 條" else "")
+                getString(R.string.filter_import_success, total) +
+                    if (breakdown.isNotEmpty()) "\n\n$breakdown" else ""
             )
             updateAllRuleSummaries()
         } catch (e: Exception) {
@@ -1198,6 +1195,29 @@ class SettingsFragment : Fragment() {
             .setMessage(message)
             .setPositiveButton(R.string.ok, null)
             .show()
+    }
+
+    /**
+     * 將各 ActionType 的規則數量格式化為多行明細
+     *
+     * 例：
+     *   通知過濾黑名單：3 條
+     *   日曆匯出白名單：2 條
+     *   持續提醒：1 條
+     */
+    private fun formatRuleBreakdown(counts: Map<ActionType, Int>): String {
+        val categoryNames = mapOf(
+            ActionType.SKIP_RECORD to getString(R.string.filter_rule_category_skip_record),
+            ActionType.CALENDAR_EXPORT to getString(R.string.filter_rule_category_calendar_export),
+            ActionType.AUTO_DISMISS to getString(R.string.filter_rule_category_auto_dismiss),
+            ActionType.PERSISTENT_ALERT to getString(R.string.filter_rule_category_persistent_alert),
+            ActionType.CLIPBOARD_COPY to getString(R.string.filter_rule_category_clipboard_copy)
+        )
+        return counts.entries
+            .filter { it.value > 0 }
+            .joinToString("\n") { (type, count) ->
+                getString(R.string.filter_rule_count_line, categoryNames[type] ?: type.name, count)
+            }
     }
 
     companion object {
