@@ -133,7 +133,7 @@ class PersistentAlertActivity : AppCompatActivity() {
             binding.layoutActions.visibility = android.view.View.VISIBLE
             for (action in validActions) {
                 val btn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                    text = action.title
+                    this.text = action.title?.toString()
                     layoutParams = android.widget.LinearLayout.LayoutParams(
                         android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                         android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
