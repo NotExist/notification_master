@@ -39,14 +39,14 @@ class DismissedBottomSheetFragment : BottomSheetDialogFragment() {
 
         binding.textTitle.setText(R.string.shortcut_dismissed_title)
 
-        val adapter = NotificationAdapter { notification ->
+        val adapter = NotificationAdapter(onItemClick = { notification ->
             startActivity(Intent(MainActivity.ACTION_SHOW_DETAIL).apply {
                 setClass(requireContext(), MainActivity::class.java)
                 putExtra(MainActivity.EXTRA_NOTIFICATION_ID, notification.id)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             })
             dismiss()
-        }
+        })
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
 

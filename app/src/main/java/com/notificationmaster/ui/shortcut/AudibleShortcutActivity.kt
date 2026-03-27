@@ -31,14 +31,14 @@ class AudibleShortcutActivity : AppCompatActivity() {
 
         binding.textTitle.setText(R.string.shortcut_audible_title)
 
-        val adapter = NotificationAdapter { notification ->
+        val adapter = NotificationAdapter(onItemClick = { notification ->
             startActivity(Intent(MainActivity.ACTION_SHOW_DETAIL).apply {
                 setClass(this@AudibleShortcutActivity, MainActivity::class.java)
                 putExtra(MainActivity.EXTRA_NOTIFICATION_ID, notification.id)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             })
             finish()
-        }
+        })
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
 

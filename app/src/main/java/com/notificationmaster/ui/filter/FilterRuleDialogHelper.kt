@@ -667,7 +667,7 @@ object FilterRuleDialogHelper {
         // RecyclerView 顯示匹配通知
         val recyclerView = RecyclerView(context).apply {
             layoutManager = LinearLayoutManager(context)
-            val previewAdapter = NotificationAdapter { /* 點擊不做事 */ }
+            val previewAdapter = NotificationAdapter(onItemClick = { /* 點擊不做事 */ })
             adapter = previewAdapter
             previewAdapter.submitList(matched.take(50))
         }
