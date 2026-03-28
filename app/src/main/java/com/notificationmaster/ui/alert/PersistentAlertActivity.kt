@@ -42,7 +42,7 @@ class PersistentAlertActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 鎖屏顯示 + 喚醒螢幕
+        // 鎖屏顯示 + 喚醒螢幕 + 保持螢幕常亮
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -53,6 +53,7 @@ class PersistentAlertActivity : AppCompatActivity() {
                 WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
         }
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         binding = ActivityPersistentAlertBinding.inflate(layoutInflater)
         setContentView(binding.root)
