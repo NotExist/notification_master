@@ -23,6 +23,10 @@
     <!-- 發送通知（Android 13+，持續提醒 heads-up 通知） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- 前景服務（持續提醒） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
     <!-- 全螢幕 Intent（持續提醒鎖屏全螢幕顯示） -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
@@ -122,12 +126,22 @@
             </intent-filter>
         </service>
 
-        <!-- 持續提醒停止 Receiver -->
+        <!-- 持續提醒前景服務 -->
+        <service
+            android:name=".core.alert.PersistentAlertService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="alarm-like persistent alert with ringtone and vibration" />
+        </service>
+
+        <!-- 持續提醒停止 Receiver（向下相容） -->
         <receiver
             android:name=".core.alert.AlertStopReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.notificationmaster.action.STOP_ALERT" />
+                <action android:name="com.notificationmaster.action.STOP_ALERT_SERVICE" />
             </intent-filter>
         </receiver>
 

@@ -290,6 +290,29 @@ class SettingsFragment : Fragment() {
                 .show()
         }
 
+        binding.btnTestAlert.setOnClickListener {
+            Toast.makeText(requireContext(), R.string.settings_debug_test_alert_scheduled, Toast.LENGTH_SHORT).show()
+            val handler = android.os.Handler(requireContext().mainLooper)
+            handler.postDelayed({
+                val data = com.notificationmaster.core.alert.AlertData(
+                    notificationKey = "debug_test_${System.currentTimeMillis()}",
+                    title = "[Debug] 測試持續提醒",
+                    text = "這是一則測試提醒，請確認震動、鈴聲和全螢幕顯示是否正常。",
+                    soundUri = null,
+                    vibrate = true,
+                    appName = getString(R.string.app_name),
+                    packageName = requireContext().packageName,
+                    eventType = "DEBUG",
+                    timestamp = System.currentTimeMillis(),
+                    subText = null,
+                    bigText = null,
+                    contentIntent = null,
+                    actions = null
+                )
+                com.notificationmaster.core.alert.PersistentAlertService.start(requireContext(), data)
+            }, 10_000L)
+        }
+
         displaySigningInfo()
     }
 

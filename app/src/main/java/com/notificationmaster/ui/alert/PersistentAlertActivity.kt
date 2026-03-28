@@ -1,6 +1,5 @@
 package com.notificationmaster.ui.alert
 
-import android.app.Notification
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -15,10 +14,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
 import com.notificationmaster.R
-import com.notificationmaster.core.alert.AlertData
-import com.notificationmaster.core.alert.PersistentAlertManager
+import com.notificationmaster.core.alert.PersistentAlertService
 import com.notificationmaster.databinding.ActivityPersistentAlertBinding
-import com.notificationmaster.service.NotificationCaptureService
 import java.text.DateFormat
 import java.util.Date
 
@@ -27,15 +24,16 @@ import java.util.Date
  *
  * 鎖屏時顯示全螢幕介面，亮屏時由系統顯示持續型 heads-up。
  * 透過 fullScreenIntent 由系統決定顯示方式。
+ * 從 [PersistentAlertService.currentAlertData] 靜態欄位讀取資料（避免 Intent 過大）。
  */
 class PersistentAlertActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityPersistentAlertBinding
 
-    /** 監聽停止提醒 broadcast，同步關閉 Activity */
+    /** 監聽停止提醒，同步關閉 Activity */
     private val stopReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == PersistentAlertManager.ACTION_STOP_ALERT) {
+            if (intent.action == PersistentAlertService.ACTION_STOP) {
                 finish()
             }
         }
@@ -59,7 +57,7 @@ class PersistentAlertActivity : AppCompatActivity() {
         binding = ActivityPersistentAlertBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        populateFromIntent(intent)
+        populateFromAlertData()
         registerStopReceiver()
 
         // 返回鍵觸發停止提醒（避免 Activity 消失但鈴聲繼續）
@@ -70,54 +68,43 @@ class PersistentAlertActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        setIntent(intent)
-        populateFromIntent(intent)
+        populateFromAlertData()
     }
 
-    private fun populateFromIntent(intent: Intent) {
-        val title = intent.getStringExtra(EXTRA_TITLE) ?: return
-        val appName = intent.getStringExtra(EXTRA_APP_NAME) ?: ""
-        val packageName = intent.getStringExtra(EXTRA_PACKAGE_NAME) ?: ""
-        val eventType = intent.getStringExtra(EXTRA_EVENT_TYPE) ?: ""
-        val timestamp = intent.getLongExtra(EXTRA_TIMESTAMP, System.currentTimeMillis())
-        val text = intent.getStringExtra(EXTRA_TEXT)
-        val subText = intent.getStringExtra(EXTRA_SUB_TEXT)
-        val bigText = intent.getStringExtra(EXTRA_BIG_TEXT)
-        val contentIntent: PendingIntent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(EXTRA_CONTENT_INTENT, PendingIntent::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra(EXTRA_CONTENT_INTENT)
+    private fun populateFromAlertData() {
+        val data = PersistentAlertService.currentAlertData
+        if (data == null) {
+            finish()
+            return
         }
-        val actions: Array<Notification.Action>? = getActionsFromIntent(intent)
 
         // App 圖示
         try {
-            binding.imgAppIcon.setImageDrawable(packageManager.getApplicationIcon(packageName))
+            binding.imgAppIcon.setImageDrawable(packageManager.getApplicationIcon(data.packageName))
         } catch (_: Exception) {
             binding.imgAppIcon.setImageResource(R.mipmap.ic_launcher)
         }
 
         // App 名稱
-        binding.textAppName.text = appName
+        binding.textAppName.text = data.appName
 
         // 觸發事件 + 時間
-        val timeStr = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(timestamp))
-        binding.textEventInfo.text = getString(R.string.alert_event_type, eventType, timeStr)
+        val timeStr = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(data.timestamp))
+        binding.textEventInfo.text = getString(R.string.alert_event_type, data.eventType, timeStr)
 
         // 通知標題
-        binding.textTitle.text = title
+        binding.textTitle.text = data.title
 
         // 副標題
-        if (subText.isNullOrEmpty()) {
+        if (data.subText.isNullOrEmpty()) {
             binding.textSubText.visibility = android.view.View.GONE
         } else {
             binding.textSubText.visibility = android.view.View.VISIBLE
-            binding.textSubText.text = subText
+            binding.textSubText.text = data.subText
         }
 
         // 通知內文（bigText 優先）
-        val content = bigText ?: text
+        val content = data.bigText ?: data.text
         if (content.isNullOrEmpty()) {
             binding.textContent.visibility = android.view.View.GONE
         } else {
@@ -127,7 +114,7 @@ class PersistentAlertActivity : AppCompatActivity() {
 
         // 原始 Action 按鈕
         binding.layoutActions.removeAllViews()
-        val validActions = actions?.filter { it.remoteInputs.isNullOrEmpty() }
+        val validActions = data.actions?.filter { it.remoteInputs.isNullOrEmpty() }
         if (validActions.isNullOrEmpty()) {
             binding.layoutActions.visibility = android.view.View.GONE
         } else {
@@ -157,11 +144,11 @@ class PersistentAlertActivity : AppCompatActivity() {
         }
 
         // 開啟原始通知按鈕
-        if (contentIntent != null) {
+        if (data.contentIntent != null) {
             binding.btnOpenOriginal.visibility = android.view.View.VISIBLE
             binding.btnOpenOriginal.setOnClickListener {
                 try {
-                    contentIntent.send()
+                    data.contentIntent.send()
                     stopAlertAndFinish()
                 } catch (_: PendingIntent.CanceledException) {
                     Toast.makeText(this, R.string.alert_open_failed, Toast.LENGTH_SHORT).show()
@@ -172,24 +159,13 @@ class PersistentAlertActivity : AppCompatActivity() {
         }
     }
 
-    private fun getActionsFromIntent(intent: Intent): Array<Notification.Action>? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableArrayExtra(EXTRA_ACTIONS, Notification.Action::class.java)
-                ?.filterIsInstance<Notification.Action>()?.toTypedArray()
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableArrayExtra(EXTRA_ACTIONS)
-                ?.filterIsInstance<Notification.Action>()?.toTypedArray()
-        }
-    }
-
     private fun registerStopReceiver() {
-        val filter = IntentFilter(PersistentAlertManager.ACTION_STOP_ALERT)
+        val filter = IntentFilter(PersistentAlertService.ACTION_STOP)
         ContextCompat.registerReceiver(this, stopReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
     private fun stopAlertAndFinish() {
-        NotificationCaptureService.getInstance()?.stopPersistentAlert()
+        PersistentAlertService.stop(this)
         finish()
     }
 
@@ -199,32 +175,10 @@ class PersistentAlertActivity : AppCompatActivity() {
     }
 
     companion object {
-        const val EXTRA_TITLE = "alert_title"
-        const val EXTRA_TEXT = "alert_text"
-        const val EXTRA_APP_NAME = "alert_app_name"
-        const val EXTRA_PACKAGE_NAME = "alert_package_name"
-        const val EXTRA_EVENT_TYPE = "alert_event_type"
-        const val EXTRA_TIMESTAMP = "alert_timestamp"
-        const val EXTRA_SUB_TEXT = "alert_sub_text"
-        const val EXTRA_BIG_TEXT = "alert_big_text"
-        const val EXTRA_CONTENT_INTENT = "alert_content_intent"
-        const val EXTRA_ACTIONS = "alert_actions"
-
-        fun createIntent(context: Context, data: AlertData): Intent {
+        /** 建立輕量 Intent（不含資料，Activity 從靜態欄位讀取） */
+        fun createIntent(context: Context): Intent {
             return Intent(context, PersistentAlertActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                putExtra(EXTRA_TITLE, data.title)
-                putExtra(EXTRA_TEXT, data.text)
-                putExtra(EXTRA_APP_NAME, data.appName)
-                putExtra(EXTRA_PACKAGE_NAME, data.packageName)
-                putExtra(EXTRA_EVENT_TYPE, data.eventType)
-                putExtra(EXTRA_TIMESTAMP, data.timestamp)
-                putExtra(EXTRA_SUB_TEXT, data.subText)
-                putExtra(EXTRA_BIG_TEXT, data.bigText)
-                putExtra(EXTRA_CONTENT_INTENT, data.contentIntent)
-                if (data.actions != null) {
-                    putExtra(EXTRA_ACTIONS, data.actions)
-                }
             }
         }
     }
