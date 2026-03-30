@@ -365,7 +365,8 @@
 
     <!-- 服務保活 -->
     <string name="settings_keepalive_title">服務保活</string>
-    <string name="settings_keepalive_summary">以前景服務加強維護監聽服務的運作，啟用後會常駐一則低優先度通知。可在系統通知設定中關閉該頻道的顯示，不影響保活效果。</string>
+    <string name="settings_keepalive_summary">以前景服務加強維護監聽服務的運作</string>
+    <string name="settings_keepalive_detail">啟用後會常駐一則低優先度通知，用以維持前景服務運作，降低監聽服務被系統回收的機率。\n\n如不想看到該通知，可在系統通知設定中關閉「服務保活」頻道的顯示，不影響保活效果。</string>
     <string name="keepalive_channel_name">服務保活</string>
     <string name="keepalive_notification_text">通知監聽服務運作中</string>
 </resources>

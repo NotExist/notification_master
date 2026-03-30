@@ -274,6 +274,14 @@ class SettingsFragment : Fragment() {
                 NlsKeepaliveService.stop(requireContext())
             }
         }
+
+        binding.textKeepaliveSummary.setOnClickListener {
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.settings_keepalive_title)
+                .setMessage(R.string.settings_keepalive_detail)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
     }
 
     private fun setupDebugSettings() {
