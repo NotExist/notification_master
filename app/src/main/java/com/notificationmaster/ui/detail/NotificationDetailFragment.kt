@@ -7,6 +7,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
@@ -139,6 +142,22 @@ class NotificationDetailFragment : Fragment() {
             if (notification != null) {
                 displayNotification(notification)
 
+                // 載入動作按鈕與 Intent 資訊
+                val actionDao = database.actionDao()
+                val actions = withContext(Dispatchers.IO) {
+                    actionDao.getActionsByNotificationIdSync(args.notificationId)
+                }
+                displayIntents(actions, notification)
+
+                // 載入媒體附件
+                val attachments = withContext(Dispatchers.IO) {
+                    mediaDao.getAttachmentsByNotificationIdSync(args.notificationId)
+                }
+                displayMediaAttachments(attachments)
+
+                // 顯示樣式資訊
+                displayStyleInfo(notification)
+
                 // 取得同 key 的所有 Entity ID
                 val entityIds = withContext(Dispatchers.IO) {
                     notificationDao.getEntityIdsByKey(notification.notificationKey)
@@ -153,22 +172,6 @@ class NotificationDetailFragment : Fragment() {
                     binding.pagerEvents.setCurrentItem(currentIndex, false)
                 }
                 updatePagerIndicator(if (currentIndex >= 0) currentIndex else 0)
-
-                // 載入媒體附件
-                val attachments = withContext(Dispatchers.IO) {
-                    mediaDao.getAttachmentsByNotificationIdSync(args.notificationId)
-                }
-                displayMediaAttachments(attachments)
-
-                // 顯示樣式資訊
-                displayStyleInfo(notification)
-
-                // 載入動作按鈕與 Intent 資訊
-                val actionDao = database.actionDao()
-                val actions = withContext(Dispatchers.IO) {
-                    actionDao.getActionsByNotificationIdSync(args.notificationId)
-                }
-                displayIntents(actions, notification)
 
                 // 顯示自訂 View 資訊
                 displayRemoteViewsInfo(notification)
@@ -273,6 +276,20 @@ class NotificationDetailFragment : Fragment() {
         // Key 和 Hash
         binding.textKey.text = notification.notificationKey
         binding.textHash.text = getString(R.string.format_hash_truncated, notification.contentHash.take(16))
+
+        // 系統通知設定按鈕
+        binding.btnAppNotificationSettings.setOnClickListener {
+            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, notification.packageName)
+                }
+            } else {
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${notification.packageName}")
+                }
+            }
+            startActivity(intent)
+        }
     }
 
     private fun showEventDetail(event: NotificationEventEntity) {

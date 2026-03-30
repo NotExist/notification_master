@@ -143,6 +143,7 @@
 
     <!-- Content descriptions -->
     <string name="content_desc_app_icon">App 圖示</string>
+    <string name="detail_app_notification_settings">檢視本 App 系統通知設定</string>
     <string name="content_desc_no_notifications">無通知</string>
     <string name="content_desc_navigate">導覽</string>
     <string name="content_desc_environment_info">環境資訊</string>

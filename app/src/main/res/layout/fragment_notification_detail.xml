@@ -70,6 +70,16 @@
 
                     </LinearLayout>
 
+                    <ImageButton
+                        android:id="@+id/btn_app_notification_settings"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="8dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/detail_app_notification_settings"
+                        android:src="@drawable/ic_settings"
+                        app:tint="?android:attr/textColorSecondary" />
+
                 </LinearLayout>
 
                 <View
@@ -169,12 +179,15 @@
 
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- 生命週期事件 Card -->
+        <!-- 動作按鈕 Card -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_actions"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            app:cardCornerRadius="12dp">
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            tools:visibility="visible">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -182,36 +195,47 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/detail_actions"
+                    android:textAppearance="?attr/textAppearanceTitleSmall"
+                    android:textStyle="bold" />
+
                 <LinearLayout
+                    android:id="@+id/layout_actions_container"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
 
-                    <TextView
-                        android:id="@+id/label_events"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/detail_events"
-                        android:textAppearance="?attr/textAppearanceTitleSmall"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/text_event_pager_indicator"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:textAppearance="?attr/textAppearanceBodySmall"
-                        android:textColor="?android:attr/textColorSecondary" />
-
-                </LinearLayout>
-
-                <!-- 固定高度 ViewPager2，水平滑動 -->
-                <androidx.viewpager2.widget.ViewPager2
-                    android:id="@+id/pager_events"
+                <!-- Intent 分隔線與子標題 -->
+                <View
+                    android:id="@+id/layout_intents_divider"
                     android:layout_width="match_parent"
-                    android:layout_height="320dp"
-                    android:layout_marginTop="8dp" />
+                    android:layout_height="1dp"
+                    android:layout_marginVertical="12dp"
+                    android:background="?android:attr/listDivider"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+                <TextView
+                    android:id="@+id/label_intents"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_intents"
+                    android:textAppearance="?attr/textAppearanceLabelMedium"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+                <LinearLayout
+                    android:id="@+id/layout_intents_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
 
             </LinearLayout>
 
@@ -293,15 +317,12 @@
 
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- 動作按鈕 Card -->
+        <!-- 生命週期事件 Card -->
         <com.google.android.material.card.MaterialCardView
-            android:id="@+id/card_actions"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            android:visibility="gone"
-            app:cardCornerRadius="12dp"
-            tools:visibility="visible">
+            app:cardCornerRadius="12dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -309,47 +330,36 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/detail_actions"
-                    android:textAppearance="?attr/textAppearanceTitleSmall"
-                    android:textStyle="bold" />
-
                 <LinearLayout
-                    android:id="@+id/layout_actions_container"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="vertical" />
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
 
-                <!-- Intent 分隔線與子標題 -->
-                <View
-                    android:id="@+id/layout_intents_divider"
+                    <TextView
+                        android:id="@+id/label_events"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/detail_events"
+                        android:textAppearance="?attr/textAppearanceTitleSmall"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/text_event_pager_indicator"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                </LinearLayout>
+
+                <!-- 固定高度 ViewPager2，水平滑動 -->
+                <androidx.viewpager2.widget.ViewPager2
+                    android:id="@+id/pager_events"
                     android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginVertical="12dp"
-                    android:background="?android:attr/listDivider"
-                    android:visibility="gone"
-                    tools:visibility="visible" />
-
-                <TextView
-                    android:id="@+id/label_intents"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/label_intents"
-                    android:textAppearance="?attr/textAppearanceLabelMedium"
-                    android:textColor="?android:attr/textColorSecondary"
-                    android:visibility="gone"
-                    tools:visibility="visible" />
-
-                <LinearLayout
-                    android:id="@+id/layout_intents_container"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone"
-                    tools:visibility="visible" />
+                    android:layout_height="320dp"
+                    android:layout_marginTop="8dp" />
 
             </LinearLayout>
 
