@@ -53,7 +53,7 @@
     <!-- 通知詳情 -->
     <string name="detail_title">通知詳情</string>
     <string name="detail_events">生命週期事件</string>
-    <string name="detail_events_help">展示相同 notification_key 下各版快照的事件紀錄。\n\n每當 App 呼叫 notify() 發布或更新通知，系統都會保存一份獨立的通知快照。每個快照以 INITIAL、POSTED 或 UPDATED 事件做為起點，包含該次 notify() 呼叫當下的完整通知狀態及其後續事件（如 REMOVED、RANKING）。左右滑動可切換不同版本的快照。\n\n事件類型：\n• INITIAL — 監聽服務啟動時系統通知欄中已存在的通知\n• POSTED — 新通知首次發布\n• UPDATED — 通知內容更新，附帶與前一版本的變動內容\n• REMOVED — 通知從通知欄消失，附帶移除原因\n• RANKING — 系統重新排序或變更通知屬性，僅在有變動時記錄</string>
+    <string name="detail_events_help">展示相同 notification_key 下各版快照的事件紀錄。\n\n每當 App 呼叫 notify() 發布或更新通知，系統都會保存一份獨立的通知快照。每個快照以 INITIAL、POSTED 或 UPDATED 事件做為起點，包含該次 notify() 呼叫當下的完整通知狀態及其後續事件（如 REMOVED、RANKING）。左右滑動可切換不同版本的快照。\n\n事件類型：\n• INITIAL — 監聽服務啟動時系統通知欄中已存在的通知\n• POSTED — 新通知首次發布\n• UPDATED — 通知內容更新，附帶與前一版本的變動內容\n• REMOVED — 通知從通知欄消失，附帶移除原因\n• RANKING — 系統重新排序或變更通知屬性，僅在有變動時記錄\n\n※ 若發現事件紀錄在生命週期上有瑕疵（如缺少 POSTED 開頭或 REMOVED 結尾、同一通知出現多個 INITIAL），可能是監聽服務曾受系統資源管理中斷所致。如有困擾，可在設定中開啟服務保活功能加以改善。</string>
     <string name="detail_actions">PendingIntent</string>
     <string name="detail_media">媒體附件</string>
     <string name="detail_style_info">樣式資訊</string>
