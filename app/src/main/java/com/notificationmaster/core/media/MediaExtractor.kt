@@ -23,13 +23,23 @@ import java.security.MessageDigest
  * 媒體提取器
  * 從 Notification extras 提取圖片等媒體資源並儲存
  *
- * 支援兩種儲存模式：
- * - 預設模式：getExternalFilesDir(null)/media/，filePath 為相對路徑 "media/{fileName}"
- * - 自訂模式：使用者透過 SAF 選擇的目錄，filePath 為完整 content URI 字串
+ * DB 只存檔名（如 "com.example_PICTURE_abc123.png"），讀取時依設定動態解析目錄：
+ * - 預設目錄：getExternalFilesDir(null)/media/
+ * - 自訂目錄：使用者透過 SAF 選擇的目錄
+ * - 找不到時 fallback 到另一目錄
  *
  * 檔名格式：{packageName}_{MediaType}_{hash}.ext
  * 提供可對照索引資訊，方便從檔案系統反查對應的通知記錄。
  */
+/**
+ * 動態解析後的媒體檔案位置
+ */
+sealed class ResolvedMedia {
+    data class DefaultDir(val file: File) : ResolvedMedia()
+    data class CustomDir(val uri: Uri) : ResolvedMedia()
+    object NotFound : ResolvedMedia()
+}
+
 class MediaExtractor(private val context: Context) {
 
     companion object {
@@ -45,134 +55,153 @@ class MediaExtractor(private val context: Context) {
         }
 
         /**
-         * 判斷 filePath 是否為 content URI（自訂目錄模式）
+         * 依設定動態解析媒體檔案位置
+         * 自訂目錄啟用時優先查自訂目錄，fallback 預設目錄；反之亦然
+         *
+         * @param fileName 媒體檔名（如 "com.example_PICTURE_abc123.png"）
          */
-        fun isContentUri(filePath: String): Boolean = filePath.startsWith("content://")
+        fun resolveMediaFile(context: Context, fileName: String): ResolvedMedia {
+            if (fileName.isEmpty()) return ResolvedMedia.NotFound
+            val customUri = AppPreferences.getCustomMediaDirUri(context)
+
+            if (customUri != null) {
+                // 優先自訂目錄 → fallback 預設
+                try {
+                    DocumentFile.fromTreeUri(context, customUri)
+                        ?.findFile(fileName)?.takeIf { it.exists() }
+                        ?.let { return ResolvedMedia.CustomDir(it.uri) }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Custom dir lookup failed for $fileName", e)
+                }
+                val file = File(File(getMediaBaseDir(context), MEDIA_DIR), fileName)
+                if (file.exists()) return ResolvedMedia.DefaultDir(file)
+            } else {
+                // 優先預設目錄（無自訂目錄時不需 fallback）
+                val file = File(File(getMediaBaseDir(context), MEDIA_DIR), fileName)
+                if (file.exists()) return ResolvedMedia.DefaultDir(file)
+            }
+            return ResolvedMedia.NotFound
+        }
 
         /**
          * 統一檢查媒體檔案是否存在
+         *
+         * @param fileName 媒體檔名
          */
-        fun mediaFileExists(context: Context, filePath: String): Boolean {
-            if (filePath.isEmpty()) return false
-            return try {
-                if (isContentUri(filePath)) {
-                    val uri = Uri.parse(filePath)
-                    context.contentResolver.openInputStream(uri)?.use { true } ?: false
-                } else {
-                    File(getMediaBaseDir(context), filePath).exists()
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "mediaFileExists failed: $filePath", e)
-                false
-            }
+        fun mediaFileExists(context: Context, fileName: String): Boolean {
+            return resolveMediaFile(context, fileName) !is ResolvedMedia.NotFound
         }
 
         /**
          * 統一載入媒體縮圖（含取樣以節省記憶體）
+         *
+         * @param fileName 媒體檔名
          * @param targetWidth 目標寬度（px）
          * @param targetHeight 目標高度（px）
          */
         fun loadMediaBitmapSampled(
             context: Context,
-            filePath: String,
+            fileName: String,
             targetWidth: Int,
             targetHeight: Int
         ): Bitmap? {
             return try {
-                if (isContentUri(filePath)) {
-                    val uri = Uri.parse(filePath)
-                    // 先取得原始尺寸
-                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    context.contentResolver.openInputStream(uri)?.use {
-                        BitmapFactory.decodeStream(it, null, bounds)
+                when (val resolved = resolveMediaFile(context, fileName)) {
+                    is ResolvedMedia.DefaultDir -> {
+                        val path = resolved.file.absolutePath
+                        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        BitmapFactory.decodeFile(path, bounds)
+                        val sampleSize = maxOf(
+                            bounds.outWidth / targetWidth,
+                            bounds.outHeight / targetHeight,
+                            1
+                        )
+                        BitmapFactory.decodeFile(
+                            path,
+                            BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                        )
                     }
-                    val sampleSize = maxOf(
-                        bounds.outWidth / targetWidth,
-                        bounds.outHeight / targetHeight,
-                        1
-                    )
-                    val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-                    context.contentResolver.openInputStream(uri)?.use {
-                        BitmapFactory.decodeStream(it, null, opts)
+                    is ResolvedMedia.CustomDir -> {
+                        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        context.contentResolver.openInputStream(resolved.uri)?.use {
+                            BitmapFactory.decodeStream(it, null, bounds)
+                        }
+                        val sampleSize = maxOf(
+                            bounds.outWidth / targetWidth,
+                            bounds.outHeight / targetHeight,
+                            1
+                        )
+                        val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                        context.contentResolver.openInputStream(resolved.uri)?.use {
+                            BitmapFactory.decodeStream(it, null, opts)
+                        }
                     }
-                } else {
-                    val file = File(getMediaBaseDir(context), filePath)
-                    if (!file.exists()) return null
-                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeFile(file.absolutePath, bounds)
-                    val sampleSize = maxOf(
-                        bounds.outWidth / targetWidth,
-                        bounds.outHeight / targetHeight,
-                        1
-                    )
-                    BitmapFactory.decodeFile(
-                        file.absolutePath,
-                        BitmapFactory.Options().apply { inSampleSize = sampleSize }
-                    )
+                    is ResolvedMedia.NotFound -> null
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "loadMediaBitmapSampled failed: $filePath", e)
+                Log.w(TAG, "loadMediaBitmapSampled failed: $fileName", e)
                 null
             }
         }
 
         /**
          * 統一讀取媒體檔案的完整位元組（匯出 Base64 用）
+         *
+         * @param fileName 媒體檔名
          */
-        fun readMediaBytes(context: Context, filePath: String): ByteArray? {
+        fun readMediaBytes(context: Context, fileName: String): ByteArray? {
             return try {
-                if (isContentUri(filePath)) {
-                    val uri = Uri.parse(filePath)
-                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                } else {
-                    val file = File(getMediaBaseDir(context), filePath)
-                    if (file.exists()) file.readBytes() else null
+                when (val resolved = resolveMediaFile(context, fileName)) {
+                    is ResolvedMedia.DefaultDir -> resolved.file.readBytes()
+                    is ResolvedMedia.CustomDir ->
+                        context.contentResolver.openInputStream(resolved.uri)?.use { it.readBytes() }
+                    is ResolvedMedia.NotFound -> null
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "readMediaBytes failed: $filePath", e)
+                Log.w(TAG, "readMediaBytes failed: $fileName", e)
                 null
             }
         }
 
         /**
          * 統一取得可用於分享的 URI
-         * - 相對路徑：透過 FileProvider
-         * - content URI：直接使用
+         *
+         * @param fileName 媒體檔名
          */
-        fun getShareUri(context: Context, filePath: String): Uri? {
+        fun getShareUri(context: Context, fileName: String): Uri? {
             return try {
-                if (isContentUri(filePath)) {
-                    Uri.parse(filePath)
-                } else {
-                    val file = File(getMediaBaseDir(context), filePath)
-                    if (!file.exists()) return null
-                    FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        file
-                    )
+                when (val resolved = resolveMediaFile(context, fileName)) {
+                    is ResolvedMedia.DefaultDir ->
+                        FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            resolved.file
+                        )
+                    is ResolvedMedia.CustomDir -> resolved.uri
+                    is ResolvedMedia.NotFound -> null
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "getShareUri failed: $filePath", e)
+                Log.w(TAG, "getShareUri failed: $fileName", e)
                 null
             }
         }
 
         /**
          * 統一刪除媒體檔案
+         *
+         * @param fileName 媒體檔名
          */
-        fun deleteMediaFile(context: Context, filePath: String): Boolean {
+        fun deleteMediaFile(context: Context, fileName: String): Boolean {
             return try {
-                if (isContentUri(filePath)) {
-                    val uri = Uri.parse(filePath)
-                    val docFile = DocumentFile.fromSingleUri(context, uri)
-                    docFile?.delete() ?: false
-                } else {
-                    val file = File(getMediaBaseDir(context), filePath)
-                    file.exists() && file.delete()
+                when (val resolved = resolveMediaFile(context, fileName)) {
+                    is ResolvedMedia.DefaultDir ->
+                        resolved.file.exists() && resolved.file.delete()
+                    is ResolvedMedia.CustomDir ->
+                        DocumentFile.fromSingleUri(context, resolved.uri)?.delete() ?: false
+                    is ResolvedMedia.NotFound -> false
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "deleteMediaFile failed: $filePath", e)
+                Log.w(TAG, "deleteMediaFile failed: $fileName", e)
                 false
             }
         }
@@ -457,14 +486,13 @@ class MediaExtractor(private val context: Context) {
         return try {
             val fileName = buildMediaFileName(packageName, mediaType, hash, ext)
             val file = File(mediaDir, fileName)
-            val filePath = "$MEDIA_DIR/$fileName"
             if (!file.exists()) {
                 FileOutputStream(file).use { it.write(bytes) }
             }
             MediaAttachmentEntity(
                 notificationId = notificationId,
                 mediaType = mediaType,
-                filePath = filePath,
+                filePath = fileName,
                 mimeType = mimeType,
                 fileSize = file.length(),
                 width = width, height = height,
@@ -502,7 +530,7 @@ class MediaExtractor(private val context: Context) {
             MediaAttachmentEntity(
                 notificationId = notificationId,
                 mediaType = mediaType,
-                filePath = docFile.uri.toString(),
+                filePath = fileName,
                 mimeType = mimeType,
                 fileSize = docFile.length(),
                 width = width, height = height,
@@ -633,7 +661,7 @@ class MediaExtractor(private val context: Context) {
             MediaAttachmentEntity(
                 notificationId = notificationId,
                 mediaType = mediaType,
-                filePath = docFile.uri.toString(),
+                filePath = fileName,
                 mimeType = "image/png",
                 fileSize = docFile.length(),
                 width = bitmap.width,
@@ -661,7 +689,6 @@ class MediaExtractor(private val context: Context) {
         return try {
             val fileName = buildMediaFileName(packageName, mediaType, hash, "png")
             val existingFile = File(mediaDir, fileName)
-            val filePath = "${MEDIA_DIR}/$fileName"
 
             if (!existingFile.exists()) {
                 FileOutputStream(existingFile).use { out ->
@@ -672,7 +699,7 @@ class MediaExtractor(private val context: Context) {
             MediaAttachmentEntity(
                 notificationId = notificationId,
                 mediaType = mediaType,
-                filePath = filePath,
+                filePath = fileName,
                 mimeType = "image/png",
                 fileSize = existingFile.length(),
                 width = bitmap.width,
@@ -748,7 +775,7 @@ class MediaExtractor(private val context: Context) {
     /**
      * 刪除指定的媒體檔案
      *
-     * @param filePaths 要刪除的檔案路徑清單（相對路徑或 content URI）
+     * @param filePaths 要刪除的檔案檔名清單
      * @return 實際刪除的數量
      */
     fun deleteMediaFiles(filePaths: List<String>): Int {

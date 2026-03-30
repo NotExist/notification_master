@@ -58,7 +58,7 @@ data class MediaAttachmentEntity(
     @ColumnInfo(name = "media_type")
     val mediaType: MediaType,
 
-    /** 檔案路徑 (相對於 app files 目錄) */
+    /** 媒體檔名（如 "com.example_PICTURE_abc123.png"） */
     @ColumnInfo(name = "file_path")
     val filePath: String,
 
