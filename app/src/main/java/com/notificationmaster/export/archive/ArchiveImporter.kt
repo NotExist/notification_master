@@ -70,9 +70,10 @@ class ArchiveImporter(private val context: Context) {
                     val mediaJson = mediaArray.getJSONObject(i)
                     val base64 = mediaJson.optString("base64", "")
                     if (base64.isNotEmpty()) {
-                        val filePath = mediaJson.getString("filePath")
-                        val file = File(MediaExtractor.getMediaBaseDir(context), filePath)
-                        file.parentFile?.mkdirs()
+                        val fileName = mediaJson.getString("filePath")
+                        val mediaDir = File(MediaExtractor.getMediaBaseDir(context), "media")
+                        mediaDir.mkdirs()
+                        val file = File(mediaDir, fileName)
                         file.writeBytes(Base64.decode(base64, Base64.NO_WRAP))
                     }
                 } catch (e: Exception) {
