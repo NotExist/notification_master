@@ -147,6 +147,19 @@ object AppPreferences {
             .apply()
     }
 
+    // === NLS 保活 ===
+
+    private const val KEY_NLS_KEEPALIVE_ENABLED = "nls_keepalive_enabled"
+
+    fun isNlsKeepaliveEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_NLS_KEEPALIVE_ENABLED, false)
+
+    fun setNlsKeepaliveEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_NLS_KEEPALIVE_ENABLED, enabled)
+            .apply()
+    }
+
     // === 規則引擎 ===
 
     fun getRulesV2Json(context: Context): String? =

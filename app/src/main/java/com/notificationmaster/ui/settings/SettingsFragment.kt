@@ -32,6 +32,7 @@ import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.databinding.FragmentSettingsBinding
 import com.notificationmaster.debug.DebugDumper
+import com.notificationmaster.service.NlsKeepaliveService
 import com.notificationmaster.export.archive.ArchiveExporter
 import com.notificationmaster.export.archive.ArchiveImporter
 import com.notificationmaster.core.content.ExportDetailLevel
@@ -163,6 +164,7 @@ class SettingsFragment : Fragment() {
         setupDebugSettings()
         setupCalendarIntegration()
         setupDataManagement()
+        setupKeepaliveSettings()
 
         checkBackupAndSuggestImport()
     }
@@ -259,6 +261,19 @@ class SettingsFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+    }
+
+    private fun setupKeepaliveSettings() {
+        binding.switchKeepalive.isChecked = AppPreferences.isNlsKeepaliveEnabled(requireContext())
+
+        binding.switchKeepalive.setOnCheckedChangeListener { _, isChecked ->
+            AppPreferences.setNlsKeepaliveEnabled(requireContext(), isChecked)
+            if (isChecked) {
+                NlsKeepaliveService.start(requireContext())
+            } else {
+                NlsKeepaliveService.stop(requireContext())
+            }
+        }
     }
 
     private fun setupDebugSettings() {

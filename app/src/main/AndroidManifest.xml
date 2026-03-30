@@ -126,6 +126,16 @@
             </intent-filter>
         </service>
 
+        <!-- NLS 保活前景服務 -->
+        <service
+            android:name=".service.NlsKeepaliveService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keep process alive to prevent NotificationListenerService disconnection" />
+        </service>
+
         <!-- 持續提醒前景服務 -->
         <service
             android:name=".core.alert.PersistentAlertService"

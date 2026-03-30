@@ -127,6 +127,11 @@ class NotificationCaptureService : NotificationListenerService() {
         Log.i(TAG, "Listener connected")
         isConnected = true
 
+        // 若保活已開啟，確保前景服務運行中
+        if (AppPreferences.isNlsKeepaliveEnabled(this)) {
+            NlsKeepaliveService.start(this)
+        }
+
         // 擷取所有現有通知（標記為 INITIAL）
         serviceScope.launch {
             val activeNotifications = try {

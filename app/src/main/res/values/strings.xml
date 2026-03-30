@@ -361,4 +361,10 @@
     <string name="alert_open_failed">來源通知已不存在</string>
     <string name="alert_action_failed">無法執行此動作</string>
     <string name="alert_event_type">觸發事件: %1$s · %2$s</string>
+
+    <!-- 服務保活 -->
+    <string name="settings_keepalive_title">服務保活</string>
+    <string name="settings_keepalive_summary">以前景服務加強維護監聽服務的運作，啟用後會常駐一則低優先度通知。可在系統通知設定中關閉該頻道的顯示，不影響保活效果。</string>
+    <string name="keepalive_channel_name">服務保活</string>
+    <string name="keepalive_notification_text">通知監聽服務運作中</string>
 </resources>
