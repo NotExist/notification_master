@@ -167,6 +167,17 @@ class DebugDumper(private val context: Context) {
     // === 公開傾印方法 ===
 
     /**
+     * 傾印所有活躍通知（onListenerConnected 時呼叫）
+     */
+    fun dumpActiveNotifications(
+        notifications: Array<StatusBarNotification>?,
+        rankingMap: RankingMap?
+    ) {
+        if (!isEnabled) return
+        notifications?.forEach { sbn -> dumpEvent(sbn, "INITIAL", rankingMap) }
+    }
+
+    /**
      * 傾印通知事件（INITIAL / POSTED / REMOVED 等）
      * 所有事件類型共用完整反射傾印，REMOVED 額外附帶 removalReason。
      */

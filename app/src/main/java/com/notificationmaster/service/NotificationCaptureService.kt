@@ -127,6 +127,9 @@ class NotificationCaptureService : NotificationListenerService() {
         Log.i(TAG, "Listener connected")
         isConnected = true
 
+        // Debug dump：傾印所有活躍通知的原始狀態
+        debugDumper.dumpActiveNotifications(activeNotifications, try { getCurrentRanking() } catch (_: Exception) { null })
+
         // 若保活已開啟，確保前景服務運行中
         if (AppPreferences.isNlsKeepaliveEnabled(this)) {
             NlsKeepaliveService.start(this)
@@ -153,7 +156,6 @@ class NotificationCaptureService : NotificationListenerService() {
             var failCount = 0
             for (sbn in activeNotifications) {
                 try {
-                    debugDumper.dumpEvent(sbn, "INITIAL", rankingMap)
                     processNotification(sbn, EventType.INITIAL, rankingMap)
                     successCount++
                 } catch (e: Exception) {
@@ -200,7 +202,6 @@ class NotificationCaptureService : NotificationListenerService() {
                     if (database.notificationDao().existsByKey(key)) {
                         skipCount++
                     } else {
-                        debugDumper.dumpEvent(sbn, "INITIAL", rankingMap)
                         processNotification(sbn, EventType.INITIAL, rankingMap)
                         newCount++
                     }
@@ -221,11 +222,10 @@ class NotificationCaptureService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) {
         Log.d(TAG, "Notification posted: ${sbn.packageName} - ${ApiVersionHelper.getNotificationKey(sbn)}")
+        debugDumper.dumpEvent(sbn, "POSTED", rankingMap)
 
         serviceScope.launch {
             try {
-                debugDumper.dumpEvent(sbn, "POSTED", rankingMap)
-
                 // 檢查是否為更新
                 val key = ApiVersionHelper.getNotificationKey(sbn)
                 val isUpdate = database.notificationDao().existsByKey(key)
@@ -244,6 +244,7 @@ class NotificationCaptureService : NotificationListenerService() {
         reason: Int
     ) {
         Log.d(TAG, "Notification removed: ${sbn.packageName} - reason: $reason (${ApiVersionHelper.categorizeRemovalReason(reason)})")
+        debugDumper.dumpEvent(sbn, "REMOVED", rankingMap, removalReason = reason)
 
         // 取消待處理的延遲清除排程（通知已被移除，無需再清除）
         val dismissKey = ApiVersionHelper.getNotificationKey(sbn)
@@ -251,7 +252,6 @@ class NotificationCaptureService : NotificationListenerService() {
 
         serviceScope.launch {
             try {
-                debugDumper.dumpEvent(sbn, "REMOVED", rankingMap, removalReason = reason)
                 processRemoval(sbn, reason, rankingMap)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing removed notification", e)
@@ -261,10 +261,10 @@ class NotificationCaptureService : NotificationListenerService() {
 
     override fun onNotificationRankingUpdate(rankingMap: RankingMap) {
         Log.d(TAG, "Ranking update received")
+        debugDumper.dumpRankingUpdate(rankingMap)
 
         serviceScope.launch {
             try {
-                debugDumper.dumpRankingUpdate(rankingMap)
                 processRankingUpdate(rankingMap)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing ranking update", e)
