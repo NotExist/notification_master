@@ -168,7 +168,7 @@ data class SupportedFeatures(
                     FeatureItem("通知頻道", "記錄頻道 ID、名稱、重要性等分類資訊"),
                     FeatureItem("頻道群組", "NotificationChannelGroup 支援頻道分組管理"),
                     FeatureItem("通知屬性擴充", "Shortcut ID、角標類型、自動過期時間"),
-                    FeatureItem("Ranking 頻道資訊", "Ranking 提供 channel、overrideGroupKey 等欄位"),
+                    FeatureItem("Ranking 擴充", "overrideGroupKey 等欄位"),
                     FeatureItem("發聲推斷（importance）", "Channel importance ≥ DEFAULT 推斷通知可能產生可感知提示（聲音或振動）")
                 )
             ),
@@ -179,7 +179,7 @@ data class SupportedFeatures(
                 features = listOf(
                     FeatureItem("語意動作", "識別動作按鈕類型（回覆、刪除、封存等）"),
                     FeatureItem("Person 資訊", "提取通知中的人物名稱和頭像圖片"),
-                    FeatureItem("Ranking Channel 物件", "ranking.channel 實際可存取（API 26 定義但 28 才可用）"),
+                    FeatureItem("Ranking Channel 物件", "ranking.channel 可存取完整頻道物件（API 26-27 改由 NotificationManager 取得）"),
                     FeatureItem("Ranking 擴充", "canShowBadge、isSuspended 等狀態欄位"),
                     FeatureItem("App 暫停狀態", "記錄 App 是否被系統暫停")
                 )

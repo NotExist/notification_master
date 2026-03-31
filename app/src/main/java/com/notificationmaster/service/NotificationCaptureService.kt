@@ -369,7 +369,7 @@ class NotificationCaptureService : NotificationListenerService() {
 
         // 6. 更新 Channel (API 26+)
         if (ApiVersionHelper.supportsNotificationChannel() && entity.channelId != null) {
-            // API 28+: 從 Ranking 取得完整 NotificationChannel（正確途徑）
+            // API 28+: 優先從 Ranking 取得 NotificationChannel
             val notificationChannel: android.app.NotificationChannel? =
                 if (ApiVersionHelper.supportsPerson()) {
                     val ranking = Ranking()
@@ -378,6 +378,9 @@ class NotificationCaptureService : NotificationListenerService() {
                         ranking.channel
                     } else null
                 } else null
+                // API 26+: fallback 到 NotificationManager（涵蓋 API 26-27 及 rankingMap 不可用時）
+                ?: (getSystemService(android.content.Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager)
+                    ?.getNotificationChannel(entity.channelId)
             updateChannel(sbn.packageName, entity.channelId, captureTime, notificationChannel)
         }
 
@@ -646,8 +649,8 @@ class NotificationCaptureService : NotificationListenerService() {
     /**
      * 更新 Channel 記錄 (API 26+)
      *
-     * @param notificationChannel 從 Ranking.getChannel() 取得的 NotificationChannel（API 28+），
-     *                            API 26-27 為 null，僅能儲存 channelId 和 importance。
+     * @param notificationChannel 從 Ranking.getChannel()（API 28+）或
+     *                            NotificationManager.getNotificationChannel()（API 26+ fallback）取得
      */
     private suspend fun updateChannel(
         packageName: String,
@@ -661,7 +664,7 @@ class NotificationCaptureService : NotificationListenerService() {
 
         if (existing != null) {
             if (notificationChannel != null) {
-                // API 28+: 有完整 channel 資訊，同時更新 metadata 和計數
+                // 有完整 channel 資訊，同時更新 metadata 和計數
                 database.channelDao().updateChannelInfoAndIncrement(
                     packageName = packageName,
                     channelId = channelId,
@@ -681,7 +684,7 @@ class NotificationCaptureService : NotificationListenerService() {
                     updateTime = captureTime
                 )
             } else {
-                // API 26-27: 僅遞增計數
+                // Channel 資訊不可用時僅遞增計數
                 database.channelDao().incrementNotificationCount(packageName, channelId, captureTime)
             }
         } else {
