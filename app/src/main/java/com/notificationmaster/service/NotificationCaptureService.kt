@@ -437,31 +437,31 @@ class NotificationCaptureService : NotificationListenerService() {
             return
         }
 
-        // 取得最新的通知記錄
-        val latestNotification = database.notificationDao().getLatestByKey(key)
+        // 取得最新的通知記錄；若不存在則從 sbn 補建（NLS 重連競態可能導致先收到 REMOVED）
+        val notificationId = database.notificationDao().getLatestByKey(key)?.id
+            ?: run {
+                Log.w(TAG, "No existing record for removal, creating from sbn: $key")
+                val entity = extractor.extractNotification(sbn, rankingMap, captureTime)
+                database.notificationDao().insert(entity)
+            }
 
-        if (latestNotification != null) {
-            // 記錄移除事件
-            val event = NotificationEventEntity(
-                notificationId = latestNotification.id,
-                notificationKey = key,
-                eventType = EventType.REMOVED,
-                eventTime = captureTime,
-                removalReason = reason,
-                removalReasonCategory = ApiVersionHelper.categorizeRemovalReason(reason),
-                rankingRank = null,
-                rankingImportance = null,
-                isAmbient = null,
-                isSuspended = null,
-                suppressedVisualEffects = null,
-                contentDiff = null
-            )
-            database.notificationEventDao().insert(event)
+        val event = NotificationEventEntity(
+            notificationId = notificationId,
+            notificationKey = key,
+            eventType = EventType.REMOVED,
+            eventTime = captureTime,
+            removalReason = reason,
+            removalReasonCategory = ApiVersionHelper.categorizeRemovalReason(reason),
+            rankingRank = null,
+            rankingImportance = null,
+            isAmbient = null,
+            isSuspended = null,
+            suppressedVisualEffects = null,
+            contentDiff = null
+        )
+        database.notificationEventDao().insert(event)
 
-            Log.d(TAG, "Recorded removal event for: $key, reason: $reason")
-        } else {
-            Log.w(TAG, "Removal event for unknown notification: $key")
-        }
+        Log.d(TAG, "Recorded removal event for: $key, reason: $reason")
 
         // 即時日曆匯出 — 更新結束時間
         checkRealtimeCalendarRemoval(
