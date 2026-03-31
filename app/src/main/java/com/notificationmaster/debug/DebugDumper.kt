@@ -1,16 +1,22 @@
 package com.notificationmaster.debug
 
 import android.app.Notification
+import android.app.PendingIntent
 import android.content.Context
 import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.IBinder
 import android.service.notification.NotificationListenerService.RankingMap
 import android.service.notification.NotificationListenerService.Ranking
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import android.widget.RemoteViews
+import com.notificationmaster.BuildConfig
 import com.notificationmaster.core.compat.ApiVersionHelper
+import com.notificationmaster.core.permission.PermissionDescriptions
+import com.notificationmaster.data.model.EnvironmentInfo
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -20,13 +26,35 @@ import java.util.Locale
 
 /**
  * Debug 模式 Raw Data Dumper
- * 將所有收到的原始通知資料 dump 到外部儲存供分析
+ * 將所有收到的原始資料以反射方式完整傾印到外部儲存供分析
+ *
+ * 所有事件類型共用同一個通用傾印邏輯，不做任何省略。
+ * 使用反射自動涵蓋所有 public field 和 no-arg getter，
+ * 新增 API 欄位無需修改程式碼。
  */
 class DebugDumper(private val context: Context) {
 
     companion object {
         private const val TAG = "DebugDumper"
         private const val DEBUG_DIR_NAME = "NotificationMaster/debug"
+        private const val MAX_DEPTH = 5
+
+        /** 不呼叫的 getter 名稱（可能觸發副作用或無用） */
+        private val UNSAFE_METHODS = setOf(
+            "loadDrawable", "getResources", "getApplicationContext", "getBaseContext",
+            "getClass", "hashCode", "notify", "notifyAll", "wait", "clone",
+            "toString", "describeContents", "writeToParcel",
+        )
+
+        /** 不追蹤回傳值的型別（持有 Context/IBinder 等不可序列化資源） */
+        private val SKIP_RETURN_TYPES: Set<Class<*>> = setOf(
+            Context::class.java,
+            android.content.res.Resources::class.java,
+            ClassLoader::class.java,
+            IBinder::class.java,
+            android.content.pm.ApplicationInfo::class.java,
+            android.content.pm.PackageManager::class.java,
+        )
     }
 
     @Volatile
@@ -40,7 +68,6 @@ class DebugDumper(private val context: Context) {
      * 優先使用外部儲存讓其他工具可存取
      */
     val dumpDir: File by lazy {
-        // 嘗試使用公開的 Documents 目錄
         val publicDir = Environment.getExternalStoragePublicDirectory(
             Environment.DIRECTORY_DOCUMENTS
         )
@@ -49,97 +76,155 @@ class DebugDumper(private val context: Context) {
         if (debugDir.mkdirs() || debugDir.isDirectory) {
             debugDir
         } else {
-            // Fallback 到 App 專屬外部目錄
             File(context.getExternalFilesDir(null), "debug").apply { mkdirs() }
         }
     }
 
-    /**
-     * 啟用 Debug 模式
-     */
     fun enable() {
         isEnabled = true
         Log.i(TAG, "Debug mode enabled. Output dir: ${dumpDir.absolutePath}")
+        dumpSystemInfo()
     }
 
     /**
-     * 停用 Debug 模式
+     * 傾印系統環境資訊（啟用 debug 時立即輸出一次）
+     * 包含裝置型號、Android 版本、API 支援狀況、權限授予狀態
      */
+    private fun dumpSystemInfo() {
+        try {
+            val timestamp = dateFormat.format(Date())
+            val filename = "system_${timestamp}_ENV.json"
+
+            val envInfo = EnvironmentInfo.create(
+                BuildConfig.VERSION_NAME,
+                BuildConfig.VERSION_CODE.toLong()
+            )
+
+            val json = JSONObject().apply {
+                put("dumpTime", System.currentTimeMillis())
+                put("dumpTimeFormatted", timestamp)
+                put("eventType", "ENV")
+
+                // 裝置與 App 資訊
+                put("device", JSONObject().apply {
+                    put("androidVersion", envInfo.androidVersion)
+                    put("apiLevel", envInfo.apiLevel)
+                    put("sdkInt", envInfo.sdkInt)
+                    put("model", envInfo.deviceModel)
+                    put("manufacturer", envInfo.deviceManufacturer)
+                    put("brand", envInfo.deviceBrand)
+                    put("product", envInfo.deviceProduct)
+                })
+                put("app", JSONObject().apply {
+                    put("versionName", envInfo.appVersion)
+                    put("versionCode", envInfo.appVersionCode)
+                    put("debug", BuildConfig.DEBUG)
+                    put("packageName", context.packageName)
+                })
+
+                // API 功能支援
+                val features = envInfo.supportedFeatures
+                put("supportedFeatures", JSONObject().apply {
+                    put("notificationKey", features.notificationKey)
+                    put("notificationChannel", features.notificationChannel)
+                    put("directReply", features.directReply)
+                    put("messagingStyle", features.messagingStyle)
+                    put("iconClass", features.iconClass)
+                    put("rankingDetails", features.rankingDetails)
+                    put("bubbles", features.bubbles)
+                    put("semanticAction", features.semanticAction)
+                    put("authenticationRequired", features.authenticationRequired)
+                    put("postNotificationsPermission", features.postNotificationsPermission)
+                })
+
+                // 權限狀態
+                val permissions = PermissionDescriptions.getApplicablePermissions()
+                put("permissions", JSONArray().apply {
+                    for (perm in permissions) {
+                        put(JSONObject().apply {
+                            put("permission", perm.permission)
+                            put("displayName", perm.displayName)
+                            put("type", perm.type)
+                            put("granted", PermissionDescriptions.checkGrantStatus(context, perm))
+                            put("required", perm.isRequired)
+                        })
+                    }
+                })
+            }
+
+            File(dumpDir, filename).writeText(json.toString(2))
+            Log.d(TAG, "Dumped system info")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to dump system info", e)
+        }
+    }
+
     fun disable() {
         isEnabled = false
         Log.i(TAG, "Debug mode disabled")
     }
 
+    // === 公開傾印方法 ===
+
     /**
-     * Dump 通知資料
+     * 傾印通知事件（INITIAL / POSTED / REMOVED 等）
+     * 所有事件類型共用完整反射傾印，REMOVED 額外附帶 removalReason。
      */
-    fun dumpNotification(sbn: StatusBarNotification, eventType: String) {
+    fun dumpEvent(
+        sbn: StatusBarNotification,
+        eventType: String,
+        rankingMap: RankingMap?,
+        removalReason: Int? = null
+    ) {
         if (!isEnabled) return
 
         try {
             val timestamp = dateFormat.format(Date())
             val safePackageName = sbn.packageName.replace(".", "_")
-            val filename = "${timestamp}_${eventType}_${safePackageName}.json"
+            val filename = "${safePackageName}_${timestamp}_${eventType}.json"
 
-            val json = buildNotificationJson(sbn, eventType)
-
-            val file = File(dumpDir, filename)
-            file.writeText(json.toString(2))
-
-            Log.d(TAG, "Dumped notification to: ${file.absolutePath}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to dump notification", e)
-        }
-    }
-
-    /**
-     * Dump 通知移除事件
-     */
-    fun dumpRemoval(sbn: StatusBarNotification, reason: Int) {
-        if (!isEnabled) return
-
-        try {
-            val timestamp = dateFormat.format(Date())
-            val safePackageName = sbn.packageName.replace(".", "_")
-            val filename = "${timestamp}_REMOVED_${safePackageName}.json"
-
+            val visited = mutableSetOf<Int>()
             val json = JSONObject().apply {
                 put("dumpTime", System.currentTimeMillis())
                 put("dumpTimeFormatted", timestamp)
-                put("eventType", "REMOVED")
+                put("eventType", eventType)
 
-                // 移除原因
-                put("removalReason", reason)
-                put("removalReasonCategory", ApiVersionHelper.categorizeRemovalReason(reason))
-                put("removalReasonDescription", ApiVersionHelper.getRemovalReasonDescription(reason))
+                if (removalReason != null) {
+                    put("removalReason", removalReason)
+                    put("removalReasonCategory", ApiVersionHelper.categorizeRemovalReason(removalReason))
+                    put("removalReasonDescription", ApiVersionHelper.getRemovalReasonDescription(removalReason))
+                }
 
-                // SBN 資訊
-                put("key", ApiVersionHelper.getNotificationKey(sbn))
-                put("packageName", sbn.packageName)
-                put("id", sbn.id)
-                put("tag", sbn.tag)
-                put("postTime", sbn.postTime)
-                put("isOngoing", sbn.isOngoing)
+                put("sbn", reflectToJson(sbn, 0, visited))
+
+                if (rankingMap != null) {
+                    val key = ApiVersionHelper.getNotificationKey(sbn)
+                    val ranking = Ranking()
+                    if (rankingMap.getRanking(key, ranking)) {
+                        put("ranking", reflectToJson(ranking, 0, mutableSetOf()))
+                    }
+                }
+
+                put("flagsDecoded", decodeFlagsToJson(sbn.notification.flags))
+                put("environment", buildEnvironmentJson())
             }
 
-            val file = File(dumpDir, filename)
-            file.writeText(json.toString(2))
-
-            Log.d(TAG, "Dumped removal to: ${file.absolutePath}")
+            File(dumpDir, filename).writeText(json.toString(2))
+            Log.d(TAG, "Dumped $eventType for ${sbn.packageName}")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to dump removal", e)
+            Log.e(TAG, "Failed to dump $eventType", e)
         }
     }
 
     /**
-     * Dump Ranking 更新
+     * 傾印 Ranking 更新（無 sbn，獨立格式）
      */
     fun dumpRankingUpdate(rankingMap: RankingMap) {
         if (!isEnabled) return
 
         try {
             val timestamp = dateFormat.format(Date())
-            val filename = "${timestamp}_RANKING.json"
+            val filename = "system_${timestamp}_RANKING.json"
 
             val json = JSONObject().apply {
                 put("dumpTime", System.currentTimeMillis())
@@ -148,140 +233,213 @@ class DebugDumper(private val context: Context) {
 
                 val rankingsArray = JSONArray()
                 val keys = rankingMap.orderedKeys
-
                 for (key in keys) {
                     val ranking = Ranking()
                     if (rankingMap.getRanking(key, ranking)) {
-                        rankingsArray.put(JSONObject().apply {
-                            put("key", key)
-                            if (Build.VERSION.SDK_INT >= 24) {
-                                put("rank", ranking.rank)
-                                put("importance", ranking.importance)
-                                put("isAmbient", ranking.isAmbient)
-                                put("suppressedVisualEffects", ranking.suppressedVisualEffects)
-                            }
-                            if (Build.VERSION.SDK_INT >= 26) {
-                                put("overrideGroupKey", ranking.overrideGroupKey)
-                            }
-                            if (Build.VERSION.SDK_INT >= 28) {
-                                put("channel", ranking.channel?.id)
-                                put("isSuspended", ranking.isSuspended)
-                                put("canShowBadge", ranking.canShowBadge())
-                            }
-                        })
+                        rankingsArray.put(reflectToJson(ranking, 0, mutableSetOf()))
                     }
                 }
-
                 put("rankings", rankingsArray)
                 put("totalCount", keys.size)
+
+                put("environment", buildEnvironmentJson())
             }
 
-            val file = File(dumpDir, filename)
-            file.writeText(json.toString(2))
-
-            Log.d(TAG, "Dumped ranking to: ${file.absolutePath}")
+            File(dumpDir, filename).writeText(json.toString(2))
+            Log.d(TAG, "Dumped RANKING (${rankingMap.orderedKeys.size} entries)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to dump ranking", e)
         }
     }
 
+    // === 反射引擎 ===
+
     /**
-     * 建構完整的通知 JSON
+     * 遞迴反射序列化任意物件為 JSON 相容值
      */
-    @Suppress("DEPRECATION")
-    private fun buildNotificationJson(sbn: StatusBarNotification, eventType: String): JSONObject {
-        val notification = sbn.notification
-        val extras = notification.extras ?: Bundle()
+    private fun reflectToJson(obj: Any?, depth: Int, visited: MutableSet<Int>): Any? {
+        if (obj == null) return JSONObject.NULL
 
-        return JSONObject().apply {
-            // Meta
-            put("dumpTime", System.currentTimeMillis())
-            put("dumpTimeFormatted", dateFormat.format(Date()))
-            put("eventType", eventType)
+        // 基本型別
+        when (obj) {
+            is Boolean, is Int, is Long, is Float, is Double, is Short, is Byte -> return obj
+            is CharSequence -> return obj.toString()
+            is Enum<*> -> return obj.name
+        }
 
-            // StatusBarNotification
-            put("sbn", JSONObject().apply {
-                put("key", ApiVersionHelper.getNotificationKey(sbn))
-                put("packageName", sbn.packageName)
-                put("id", sbn.id)
-                put("tag", sbn.tag)
-                put("postTime", sbn.postTime)
-                put("isOngoing", sbn.isOngoing)
-                put("isClearable", sbn.isClearable)
-                put("groupKey", sbn.groupKey)
-                put("user", sbn.user?.toString())
-                if (Build.VERSION.SDK_INT >= 24) {
-                    put("overrideGroupKey", sbn.overrideGroupKey)
+        // Binary 型別：標示但不傾印內容
+        if (isBinaryType(obj)) return buildBinaryMetadata(obj)
+        if (obj is ByteArray) return JSONObject().apply {
+            put("_type", "ByteArray"); put("_binary", true); put("size", obj.size)
+        }
+
+        // 基本陣列
+        when (obj) {
+            is IntArray -> return JSONArray(obj.toList())
+            is LongArray -> return JSONArray(obj.toList())
+            is FloatArray -> return JSONArray(obj.toList())
+            is DoubleArray -> return JSONArray(obj.toList())
+            is BooleanArray -> return JSONArray(obj.toList())
+            is ShortArray -> return JSONArray(obj.toList())
+        }
+
+        // 深度限制
+        if (depth > MAX_DEPTH) return JSONObject().apply {
+            put("_type", obj.javaClass.simpleName); put("_truncated", true)
+        }
+
+        // 循環引用偵測
+        val id = System.identityHashCode(obj)
+        if (id in visited) return JSONObject().apply {
+            put("_type", obj.javaClass.simpleName); put("_circular", true)
+        }
+        visited.add(id)
+
+        try {
+            return when (obj) {
+                is Bundle -> reflectBundle(obj, depth, visited)
+                is PendingIntent -> JSONObject().apply {
+                    put("_type", "PendingIntent")
+                    put("creatorPackage", obj.creatorPackage)
+                    put("creatorUid", obj.creatorUid)
                 }
-            })
-
-            // Notification
-            put("notification", JSONObject().apply {
-                put("flags", notification.flags)
-                put("flagsDecoded", decodeFlagsToJson(notification.flags))
-
-                @Suppress("DEPRECATION")
-                put("priority", notification.priority)
-                put("category", notification.category)
-                put("visibility", notification.visibility)
-                put("color", notification.color)
-                put("when", notification.`when`)
-                put("number", notification.number)
-                put("group", notification.group)
-                put("sortKey", notification.sortKey)
-                put("tickerText", notification.tickerText?.toString())
-
-                // Sound & Vibration
-                put("sound", notification.sound?.toString())
-                put("vibrate", notification.vibrate?.let { JSONArray(it.toList()) })
-                put("ledARGB", notification.ledARGB)
-                put("ledOnMS", notification.ledOnMS)
-                put("ledOffMS", notification.ledOffMS)
-                put("defaults", notification.defaults)
-
-                put("publicVersion", notification.publicVersion != null)
-
-                // API 26+
-                if (Build.VERSION.SDK_INT >= 26) {
-                    put("channelId", notification.channelId)
-                    put("timeoutAfter", notification.timeoutAfter)
-                    put("badgeIconType", notification.badgeIconType)
-                    put("shortcutId", notification.shortcutId)
-                    put("settingsText", notification.settingsText?.toString())
+                is Array<*> -> JSONArray().apply {
+                    obj.forEach { put(reflectToJson(it, depth + 1, visited)) }
                 }
-
-                // API 29+
-                if (Build.VERSION.SDK_INT >= 29) {
-                    put("bubbleMetadata", notification.bubbleMetadata != null)
-                    put("locusId", notification.locusId?.id)
-                    put("allowSystemGeneratedContextualActions",
-                        notification.allowSystemGeneratedContextualActions)
+                is Collection<*> -> JSONArray().apply {
+                    obj.forEach { put(reflectToJson(it, depth + 1, visited)) }
                 }
-
-                // RemoteViews
-                put("contentView", notification.contentView != null)
-                put("bigContentView", notification.bigContentView != null)
-                put("headsUpContentView", notification.headsUpContentView != null)
-            })
-
-            // Extras (完整 dump)
-            put("extras", dumpExtras(extras))
-
-            // Actions
-            put("actions", dumpActions(notification))
-
-            // 環境資訊
-            put("environment", JSONObject().apply {
-                put("apiLevel", Build.VERSION.SDK_INT)
-                put("androidVersion", Build.VERSION.RELEASE)
-                put("deviceModel", Build.MODEL)
-            })
+                is Map<*, *> -> JSONObject().apply {
+                    obj.forEach { (k, v) -> put(k.toString(), reflectToJson(v, depth + 1, visited)) }
+                }
+                else -> reflectObject(obj, depth, visited)
+            }
+        } finally {
+            visited.remove(id)
         }
     }
 
     /**
-     * 解碼 Flags
+     * Bundle 用 keySet() 迭代（比反射更可靠）
      */
+    @Suppress("DEPRECATION")
+    private fun reflectBundle(bundle: Bundle, depth: Int, visited: MutableSet<Int>): JSONObject {
+        val json = JSONObject()
+        json.put("_type", "Bundle")
+        for (key in bundle.keySet()) {
+            try {
+                json.put(key, reflectToJson(bundle.get(key), depth + 1, visited))
+            } catch (e: Exception) {
+                json.put(key, JSONObject().apply { put("_error", e.message) })
+            }
+        }
+        return json
+    }
+
+    /**
+     * 通用物件反射：public fields + no-arg getters
+     */
+    private fun reflectObject(obj: Any, depth: Int, visited: MutableSet<Int>): JSONObject {
+        val json = JSONObject()
+        json.put("_type", obj.javaClass.simpleName)
+
+        val seenNames = mutableSetOf<String>()
+
+        // 1. Public fields
+        for (field in obj.javaClass.fields) {
+            val name = field.name
+            if (name.startsWith("$") || name.startsWith("CREATOR")) continue
+            seenNames.add(name)
+            try {
+                val value = field.get(obj)
+                if (shouldSkipReturnType(field.type)) {
+                    json.put(name, JSONObject().apply {
+                        put("_type", field.type.simpleName); put("_skipped", true)
+                    })
+                } else {
+                    json.put(name, reflectToJson(value, depth + 1, visited))
+                }
+            } catch (e: Exception) {
+                json.put(name, JSONObject().apply { put("_error", e.message) })
+            }
+        }
+
+        // 2. Public no-arg getters (get* / is*)
+        for (method in obj.javaClass.methods) {
+            try {
+                val name = method.name
+                if (method.parameterCount != 0) continue
+                if (name in UNSAFE_METHODS) continue
+                if (!name.startsWith("get") && !name.startsWith("is")) continue
+
+                val returnType = method.returnType
+                if (returnType == Void.TYPE) continue
+
+                val propName = when {
+                    name.startsWith("get") && name.length > 3 ->
+                        name.removePrefix("get").replaceFirstChar { it.lowercase() }
+                    name.startsWith("is") && name.length > 2 -> name
+                    else -> continue
+                }
+                if (propName in seenNames) continue
+                seenNames.add(propName)
+
+                if (shouldSkipReturnType(returnType)) {
+                    json.put(propName, JSONObject().apply {
+                        put("_type", returnType.simpleName); put("_skipped", true)
+                    })
+                    continue
+                }
+
+                val value = method.invoke(obj)
+                json.put(propName, reflectToJson(value, depth + 1, visited))
+            } catch (_: Exception) {
+                // API 版本不符、SecurityException 等 — 靜默跳過
+            }
+        }
+
+        return json
+    }
+
+    // === Binary 型別處理 ===
+
+    private fun isBinaryType(obj: Any): Boolean {
+        return obj is Bitmap ||
+                obj is android.graphics.drawable.Drawable ||
+                obj is RemoteViews ||
+                (Build.VERSION.SDK_INT >= 23 && obj is android.graphics.drawable.Icon)
+    }
+
+    private fun buildBinaryMetadata(obj: Any): JSONObject = JSONObject().apply {
+        put("_type", obj.javaClass.simpleName)
+        put("_binary", true)
+        when (obj) {
+            is Bitmap -> {
+                put("width", obj.width)
+                put("height", obj.height)
+                put("config", obj.config?.toString())
+                put("byteCount", obj.byteCount)
+            }
+            is RemoteViews -> {
+                put("package", obj.`package`)
+                put("layoutId", obj.layoutId)
+            }
+        }
+        if (Build.VERSION.SDK_INT >= 23 && obj is android.graphics.drawable.Icon) {
+            if (Build.VERSION.SDK_INT >= 28) {
+                put("iconType", obj.type)
+                put("resPackage", obj.resPackage)
+                put("resId", obj.resId)
+            }
+        }
+    }
+
+    private fun shouldSkipReturnType(type: Class<*>): Boolean {
+        return SKIP_RETURN_TYPES.any { it.isAssignableFrom(type) }
+    }
+
+    // === 輔助 ===
+
     @Suppress("DEPRECATION")
     private fun decodeFlagsToJson(flags: Int): JSONObject {
         return JSONObject().apply {
@@ -298,123 +456,14 @@ class DebugDumper(private val context: Context) {
         }
     }
 
-    /**
-     * Dump Extras Bundle
-     */
-    @Suppress("DEPRECATION")
-    private fun dumpExtras(extras: Bundle): JSONObject {
-        val json = JSONObject()
-
-        for (key in extras.keySet()) {
-            try {
-                val value = extras.get(key)
-                val valueJson = when (value) {
-                    null -> JSONObject.NULL
-                    is CharSequence -> value.toString()
-                    is Number -> value
-                    is Boolean -> value
-                    is Bitmap -> JSONObject().apply {
-                        put("type", "Bitmap")
-                        put("width", value.width)
-                        put("height", value.height)
-                        put("config", value.config.toString())
-                        put("byteCount", value.byteCount)
-                    }
-                    is Bundle -> JSONObject().apply {
-                        put("type", "Bundle")
-                        put("keys", JSONArray(value.keySet().toList()))
-                    }
-                    is Array<*> -> JSONArray(value.map { it?.toString() })
-                    is IntArray -> JSONArray(value.toList())
-                    is LongArray -> JSONArray(value.toList())
-                    is FloatArray -> JSONArray(value.toList())
-                    is DoubleArray -> JSONArray(value.toList())
-                    is BooleanArray -> JSONArray(value.toList())
-                    is ArrayList<*> -> JSONArray(value.map { it?.toString() })
-                    else -> if (Build.VERSION.SDK_INT >= 23 && value is android.graphics.drawable.Icon) {
-                        JSONObject().apply {
-                            put("type", "Icon")
-                            if (Build.VERSION.SDK_INT >= 28) {
-                                put("iconType", value.type)
-                                put("resPackage", value.resPackage)
-                                put("resId", value.resId)
-                            }
-                        }
-                    } else {
-                        JSONObject().apply {
-                            put("type", value.javaClass.name)
-                            put("toString", value.toString())
-                        }
-                    }
-                }
-                json.put(key, valueJson)
-            } catch (e: Exception) {
-                json.put(key, JSONObject().apply {
-                    put("error", e.message)
-                })
-            }
-        }
-
-        return json
+    private fun buildEnvironmentJson(): JSONObject = JSONObject().apply {
+        put("apiLevel", Build.VERSION.SDK_INT)
+        put("androidVersion", Build.VERSION.RELEASE)
+        put("deviceModel", Build.MODEL)
     }
 
-    /**
-     * Dump Actions
-     */
-    @Suppress("DEPRECATION")
-    private fun dumpActions(notification: Notification): JSONArray {
-        val actions = notification.actions ?: return JSONArray()
-        val array = JSONArray()
+    // === 檔案管理 ===
 
-        for ((index, action) in actions.withIndex()) {
-            array.put(JSONObject().apply {
-                put("index", index)
-                put("title", action.title?.toString())
-                put("icon", action.icon)
-
-                put("creatorPackage", action.actionIntent?.creatorPackage)
-                put("creatorUid", action.actionIntent?.creatorUid)
-
-                if (Build.VERSION.SDK_INT >= 28) {
-                    put("semanticAction", action.semanticAction)
-                }
-
-                if (Build.VERSION.SDK_INT >= 29) {
-                    put("isContextual", action.isContextual)
-                }
-
-                if (Build.VERSION.SDK_INT >= 31) {
-                    put("isAuthenticationRequired", action.isAuthenticationRequired)
-                }
-
-                // RemoteInputs
-                val remoteInputs = action.remoteInputs
-                if (remoteInputs != null && remoteInputs.isNotEmpty()) {
-                    put("remoteInputs", JSONArray().apply {
-                        for (input in remoteInputs) {
-                            put(JSONObject().apply {
-                                put("resultKey", input.resultKey)
-                                put("label", input.label?.toString())
-                                put("allowFreeFormInput", input.allowFreeFormInput)
-                                put("choices", input.choices?.map { it.toString() }?.let { JSONArray(it) })
-                                if (Build.VERSION.SDK_INT >= 29) {
-                                    put("editChoicesBeforeSending", input.editChoicesBeforeSending)
-                                }
-                            })
-                        }
-                    })
-                }
-            })
-        }
-
-        return array
-    }
-
-    // === 管理功能 ===
-
-    /**
-     * 取得 dump 檔案清單
-     */
     fun getDumpFiles(): List<File> {
         return dumpDir.listFiles()
             ?.filter { it.extension == "json" }
@@ -422,21 +471,10 @@ class DebugDumper(private val context: Context) {
             ?: emptyList()
     }
 
-    /**
-     * 取得 dump 檔案總數
-     */
     fun getDumpFileCount(): Int = getDumpFiles().size
 
-    /**
-     * 取得 dump 檔案總大小
-     */
-    fun getDumpTotalSize(): Long {
-        return getDumpFiles().sumOf { it.length() }
-    }
+    fun getDumpTotalSize(): Long = getDumpFiles().sumOf { it.length() }
 
-    /**
-     * 清除所有 dump 檔案
-     */
     fun clearDumpFiles(): Int {
         var count = 0
         getDumpFiles().forEach { file ->
@@ -446,9 +484,6 @@ class DebugDumper(private val context: Context) {
         return count
     }
 
-    /**
-     * 清除指定時間之前的 dump 檔案
-     */
     fun clearDumpFilesBefore(beforeTime: Long): Int {
         var count = 0
         getDumpFiles().forEach { file ->

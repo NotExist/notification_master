@@ -153,6 +153,7 @@ class NotificationCaptureService : NotificationListenerService() {
             var failCount = 0
             for (sbn in activeNotifications) {
                 try {
+                    debugDumper.dumpEvent(sbn, "INITIAL", rankingMap)
                     processNotification(sbn, EventType.INITIAL, rankingMap)
                     successCount++
                 } catch (e: Exception) {
@@ -199,6 +200,7 @@ class NotificationCaptureService : NotificationListenerService() {
                     if (database.notificationDao().existsByKey(key)) {
                         skipCount++
                     } else {
+                        debugDumper.dumpEvent(sbn, "INITIAL", rankingMap)
                         processNotification(sbn, EventType.INITIAL, rankingMap)
                         newCount++
                     }
@@ -222,15 +224,14 @@ class NotificationCaptureService : NotificationListenerService() {
 
         serviceScope.launch {
             try {
+                debugDumper.dumpEvent(sbn, "POSTED", rankingMap)
+
                 // 檢查是否為更新
                 val key = ApiVersionHelper.getNotificationKey(sbn)
                 val isUpdate = database.notificationDao().existsByKey(key)
                 val eventType = if (isUpdate) EventType.UPDATED else EventType.POSTED
 
                 processNotification(sbn, eventType, rankingMap)
-
-                // Debug dump
-                debugDumper.dumpNotification(sbn, eventType.name)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing posted notification", e)
             }
@@ -250,10 +251,8 @@ class NotificationCaptureService : NotificationListenerService() {
 
         serviceScope.launch {
             try {
+                debugDumper.dumpEvent(sbn, "REMOVED", rankingMap, removalReason = reason)
                 processRemoval(sbn, reason, rankingMap)
-
-                // Debug dump
-                debugDumper.dumpRemoval(sbn, reason)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing removed notification", e)
             }
@@ -265,10 +264,8 @@ class NotificationCaptureService : NotificationListenerService() {
 
         serviceScope.launch {
             try {
-                processRankingUpdate(rankingMap)
-
-                // Debug dump
                 debugDumper.dumpRankingUpdate(rankingMap)
+                processRankingUpdate(rankingMap)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing ranking update", e)
             }
