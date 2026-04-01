@@ -609,19 +609,27 @@ class NotificationDetailFragment : Fragment() {
 
         when {
             style.endsWith("InboxStyle") -> {
-                // 解析 android.textLines 陣列
                 val textLines = extras?.optJSONArray("android.textLines")
                 if (textLines != null && textLines.length() > 0) {
                     hasContent = true
+                    addStyleHeader(container, "InboxStyle", R.string.style_inbox_desc)
                     addStyleInfoLabel(container, "textLines")
                     for (i in 0 until textLines.length()) {
                         addStyleInfoText(container, textLines.optString(i, ""))
                     }
                 }
+                // summaryText（InboxStyle 也可以有）
+                val summaryText = extras?.optString("android.summaryText", "")
+                if (!summaryText.isNullOrEmpty()) {
+                    if (!hasContent) addStyleHeader(container, "InboxStyle", R.string.style_inbox_desc)
+                    hasContent = true
+                    addStyleInfoLabel(container, "summaryText")
+                    addStyleInfoText(container, summaryText)
+                }
             }
 
             style.endsWith("MediaStyle") || style.endsWith("DecoratedMediaCustomViewStyle") -> {
-                // compactActions 索引陣列
+                addStyleHeader(container, "MediaStyle", R.string.style_media_desc)
                 val compactActions = extras?.optJSONArray("android.compactActions")
                 if (compactActions != null) {
                     hasContent = true
@@ -631,17 +639,17 @@ class NotificationDetailFragment : Fragment() {
                     addStyleInfoLabel(container, "compactActions")
                     addStyleInfoText(container, indices.joinToString(", "))
                 }
-                // mediaSession 存在與否
                 val hasMediaSession = extras?.has("android.mediaSession") == true
                 if (hasMediaSession) {
                     hasContent = true
                     addStyleInfoLabel(container, "mediaSession")
                     addStyleInfoText(container, "present")
                 }
+                if (!hasContent) container.removeAllViews() // 移除空的 header
             }
 
             style.endsWith("CallStyle") -> {
-                // callType
+                addStyleHeader(container, "CallStyle", R.string.style_call_desc)
                 val callType = extras?.optInt("android.callType", -1) ?: -1
                 if (callType >= 0) {
                     hasContent = true
@@ -654,17 +662,17 @@ class NotificationDetailFragment : Fragment() {
                     addStyleInfoLabel(container, "callType")
                     addStyleInfoText(container, typeDesc)
                 }
-                // callPerson
                 val callPerson = extras?.optString("android.callPerson", "")
                 if (!callPerson.isNullOrEmpty()) {
                     hasContent = true
                     addStyleInfoLabel(container, "callPerson")
                     addStyleInfoText(container, callPerson)
                 }
+                if (!hasContent) container.removeAllViews()
             }
 
             style.endsWith("MessagingStyle") -> {
-                // conversationTitle 和 isGroupConversation（補充顯示）
+                addStyleHeader(container, "MessagingStyle", R.string.style_messaging_desc)
                 val conversationTitle = notification.conversationTitle
                     ?: extras?.optString("android.conversationTitle", "")
                 if (!conversationTitle.isNullOrEmpty()) {
@@ -678,13 +686,14 @@ class NotificationDetailFragment : Fragment() {
                     addStyleInfoLabel(container, "isGroupConversation")
                     addStyleInfoText(container, "true")
                 }
+                if (!hasContent) container.removeAllViews()
             }
 
             style.endsWith("BigTextStyle") -> {
-                // summaryText（若主內容區未顯示）
                 val summaryText = extras?.optString("android.summaryText", "")
                 if (!summaryText.isNullOrEmpty()) {
                     hasContent = true
+                    addStyleHeader(container, "BigTextStyle", R.string.style_big_text_desc)
                     addStyleInfoLabel(container, "summaryText")
                     addStyleInfoText(container, summaryText)
                 }
@@ -692,6 +701,28 @@ class NotificationDetailFragment : Fragment() {
         }
 
         _binding.cardStyleInfo.visibility = if (hasContent) View.VISIBLE else View.GONE
+    }
+
+    private fun addStyleHeader(container: LinearLayout, styleName: String, descriptionRes: Int) {
+        val ctx = container.context
+        val dp = ctx.resources.displayMetrics.density
+        val tv = TextView(ctx).apply {
+            text = styleName
+            textSize = 13f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary))
+            setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, R.drawable.ic_info_outline, 0)
+            compoundDrawablePadding = (4 * dp).toInt()
+            setPadding(0, 0, 0, (4 * dp).toInt())
+            setOnClickListener {
+                MaterialAlertDialogBuilder(ctx)
+                    .setTitle(styleName)
+                    .setMessage(descriptionRes)
+                    .setPositiveButton(R.string.ok, null)
+                    .show()
+            }
+        }
+        container.addView(tv)
     }
 
     private fun addStyleInfoLabel(container: LinearLayout, label: String) {

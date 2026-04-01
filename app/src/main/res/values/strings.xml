@@ -125,6 +125,11 @@
     <string name="tag_chronometer_desc">通知時間位置顯示為持續計時器，而非靜態時間戳。\n基準時間為 whenTime。\n\n判斷依據：extras 包含 EXTRA_SHOW_CHRONOMETER = true。\n\n常見於：通話計時、錄音、計時器</string>
     <string name="tag_ambient_desc">Ranking 標記為環境通知，在低干擾模式下不中斷使用者。\n\n判斷依據：Ranking.isAmbient = true。</string>
     <string name="tag_suspended_desc">App 被系統暫停（如家長控制、企業管理政策），通知不對使用者顯示。\n\n判斷依據：Ranking.isSuspended = true (API 28+)。</string>
+    <string name="style_inbox_desc">InboxStyle：多行摘要通知（如郵件列表），每行獨立顯示，適合展示多筆同類資訊。</string>
+    <string name="style_media_desc">MediaStyle：媒體播放控制通知，提供精簡動作按鈕和 MediaSession 連結。</string>
+    <string name="style_call_desc">CallStyle (API 31+)：通話專用通知，提供來電/通話中/篩選等操作介面。</string>
+    <string name="style_messaging_desc">MessagingStyle：對話通知，包含結構化的訊息列表、sender 和對話標題。</string>
+    <string name="style_big_text_desc">BigTextStyle：展開後顯示大段文字的通知，text 為摺疊摘要，bigText 為完整內容。</string>
     <string name="tag_importance_none_desc">Importance NONE (0)：通知頻道已被使用者關閉，通知完全不顯示。</string>
     <string name="tag_importance_min_desc">Importance MIN (1)：靜音通知，不出現在狀態列，僅在下拉通知面板底部可見。</string>
     <string name="tag_importance_low_desc">Importance LOW (2)：靜音通知，出現在狀態列但不發聲不振動。</string>
