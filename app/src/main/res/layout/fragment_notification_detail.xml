@@ -212,7 +212,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:text="@string/label_time"
-                    android:drawableEnd="@drawable/ic_info_outline"
+                    app:drawableEndCompat="@drawable/ic_info_outline"
                     android:drawablePadding="4dp"
                     android:textAppearance="?attr/textAppearanceLabelMedium"
                     android:textColor="?android:attr/textColorSecondary" />
@@ -239,7 +239,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/label_when_time"
-                        android:drawableEnd="@drawable/ic_info_outline"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
                         android:drawablePadding="4dp"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
@@ -262,7 +262,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:text="@string/label_capture_time"
-                    android:drawableEnd="@drawable/ic_info_outline"
+                    app:drawableEndCompat="@drawable/ic_info_outline"
                     android:drawablePadding="4dp"
                     android:textAppearance="?attr/textAppearanceLabelMedium"
                     android:textColor="?android:attr/textColorSecondary" />
@@ -970,7 +970,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/label_persistence_type"
-                        android:drawableEnd="@drawable/ic_info_outline"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
                         android:drawablePadding="4dp"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
@@ -1037,7 +1037,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/label_flags"
-                        android:drawableEnd="@drawable/ic_info_outline"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
                         android:drawablePadding="4dp"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
@@ -1134,7 +1134,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/label_ranking"
-                    android:drawableEnd="@drawable/ic_info_outline"
+                    app:drawableEndCompat="@drawable/ic_info_outline"
                     android:drawablePadding="4dp"
                     android:textAppearance="?attr/textAppearanceTitleSmall"
                     android:textStyle="bold" />

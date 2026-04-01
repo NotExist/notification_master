@@ -62,7 +62,16 @@ class NotificationDetailFragment : Fragment() {
 
     private val args: NotificationDetailFragmentArgs by navArgs()
 
-    private val rfc3339Format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault())
+    private fun formatTime(millis: Long): String {
+        return if (Build.VERSION.SDK_INT >= 26) {
+            java.time.Instant.ofEpochMilli(millis)
+                .atZone(java.time.ZoneId.systemDefault())
+                .format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+        } else {
+            SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.getDefault())
+                .format(Date(millis))
+        }
+    }
     private val preciseTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
 
     private lateinit var pagerAdapter: EventGroupPagerAdapter
@@ -261,7 +270,7 @@ class NotificationDetailFragment : Fragment() {
         }
 
         // 發佈時間
-        binding.textTime.text = rfc3339Format.format(Date(notification.postTime))
+        binding.textTime.text = formatTime(notification.postTime)
         binding.labelPostTime.setOnClickListener {
             MaterialAlertDialogBuilder(context)
                 .setTitle(R.string.label_time)
@@ -274,7 +283,7 @@ class NotificationDetailFragment : Fragment() {
         val whenTime = notification.whenTime
         if (whenTime > 0) {
             binding.layoutWhenTime.visibility = View.VISIBLE
-            val whenText = rfc3339Format.format(Date(whenTime))
+            val whenText = formatTime(whenTime)
             binding.textWhenTime.text = if (notification.showWhen) whenText
                 else "$whenText ${getString(R.string.label_when_not_shown)}"
             binding.labelWhenTime.setOnClickListener {
@@ -289,7 +298,7 @@ class NotificationDetailFragment : Fragment() {
         }
 
         // 擷取時間
-        binding.textCaptureTime.text = rfc3339Format.format(Date(notification.captureTime))
+        binding.textCaptureTime.text = formatTime(notification.captureTime)
         binding.labelCaptureTime.setOnClickListener {
             MaterialAlertDialogBuilder(context)
                 .setTitle(R.string.label_capture_time)
@@ -414,12 +423,12 @@ class NotificationDetailFragment : Fragment() {
         }
         binding.textImportance.text = "$importanceName (${notification.importance})"
         val priority = notification.priority
+        binding.iconImportanceInfo.visibility = View.VISIBLE
         if (priority != 0) {
             val priorityName = when (priority) {
                 -2 -> "MIN"; -1 -> "LOW"; 0 -> "DEFAULT"; 1 -> "HIGH"; 2 -> "MAX"
                 else -> priority.toString()
             }
-            binding.iconImportanceInfo.visibility = View.VISIBLE
             binding.iconImportanceInfo.setOnClickListener {
                 MaterialAlertDialogBuilder(context)
                     .setTitle(R.string.label_importance)
@@ -428,7 +437,13 @@ class NotificationDetailFragment : Fragment() {
                     .show()
             }
         } else {
-            binding.iconImportanceInfo.visibility = View.GONE
+            binding.iconImportanceInfo.setOnClickListener {
+                MaterialAlertDialogBuilder(context)
+                    .setTitle(R.string.label_importance)
+                    .setMessage(R.string.desc_importance)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
         }
 
         // persistenceType
@@ -925,7 +940,7 @@ class NotificationDetailFragment : Fragment() {
         }
         if (notification.lastAudiblyAlertedMillis > 0) {
             addStyleInfoLabel(container, "lastAudiblyAlertedMillis")
-            addStyleInfoText(container, rfc3339Format.format(Date(notification.lastAudiblyAlertedMillis)))
+            addStyleInfoText(container, formatTime(notification.lastAudiblyAlertedMillis))
         }
     }
 
