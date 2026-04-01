@@ -37,6 +37,7 @@ import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.data.db.entity.ActionEntity
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.MediaAttachmentEntity
+import com.notificationmaster.data.db.entity.DeviceStateEntity
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.SemanticAction
 import com.notificationmaster.data.db.entity.NotificationEventEntity
@@ -157,6 +158,18 @@ class NotificationDetailFragment : Fragment() {
 
                 // 顯示樣式資訊
                 displayStyleInfo(notification)
+
+                // 條件性區塊
+                displayConditionalBlocks(notification)
+
+                // 通知效果、Ranking 快照、裝置狀態
+                displayEffects(notification)
+                displayRanking(notification)
+
+                val deviceState = withContext(Dispatchers.IO) {
+                    database.deviceStateDao().getByNotificationId(args.notificationId)
+                }
+                displayDeviceState(deviceState)
 
                 // 取得同 key 的所有 Entity ID
                 val entityIds = withContext(Dispatchers.IO) {
@@ -367,24 +380,109 @@ class NotificationDetailFragment : Fragment() {
                 addChip("CallStyle", R.color.tag_call_style, R.string.tag_call_style_desc)
         }
 
-        // 詳細資訊欄位（全部永遠顯示，null 顯示 "null"）
+        // 詳細資訊欄位
+
+        // 識別
+        binding.textKey.text = notification.notificationKey
+        binding.textKey.setOnClickListener {
+            MaterialAlertDialogBuilder(context)
+                .setTitle("Notification Key")
+                .setMessage(R.string.desc_notification_key)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
+
+        // 頻道 / 分類 / 群組
         binding.textChannel.text = notification.channelId ?: "null"
-        binding.textGroup.text = notification.groupKey ?: "null"
-        binding.textNotificationId.text = notification.notificationId.toString()
-        binding.textTag.text = notification.tag ?: "null"
         binding.textCategory.text = notification.category ?: "null"
+        binding.textGroup.text = notification.groupKey ?: "null"
+        binding.textOverrideGroupKey.text = notification.overrideGroupKey ?: "null"
+        binding.textSortKey.text = notification.sortKey ?: "null"
+
+        // 狀態 / 行為屬性
         binding.textVisibility.text = when (notification.visibility) {
             Notification.VISIBILITY_PUBLIC -> "PUBLIC"
             Notification.VISIBILITY_PRIVATE -> "PRIVATE"
             Notification.VISIBILITY_SECRET -> "SECRET"
             else -> notification.visibility.toString()
         }
-        binding.textSortKey.text = notification.sortKey ?: "null"
-        binding.textShortcutId.text = notification.shortcutId ?: "null"
-        binding.textOverrideGroupKey.text = notification.overrideGroupKey ?: "null"
 
-        // Key 和 Hash
-        binding.textKey.text = notification.notificationKey
+        // importance / priority
+        val importanceName = when (notification.importance) {
+            0 -> "NONE"; 1 -> "MIN"; 2 -> "LOW"; 3 -> "DEFAULT"; 4 -> "HIGH"; 5 -> "MAX"
+            else -> notification.importance.toString()
+        }
+        binding.textImportance.text = "$importanceName (${notification.importance})"
+        val priority = notification.priority
+        if (priority != 0) {
+            val priorityName = when (priority) {
+                -2 -> "MIN"; -1 -> "LOW"; 0 -> "DEFAULT"; 1 -> "HIGH"; 2 -> "MAX"
+                else -> priority.toString()
+            }
+            binding.iconImportanceInfo.visibility = View.VISIBLE
+            binding.iconImportanceInfo.setOnClickListener {
+                MaterialAlertDialogBuilder(context)
+                    .setTitle(R.string.label_importance)
+                    .setMessage(getString(R.string.desc_importance_with_priority, "$priorityName ($priority)"))
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        } else {
+            binding.iconImportanceInfo.visibility = View.GONE
+        }
+
+        // persistenceType
+        binding.textPersistenceType.text = notification.persistenceType
+        binding.labelPersistenceType.setOnClickListener {
+            MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.label_persistence_type)
+                .setMessage(R.string.desc_persistence_type)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
+
+        binding.textShortcutId.text = notification.shortcutId ?: "null"
+
+        // color
+        val color = notification.color
+        if (color != 0) {
+            binding.viewColorPreview.visibility = View.VISIBLE
+            val bg = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 4f * resources.displayMetrics.density
+                setColor(color)
+            }
+            binding.viewColorPreview.background = bg
+            binding.textColor.text = String.format("#%06X", 0xFFFFFF and color)
+        } else {
+            binding.viewColorPreview.visibility = View.GONE
+            binding.textColor.text = "未設定"
+        }
+
+        // flags
+        val flags = notification.flags
+        binding.textFlags.text = String.format("0x%08X", flags)
+        binding.labelFlags.setOnClickListener {
+            val decoded = buildString {
+                appendLine("FLAG_SHOW_LIGHTS: ${(flags and 0x01) != 0}")
+                appendLine("FLAG_ONGOING_EVENT: ${(flags and 0x02) != 0}")
+                appendLine("FLAG_INSISTENT: ${(flags and 0x04) != 0}")
+                appendLine("FLAG_ONLY_ALERT_ONCE: ${(flags and 0x08) != 0}")
+                appendLine("FLAG_AUTO_CANCEL: ${(flags and 0x10) != 0}")
+                appendLine("FLAG_NO_CLEAR: ${(flags and 0x20) != 0}")
+                appendLine("FLAG_FOREGROUND_SERVICE: ${(flags and 0x40) != 0}")
+                appendLine("FLAG_HIGH_PRIORITY: ${(flags and 0x80) != 0}")
+                appendLine("FLAG_LOCAL_ONLY: ${(flags and 0x100) != 0}")
+                append("FLAG_GROUP_SUMMARY: ${(flags and 0x200) != 0}")
+            }
+            MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.label_flags)
+                .setMessage(getString(R.string.desc_flags, decoded))
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
+
+        // contentHash
         binding.textHash.text = getString(R.string.format_hash_truncated, notification.contentHash.take(16))
 
         // 系統通知設定按鈕
@@ -701,6 +799,152 @@ class NotificationDetailFragment : Fragment() {
         }
 
         _binding.cardStyleInfo.visibility = if (hasContent) View.VISIBLE else View.GONE
+    }
+
+    private fun displayConditionalBlocks(notification: NotificationEntity) {
+        val _binding = _binding ?: return
+
+        // 進度條
+        if (notification.progress > 0 || notification.progressIndeterminate) {
+            _binding.cardProgress.visibility = View.VISIBLE
+            _binding.textProgress.text = if (notification.progressIndeterminate) "不確定"
+                else "${notification.progress} / ${notification.progressMax}"
+        } else {
+            _binding.cardProgress.visibility = View.GONE
+        }
+
+        // 計時器
+        if (notification.showChronometer) {
+            _binding.cardChronometer.visibility = View.VISIBLE
+            _binding.textChronometer.text = if (notification.chronometerCountDown) "倒數計時" else "正計時"
+        } else {
+            _binding.cardChronometer.visibility = View.GONE
+        }
+
+        // 關聯聯絡人
+        if (!notification.people.isNullOrEmpty()) {
+            _binding.cardPeople.visibility = View.VISIBLE
+            _binding.textPeople.text = try {
+                val arr = JSONArray(notification.people)
+                (0 until arr.length()).joinToString("\n") { arr.optString(it, "") }
+            } catch (_: Exception) { notification.people }
+        } else {
+            _binding.cardPeople.visibility = View.GONE
+        }
+
+        // 訊息內容
+        if (!notification.messages.isNullOrEmpty()) {
+            _binding.cardMessages.visibility = View.VISIBLE
+            _binding.textMessages.text = try {
+                val arr = JSONArray(notification.messages)
+                (0 until arr.length()).joinToString("\n") { i ->
+                    val msg = arr.optJSONObject(i)
+                    val sender = msg?.optString("sender", "") ?: ""
+                    val text = msg?.optString("text", "") ?: ""
+                    if (sender.isNotEmpty()) "$sender: $text" else text
+                }
+            } catch (_: Exception) { notification.messages }
+        } else {
+            _binding.cardMessages.visibility = View.GONE
+        }
+
+        // Bubble 詳情
+        if (notification.hasBubbleMetadata) {
+            _binding.cardBubble.visibility = View.VISIBLE
+            val container = _binding.layoutBubbleContainer
+            container.removeAllViews()
+            addStyleInfoLabel(container, "desiredHeight")
+            addStyleInfoText(container, "${notification.bubbleDesiredHeight} dp")
+            if (notification.bubbleDesiredHeightResId != 0) {
+                addStyleInfoLabel(container, "desiredHeightResId")
+                addStyleInfoText(container, notification.bubbleDesiredHeightResId.toString())
+            }
+            addStyleInfoLabel(container, "autoExpand")
+            addStyleInfoText(container, notification.bubbleAutoExpand.toString())
+            addStyleInfoLabel(container, "suppressNotification")
+            addStyleInfoText(container, notification.bubbleSuppressNotification.toString())
+        } else {
+            _binding.cardBubble.visibility = View.GONE
+        }
+    }
+
+    private fun displayEffects(notification: NotificationEntity) {
+        val _binding = _binding ?: return
+        val container = _binding.layoutEffectsContainer
+        container.removeAllViews()
+
+        addStyleInfoLabel(container, "soundUri")
+        addStyleInfoText(container, notification.soundUri ?: "系統預設")
+        addStyleInfoLabel(container, "vibratePattern")
+        addStyleInfoText(container, notification.vibratePattern ?: "未設定")
+        if (notification.ledArgb != 0) {
+            addStyleInfoLabel(container, "LED")
+            addStyleInfoText(container, "色彩: ${String.format("#%06X", 0xFFFFFF and notification.ledArgb)} · 亮: ${notification.ledOnMs}ms · 暗: ${notification.ledOffMs}ms")
+        } else {
+            addStyleInfoLabel(container, "LED")
+            addStyleInfoText(container, "未設定")
+        }
+    }
+
+    private fun displayRanking(notification: NotificationEntity) {
+        val _binding = _binding ?: return
+        val container = _binding.layoutRankingContainer
+        container.removeAllViews()
+
+        _binding.labelRankingTitle.setOnClickListener {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.label_ranking)
+                .setMessage(R.string.desc_ranking)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
+
+        addStyleInfoLabel(container, "suppressedVisualEffects")
+        val sve = notification.suppressedVisualEffects
+        addStyleInfoText(container, String.format("0x%X", sve))
+
+        addStyleInfoLabel(container, "lastAudiblyAlertedMillis")
+        val laam = notification.lastAudiblyAlertedMillis
+        addStyleInfoText(container, if (laam > 0) rfc3339Format.format(Date(laam)) else "從未發聲")
+    }
+
+    private fun displayDeviceState(deviceState: DeviceStateEntity?) {
+        val _binding = _binding ?: return
+        if (deviceState == null) {
+            _binding.cardDeviceState.visibility = View.GONE
+            return
+        }
+
+        _binding.cardDeviceState.visibility = View.VISIBLE
+        val container = _binding.layoutDeviceStateContainer
+        container.removeAllViews()
+
+        addStyleInfoLabel(container, "ringerMode")
+        addStyleInfoText(container, when (deviceState.ringerMode) {
+            0 -> "靜音"; 1 -> "振動"; 2 -> "正常"; else -> deviceState.ringerMode.toString()
+        })
+
+        addStyleInfoLabel(container, "isScreenOn")
+        addStyleInfoText(container, if (deviceState.isScreenOn) "亮" else "暗")
+
+        addStyleInfoLabel(container, "batteryLevel")
+        addStyleInfoText(container, if (deviceState.batteryLevel >= 0) "${deviceState.batteryLevel}%" else "未知")
+
+        addStyleInfoLabel(container, "batteryStatus")
+        addStyleInfoText(container, when (deviceState.batteryStatus) {
+            2 -> "充電中"; 3 -> "放電中"; 4 -> "未充電"; 5 -> "已充滿"; else -> "未知"
+        })
+
+        addStyleInfoLabel(container, "isConnected")
+        addStyleInfoText(container, when (deviceState.isConnected) {
+            true -> "已連線"; false -> "未連線"; null -> "未知"
+        })
+
+        addStyleInfoLabel(container, "connectionType")
+        addStyleInfoText(container, when (deviceState.connectionType) {
+            -1 -> "無"; 1 -> "WiFi"; 0 -> "行動數據"; 9 -> "乙太網路"
+            else -> "類型 ${deviceState.connectionType}"
+        })
     }
 
     private fun addStyleHeader(container: LinearLayout, styleName: String, descriptionRes: Int) {

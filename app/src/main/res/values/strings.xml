@@ -185,8 +185,20 @@
     <string name="label_override_group_key">overrideGroupKey</string>
     <string name="label_key">Key</string>
     <string name="label_content_hash">Content Hash</string>
+    <string name="label_importance">importance</string>
+    <string name="label_persistence_type">persistenceType</string>
+    <string name="label_color">color</string>
+    <string name="label_flags">flags</string>
     <string name="label_intents">Intent 資訊</string>
     <string name="label_remote_views">自訂 View</string>
+    <string name="label_progress">進度條</string>
+    <string name="label_chronometer">計時器</string>
+    <string name="label_people">關聯聯絡人</string>
+    <string name="label_messages">訊息內容</string>
+    <string name="label_bubble_detail">Bubble 詳情</string>
+    <string name="label_effects">通知效果</string>
+    <string name="label_ranking">Ranking 快照</string>
+    <string name="label_device_state">裝置狀態</string>
     <string name="intent_send_failed">Intent 發送失敗（已取消或過期）</string>
     <string name="intent_triggered">已觸發</string>
 
@@ -197,6 +209,13 @@
     <string name="desc_post_time">Android 系統在 notify() 時記錄的發佈時間，通知更新時會刷新。\n\n與事件時間不同：發佈時間是系統端的實際發佈時刻，事件時間是 App 指定的時間。\n與擷取時間不同：擷取時間是 NLS 收到並寫入的時刻，差值反映處理延遲。</string>
     <string name="desc_when_time">App 透過 setWhen() 設定的事件時間，通知列上 showWhen=true 時顯示此值。可能與發佈時間不同，例如郵件的寄出時間、訊息的發送時間。</string>
     <string name="desc_capture_time">NLS 收到事件並寫入資料庫的時間。與發佈時間的差值反映系統處理和 App 排程的延遲。</string>
+
+    <string name="desc_importance">系統判定的通知重要性（API 26+），決定是否發聲、是否 heads-up、是否顯示。\n\nNONE(0)=不顯示 / MIN(1)=靜音不在狀態列 / LOW(2)=靜音在狀態列 / DEFAULT(3)=發聲 / HIGH(4)=發聲+heads-up / MAX(5)=同HIGH</string>
+    <string name="desc_importance_with_priority">系統判定的通知重要性（API 26+）。\n\n此通知同時設有舊版 priority 值：%1$s\npriority 是 API 16-25 的優先度機制，已被 importance 取代。</string>
+    <string name="desc_persistence_type">通知的持久性類型（推斷值）：\n\n• FOREGROUND_SERVICE：前景服務通知\n• ONGOING：持續通知（非前景服務）\n• PINNED：FLAG_NO_CLEAR 固定通知\n• TRANSIENT：一般短暫通知</string>
+    <string name="desc_flags">通知的原始 flags 位元遮罩，各 flag 已由 chip 個別呈現。\n\n%1$s</string>
+    <string name="desc_ranking">此為通知記錄時從 Ranking 擷取的快照值，僅反映當下狀態。後續可能因 RANKING 事件調整，變化紀錄請查看生命週期事件。</string>
+    <string name="desc_notification_key">系統組合的唯一識別，同一 key 的通知為同一則的不同版本。\n\n組成：userId | packageName | notificationId | tag | uid\n\n• notificationId：App 發送通知時指定的 ID\n• tag：App 的可選標籤\n• 同 package + 同 id + 同 tag = 更新而非新增</string>
 
     <!-- 格式字串 -->
     <string name="format_android_version">Android %1$s (API %2$d)</string>

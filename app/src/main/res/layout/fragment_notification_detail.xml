@@ -453,6 +453,182 @@
 
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- 條件性區塊：進度條 -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_progress"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            tools:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_progress"
+                    android:textAppearance="?attr/textAppearanceTitleSmall"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/text_progress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    tools:text="50 / 100" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 條件性區塊：計時器 -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_chronometer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            tools:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_chronometer"
+                    android:textAppearance="?attr/textAppearanceTitleSmall"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/text_chronometer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    tools:text="正計時" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 條件性區塊：關聯資訊 -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_people"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            tools:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_people"
+                    android:textAppearance="?attr/textAppearanceTitleSmall"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/text_people"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textIsSelectable="true"
+                    tools:text="content://contacts/123" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 條件性區塊：Messages -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_messages"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            tools:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_messages"
+                    android:textAppearance="?attr/textAppearanceTitleSmall"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/text_messages"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textIsSelectable="true"
+                    tools:text="Alice: Hello\nBob: Hi" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 條件性區塊：Bubble 詳情 -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_bubble"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            tools:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_bubble_detail"
+                    android:textAppearance="?attr/textAppearanceTitleSmall"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/layout_bubble_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- 生命週期事件 Card -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
@@ -568,53 +744,7 @@
 
                 </LinearLayout>
 
-                <!-- notificationId -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/label_notification_id"
-                        android:textAppearance="?attr/textAppearanceLabelMedium"
-                        android:textColor="?android:attr/textColorSecondary" />
-
-                    <TextView
-                        android:id="@+id/text_notification_id"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textIsSelectable="true"
-                        tools:text="12345" />
-
-                </LinearLayout>
-
-                <!-- tag -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/label_tag"
-                        android:textAppearance="?attr/textAppearanceLabelMedium"
-                        android:textColor="?android:attr/textColorSecondary" />
-
-                    <TextView
-                        android:id="@+id/text_tag"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textIsSelectable="true"
-                        tools:text="null" />
-
-                </LinearLayout>
+                <!-- notificationId / tag 已併入 notificationKey 說明 -->
 
                 <!-- category -->
                 <LinearLayout
@@ -786,6 +916,143 @@
 
                 </LinearLayout>
 
+                <!-- importance / priority -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_importance"
+                            android:textAppearance="?attr/textAppearanceLabelMedium"
+                            android:textColor="?android:attr/textColorSecondary" />
+
+                        <ImageView
+                            android:id="@+id/icon_importance_info"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginStart="4dp"
+                            android:src="@drawable/ic_info_outline"
+                            android:visibility="gone"
+                            android:contentDescription="@string/label_importance"
+                            tools:visibility="visible" />
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/text_importance"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                        android:textIsSelectable="true"
+                        tools:text="DEFAULT (3)" />
+
+                </LinearLayout>
+
+                <!-- persistenceType -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/label_persistence_type"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_persistence_type"
+                        android:drawableEnd="@drawable/ic_info_outline"
+                        android:drawablePadding="4dp"
+                        android:textAppearance="?attr/textAppearanceLabelMedium"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                    <TextView
+                        android:id="@+id/text_persistence_type"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                        android:textIsSelectable="true"
+                        tools:text="TRANSIENT" />
+
+                </LinearLayout>
+
+                <!-- color -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_color"
+                        android:textAppearance="?attr/textAppearanceLabelMedium"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <View
+                            android:id="@+id/view_color_preview"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginEnd="8dp" />
+
+                        <TextView
+                            android:id="@+id/text_color"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textAppearance="?attr/textAppearanceBodyMedium"
+                            android:fontFamily="monospace"
+                            android:textIsSelectable="true"
+                            tools:text="#FF4081" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <!-- flags -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/label_flags"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_flags"
+                        android:drawableEnd="@drawable/ic_info_outline"
+                        android:drawablePadding="4dp"
+                        android:textAppearance="?attr/textAppearanceLabelMedium"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                    <TextView
+                        android:id="@+id/text_flags"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:fontFamily="monospace"
+                        android:textIsSelectable="true"
+                        tools:text="0x00000012" />
+
+                </LinearLayout>
+
                 <!-- 自訂 View 資訊 -->
                 <LinearLayout
                     android:id="@+id/layout_remote_views"
@@ -811,6 +1078,105 @@
                         android:orientation="vertical" />
 
                 </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 通知效果 Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_effects"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardCornerRadius="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_effects"
+                    android:textAppearance="?attr/textAppearanceTitleSmall"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/layout_effects_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Ranking 快照 Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_ranking"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardCornerRadius="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/label_ranking_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_ranking"
+                    android:drawableEnd="@drawable/ic_info_outline"
+                    android:drawablePadding="4dp"
+                    android:textAppearance="?attr/textAppearanceTitleSmall"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/layout_ranking_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 裝置狀態 Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_device_state"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardCornerRadius="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_device_state"
+                    android:textAppearance="?attr/textAppearanceTitleSmall"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/layout_device_state_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
 
             </LinearLayout>
 
