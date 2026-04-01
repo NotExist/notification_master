@@ -870,24 +870,44 @@ class NotificationDetailFragment : Fragment() {
 
     private fun displayEffects(notification: NotificationEntity) {
         val _binding = _binding ?: return
+        val hasEffects = notification.soundUri != null ||
+                notification.vibratePattern != null ||
+                notification.ledArgb != 0
+
+        if (!hasEffects) {
+            _binding.cardEffects.visibility = View.GONE
+            return
+        }
+
+        _binding.cardEffects.visibility = View.VISIBLE
         val container = _binding.layoutEffectsContainer
         container.removeAllViews()
 
-        addStyleInfoLabel(container, "soundUri")
-        addStyleInfoText(container, notification.soundUri ?: "系統預設")
-        addStyleInfoLabel(container, "vibratePattern")
-        addStyleInfoText(container, notification.vibratePattern ?: "未設定")
+        if (notification.soundUri != null) {
+            addStyleInfoLabel(container, "soundUri")
+            addStyleInfoText(container, notification.soundUri)
+        }
+        if (notification.vibratePattern != null) {
+            addStyleInfoLabel(container, "vibratePattern")
+            addStyleInfoText(container, notification.vibratePattern)
+        }
         if (notification.ledArgb != 0) {
             addStyleInfoLabel(container, "LED")
             addStyleInfoText(container, "色彩: ${String.format("#%06X", 0xFFFFFF and notification.ledArgb)} · 亮: ${notification.ledOnMs}ms · 暗: ${notification.ledOffMs}ms")
-        } else {
-            addStyleInfoLabel(container, "LED")
-            addStyleInfoText(container, "未設定")
         }
     }
 
     private fun displayRanking(notification: NotificationEntity) {
         val _binding = _binding ?: return
+        val hasRanking = notification.suppressedVisualEffects != 0 ||
+                notification.lastAudiblyAlertedMillis > 0
+
+        if (!hasRanking) {
+            _binding.cardRanking.visibility = View.GONE
+            return
+        }
+
+        _binding.cardRanking.visibility = View.VISIBLE
         val container = _binding.layoutRankingContainer
         container.removeAllViews()
 
@@ -899,13 +919,14 @@ class NotificationDetailFragment : Fragment() {
                 .show()
         }
 
-        addStyleInfoLabel(container, "suppressedVisualEffects")
-        val sve = notification.suppressedVisualEffects
-        addStyleInfoText(container, String.format("0x%X", sve))
-
-        addStyleInfoLabel(container, "lastAudiblyAlertedMillis")
-        val laam = notification.lastAudiblyAlertedMillis
-        addStyleInfoText(container, if (laam > 0) rfc3339Format.format(Date(laam)) else "從未發聲")
+        if (notification.suppressedVisualEffects != 0) {
+            addStyleInfoLabel(container, "suppressedVisualEffects")
+            addStyleInfoText(container, String.format("0x%X", notification.suppressedVisualEffects))
+        }
+        if (notification.lastAudiblyAlertedMillis > 0) {
+            addStyleInfoLabel(container, "lastAudiblyAlertedMillis")
+            addStyleInfoText(container, rfc3339Format.format(Date(notification.lastAudiblyAlertedMillis)))
+        }
     }
 
     private fun displayDeviceState(deviceState: DeviceStateEntity?) {
