@@ -727,6 +727,9 @@ class NotificationDetailFragment : Fragment() {
         }
 
         _binding.cardActions.visibility = View.VISIBLE
+        if (actions.isNotEmpty()) {
+            _binding.labelActionsTitle.text = "${getString(R.string.detail_actions)} (${actions.size})"
+        }
         val container = _binding.layoutActionsContainer
         container.removeAllViews()
 
@@ -802,15 +805,15 @@ class NotificationDetailFragment : Fragment() {
             } catch (_: Exception) { null }
 
             if (notification.hasContentIntent) {
-                val desc = buildIntentDescription("contentIntent", intentMeta?.optJSONObject("contentIntent"))
+                val desc = buildIntentDescription("contentIntent", intentMeta?.optJSONObject("contentIntent"), notification.packageName)
                 addIntentRow(intentsContainer, desc, intentSet?.contentIntent)
             }
             if (notification.hasDeleteIntent) {
-                val desc = buildIntentDescription("deleteIntent", intentMeta?.optJSONObject("deleteIntent"))
+                val desc = buildIntentDescription("deleteIntent", intentMeta?.optJSONObject("deleteIntent"), notification.packageName)
                 addIntentRow(intentsContainer, desc, intentSet?.deleteIntent)
             }
             if (notification.hasFullScreenIntent) {
-                val desc = buildIntentDescription("fullScreenIntent", intentMeta?.optJSONObject("fullScreenIntent"))
+                val desc = buildIntentDescription("fullScreenIntent", intentMeta?.optJSONObject("fullScreenIntent"), notification.packageName)
                 addIntentRow(intentsContainer, desc, intentSet?.fullScreenIntent)
             }
         }
@@ -819,8 +822,10 @@ class NotificationDetailFragment : Fragment() {
     /**
      * 從 rawDataJson 中的 intent 元資料組裝描述文字
      */
-    private fun buildIntentDescription(name: String, meta: JSONObject?): String {
+    private fun buildIntentDescription(name: String, meta: JSONObject?, packageName: String): String {
         if (meta == null) return name
+
+        val parts = mutableListOf<String>()
 
         // API 34+ type flags
         val types = mutableListOf<String>()
@@ -828,8 +833,15 @@ class NotificationDetailFragment : Fragment() {
         if (meta.optBoolean("isBroadcast", false)) types.add("Broadcast")
         if (meta.optBoolean("isService", false)) types.add("Service")
         if (meta.optBoolean("isForegroundService", false)) types.add("FgService")
+        if (types.isNotEmpty()) parts.add(types.joinToString("/"))
 
-        return if (types.isNotEmpty()) "$name (${types.joinToString("/")})" else name
+        // creatorPackage（僅在與通知來源不同時顯示）
+        val creator = meta.optString("creatorPackage", "")
+        if (creator.isNotEmpty() && creator != packageName) {
+            parts.add("from: $creator")
+        }
+
+        return if (parts.isNotEmpty()) "$name (${parts.joinToString(" · ")})" else name
     }
 
     /**
