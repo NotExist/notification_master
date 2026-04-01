@@ -288,13 +288,19 @@ class NotificationDetailFragment : Fragment() {
         // 標籤
         binding.chipGroupFlags.removeAllViews()
 
+        // Importance chips（除 DEFAULT 外各等級獨立 chip）
+        when (notification.importance) {
+            0 -> addChip("NONE", R.color.status_disabled, R.string.tag_importance_none_desc)
+            1 -> addChip("MIN", R.color.tag_silent, R.string.tag_importance_min_desc)
+            2 -> addChip("LOW", R.color.tag_silent, R.string.tag_importance_low_desc)
+            4 -> addChip("HIGH", R.color.status_warning, R.string.tag_importance_high_desc)
+            5 -> addChip("MAX", R.color.status_warning, R.string.tag_importance_max_desc)
+        }
+
         // 系統通知抽屜分類標籤
         if (notification.isConversation ||
             (notification.isMessagingStyle && !notification.shortcutId.isNullOrEmpty())) {
             addChip("Conversation", R.color.tag_conversation, R.string.tag_conversation_desc)
-        }
-        if (notification.importance in 1..2) {
-            addChip("Silent", R.color.tag_silent, R.string.tag_silent_desc)
         }
         if (notification.isMessagingStyle) {
             addChip("MessagingStyle", R.color.tag_messaging_style, R.string.tag_messaging_style_desc)
@@ -304,17 +310,27 @@ class NotificationDetailFragment : Fragment() {
         if (notification.isOngoing) {
             addChip("Ongoing", R.color.event_initial, R.string.tag_ongoing_desc)
         }
+        if (notification.isNoClear) {
+            addChip("NoClear", R.color.event_initial, R.string.tag_no_clear_desc)
+        }
         if (notification.isForegroundService) {
             addChip("Foreground Service", R.color.event_ranking, R.string.tag_fg_service_desc)
         }
+        // 推斷 chips（虛線邊框）
         if (notification.likelyHeadsup) {
-            addChip("Heads-up", R.color.status_warning, R.string.tag_headsup_desc)
+            addChip("Heads-up", R.color.status_warning, R.string.tag_headsup_desc, inferred = true)
         }
         if (notification.isAudible) {
-            addChip("Audible", R.color.tag_audible, R.string.tag_audible_desc)
+            addChip("Audible", R.color.tag_audible, R.string.tag_audible_desc, inferred = true)
         }
         if (notification.isAutoCancel) {
             addChip("AutoCancel", R.color.event_updated, R.string.tag_auto_cancel_desc)
+        }
+        if (notification.isHighPriority) {
+            addChip("HighPriority", R.color.status_warning, R.string.tag_high_priority_desc)
+        }
+        if (notification.isLocalOnly) {
+            addChip("LocalOnly", R.color.text_secondary, R.string.tag_local_only_desc)
         }
         if (notification.isGroupSummary) {
             addChip("Group Summary", R.color.event_posted, R.string.tag_summary_desc)
@@ -324,6 +340,15 @@ class NotificationDetailFragment : Fragment() {
         }
         if (notification.hasCustomContentView || notification.hasCustomBigContentView || notification.hasCustomHeadsUpContentView) {
             addChip("Custom View", R.color.text_secondary, R.string.tag_custom_view_desc)
+        }
+        if (notification.showChronometer) {
+            addChip("Chronometer", R.color.event_ranking, R.string.tag_chronometer_desc)
+        }
+        if (notification.isAmbient) {
+            addChip("Ambient", R.color.tag_silent, R.string.tag_ambient_desc)
+        }
+        if (notification.isSuspended) {
+            addChip("Suspended", R.color.status_disabled, R.string.tag_suspended_desc)
         }
 
         // Style 標籤（基於 template 尾綴匹配）
@@ -340,7 +365,6 @@ class NotificationDetailFragment : Fragment() {
                 addChip("MediaStyle", R.color.tag_media_style, R.string.tag_media_style_desc)
             style.endsWith("CallStyle") ->
                 addChip("CallStyle", R.color.tag_call_style, R.string.tag_call_style_desc)
-            // MessagingStyle 和 DecoratedCustomViewStyle 已被其他標籤涵蓋
         }
 
         // 詳細資訊欄位（全部永遠顯示，null 顯示 "null"）
@@ -952,12 +976,29 @@ class NotificationDetailFragment : Fragment() {
     }
 
     private fun addChip(text: String, colorRes: Int, descriptionRes: Int) {
+        addChip(text, colorRes, descriptionRes, inferred = false)
+    }
+
+    /**
+     * @param inferred true 時使用虛線邊框（推斷結果），false 時使用實心背景（原始資料）
+     */
+    private fun addChip(text: String, colorRes: Int, descriptionRes: Int, inferred: Boolean) {
         val ctx = requireContext()
         val chip = Chip(ctx).apply {
             this.text = text
             isClickable = true
-            chipBackgroundColor = ContextCompat.getColorStateList(ctx, colorRes)
-            setTextColor(ContextCompat.getColor(ctx, R.color.white))
+            if (inferred) {
+                // 虛線邊框：透明背景 + 有色邊線
+                chipBackgroundColor = ContextCompat.getColorStateList(ctx, android.R.color.transparent)
+                chipStrokeWidth = 2f * ctx.resources.displayMetrics.density
+                chipStrokeColor = ContextCompat.getColorStateList(ctx, colorRes)
+                setTextColor(ContextCompat.getColor(ctx, colorRes))
+                // 虛線效果透過 PathEffect 無法直接設定在 Chip 上，改用降低透明度區分
+                alpha = 0.85f
+            } else {
+                chipBackgroundColor = ContextCompat.getColorStateList(ctx, colorRes)
+                setTextColor(ContextCompat.getColor(ctx, R.color.white))
+            }
             setOnClickListener {
                 MaterialAlertDialogBuilder(ctx)
                     .setTitle(text)
