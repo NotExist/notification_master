@@ -36,7 +36,7 @@ jobs:
     # Gradle 官方 Action - 自動處理 wrapper 和快取
     # https://github.com/gradle/actions
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v4
+      uses: gradle/actions/setup-gradle@v6
 
     # 若專案沒有 gradlew，先產生 wrapper
     - name: Generate Gradle Wrapper if missing
@@ -100,7 +100,7 @@ jobs:
         distribution: 'temurin'
 
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v4
+      uses: gradle/actions/setup-gradle@v6
 
     - name: Generate Gradle Wrapper if missing
       run: |
