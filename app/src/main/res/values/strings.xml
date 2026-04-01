@@ -150,8 +150,12 @@
 
     <!-- 欄位標籤 -->
     <string name="label_title">標題</string>
+    <string name="label_subtitle">副標</string>
     <string name="label_content">內文</string>
-    <string name="label_time">時間</string>
+    <string name="label_time">發佈時間</string>
+    <string name="label_when_time">事件時間</string>
+    <string name="label_capture_time">擷取時間</string>
+    <string name="label_when_not_shown">（通知列不顯示）</string>
     <string name="label_tags_and_status">標籤與狀態</string>
     <string name="label_detail_info">詳細資訊</string>
     <string name="label_channel">channel_id</string>
@@ -169,6 +173,14 @@
     <string name="label_remote_views">自訂 View</string>
     <string name="intent_send_failed">Intent 發送失敗（已取消或過期）</string>
     <string name="intent_triggered">已觸發</string>
+
+    <!-- Detail 欄位說明 Dialog -->
+    <string name="desc_title_fallback">此通知的展開標題（bigTitle）與原始標題（title）不同。\n\n原始標題：%1$s</string>
+    <string name="desc_subtitle_fallback">此為已棄用的 infoText 欄位。新版 API 使用 subText 取代。</string>
+    <string name="desc_content_fallback">此通知的展開內容（bigText）與摺疊摘要（text）不同。\n\n摺疊摘要：%1$s</string>
+    <string name="desc_post_time">Android 系統在 notify() 時記錄的發佈時間，通知更新時會刷新。\n\n與事件時間不同：發佈時間是系統端的實際發佈時刻，事件時間是 App 指定的時間。\n與擷取時間不同：擷取時間是 NLS 收到並寫入的時刻，差值反映處理延遲。</string>
+    <string name="desc_when_time">App 透過 setWhen() 設定的事件時間，通知列上 showWhen=true 時顯示此值。可能與發佈時間不同，例如郵件的寄出時間、訊息的發送時間。</string>
+    <string name="desc_capture_time">NLS 收到事件並寫入資料庫的時間。與發佈時間的差值反映系統處理和 App 排程的延遲。</string>
 
     <!-- 格式字串 -->
     <string name="format_android_version">Android %1$s (API %2$d)</string>

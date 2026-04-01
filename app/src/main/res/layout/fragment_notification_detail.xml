@@ -89,12 +89,30 @@
                     android:background="?android:attr/listDivider" />
 
                 <!-- 標題 -->
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/label_title"
-                    android:textAppearance="?attr/textAppearanceLabelMedium"
-                    android:textColor="?android:attr/textColorSecondary" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_title"
+                        android:textAppearance="?attr/textAppearanceLabelMedium"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                    <ImageView
+                        android:id="@+id/icon_title_info"
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_marginStart="4dp"
+                        android:src="@drawable/ic_info_outline"
+                        android:visibility="gone"
+                        android:contentDescription="@string/label_title"
+                        tools:visibility="visible" />
+
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/text_title"
@@ -105,14 +123,78 @@
                     android:textIsSelectable="true"
                     tools:text="通知標題" />
 
-                <!-- 內文 -->
-                <TextView
-                    android:layout_width="wrap_content"
+                <!-- 副標 -->
+                <LinearLayout
+                    android:id="@+id/layout_subtitle"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="@string/label_content"
-                    android:textAppearance="?attr/textAppearanceLabelMedium"
-                    android:textColor="?android:attr/textColorSecondary" />
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_subtitle"
+                            android:textAppearance="?attr/textAppearanceLabelMedium"
+                            android:textColor="?android:attr/textColorSecondary" />
+
+                        <ImageView
+                            android:id="@+id/icon_subtitle_info"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginStart="4dp"
+                            android:src="@drawable/ic_info_outline"
+                            android:visibility="gone"
+                            android:contentDescription="@string/label_subtitle"
+                            tools:visibility="visible" />
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/text_subtitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                        android:textIsSelectable="true"
+                        tools:text="副標文字" />
+
+                </LinearLayout>
+
+                <!-- 內文 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_content"
+                        android:textAppearance="?attr/textAppearanceLabelMedium"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                    <ImageView
+                        android:id="@+id/icon_content_info"
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_marginStart="4dp"
+                        android:src="@drawable/ic_info_outline"
+                        android:visibility="gone"
+                        android:contentDescription="@string/label_content"
+                        tools:visibility="visible" />
+
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/text_content"
@@ -123,12 +205,15 @@
                     android:textIsSelectable="true"
                     tools:text="通知內文內容，可能會很長..." />
 
-                <!-- 時間 -->
+                <!-- 發佈時間 -->
                 <TextView
+                    android:id="@+id/label_post_time"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:text="@string/label_time"
+                    android:drawableEnd="@drawable/ic_info_outline"
+                    android:drawablePadding="4dp"
                     android:textAppearance="?attr/textAppearanceLabelMedium"
                     android:textColor="?android:attr/textColorSecondary" />
 
@@ -139,7 +224,57 @@
                     android:layout_marginTop="4dp"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
                     android:textIsSelectable="true"
-                    tools:text="2026年1月29日 12:34:56" />
+                    tools:text="2026-04-01T14:30:25+08:00" />
+
+                <!-- 事件時間 -->
+                <LinearLayout
+                    android:id="@+id/layout_when_time"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/label_when_time"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_when_time"
+                        android:drawableEnd="@drawable/ic_info_outline"
+                        android:drawablePadding="4dp"
+                        android:textAppearance="?attr/textAppearanceLabelMedium"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                    <TextView
+                        android:id="@+id/text_when_time"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                        android:textIsSelectable="true"
+                        tools:text="2026-04-01T14:30:25+08:00" />
+
+                </LinearLayout>
+
+                <!-- 擷取時間 -->
+                <TextView
+                    android:id="@+id/label_capture_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/label_capture_time"
+                    android:drawableEnd="@drawable/ic_info_outline"
+                    android:drawablePadding="4dp"
+                    android:textAppearance="?attr/textAppearanceLabelMedium"
+                    android:textColor="?android:attr/textColorSecondary" />
+
+                <TextView
+                    android:id="@+id/text_capture_time"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textIsSelectable="true"
+                    tools:text="2026-04-01T14:30:25+08:00" />
 
             </LinearLayout>
 

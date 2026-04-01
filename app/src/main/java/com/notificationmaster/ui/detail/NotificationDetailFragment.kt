@@ -61,7 +61,7 @@ class NotificationDetailFragment : Fragment() {
 
     private val args: NotificationDetailFragmentArgs by navArgs()
 
-    private val dateTimeFormat = SimpleDateFormat("yyyy年M月d日 HH:mm:ss", Locale.getDefault())
+    private val rfc3339Format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault())
     private val preciseTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
 
     private lateinit var pagerAdapter: EventGroupPagerAdapter
@@ -194,10 +194,96 @@ class NotificationDetailFragment : Fragment() {
 
         binding.textPackageName.text = notification.packageName
 
-        // 基本內容
-        binding.textTitle.text = notification.title ?: context.getString(R.string.no_title)
-        binding.textContent.text = notification.bigText ?: notification.text ?: context.getString(R.string.no_content)
-        binding.textTime.text = dateTimeFormat.format(Date(notification.postTime))
+        // 標題：bigTitle 優先 → fallback title
+        val displayTitle = notification.bigTitle ?: notification.title
+        binding.textTitle.text = displayTitle ?: context.getString(R.string.no_title)
+        if (notification.bigTitle != null && notification.title != null && notification.bigTitle != notification.title) {
+            binding.iconTitleInfo.visibility = View.VISIBLE
+            binding.iconTitleInfo.setOnClickListener {
+                MaterialAlertDialogBuilder(context)
+                    .setTitle(R.string.label_title)
+                    .setMessage(getString(R.string.desc_title_fallback, notification.title))
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        } else {
+            binding.iconTitleInfo.visibility = View.GONE
+        }
+
+        // 副標：subText 優先 → fallback infoText
+        val displaySubtitle = notification.subText ?: notification.infoText
+        if (displaySubtitle != null) {
+            binding.layoutSubtitle.visibility = View.VISIBLE
+            binding.textSubtitle.text = displaySubtitle
+            if (notification.subText == null && notification.infoText != null) {
+                binding.iconSubtitleInfo.visibility = View.VISIBLE
+                binding.iconSubtitleInfo.setOnClickListener {
+                    MaterialAlertDialogBuilder(context)
+                        .setTitle(R.string.label_subtitle)
+                        .setMessage(R.string.desc_subtitle_fallback)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+                }
+            } else {
+                binding.iconSubtitleInfo.visibility = View.GONE
+            }
+        } else {
+            binding.layoutSubtitle.visibility = View.GONE
+        }
+
+        // 內容：bigText 優先 → fallback text
+        val displayContent = notification.bigText ?: notification.text
+        binding.textContent.text = displayContent ?: context.getString(R.string.no_content)
+        if (notification.bigText != null && notification.text != null && notification.bigText != notification.text) {
+            binding.iconContentInfo.visibility = View.VISIBLE
+            binding.iconContentInfo.setOnClickListener {
+                MaterialAlertDialogBuilder(context)
+                    .setTitle(R.string.label_content)
+                    .setMessage(getString(R.string.desc_content_fallback, notification.text))
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        } else {
+            binding.iconContentInfo.visibility = View.GONE
+        }
+
+        // 發佈時間
+        binding.textTime.text = rfc3339Format.format(Date(notification.postTime))
+        binding.labelPostTime.setOnClickListener {
+            MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.label_time)
+                .setMessage(R.string.desc_post_time)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
+
+        // 事件時間 (whenTime)
+        val whenTime = notification.whenTime
+        if (whenTime > 0) {
+            binding.layoutWhenTime.visibility = View.VISIBLE
+            val whenText = rfc3339Format.format(Date(whenTime))
+            binding.textWhenTime.text = if (notification.showWhen) whenText
+                else "$whenText ${getString(R.string.label_when_not_shown)}"
+            binding.labelWhenTime.setOnClickListener {
+                MaterialAlertDialogBuilder(context)
+                    .setTitle(R.string.label_when_time)
+                    .setMessage(R.string.desc_when_time)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        } else {
+            binding.layoutWhenTime.visibility = View.GONE
+        }
+
+        // 擷取時間
+        binding.textCaptureTime.text = rfc3339Format.format(Date(notification.captureTime))
+        binding.labelCaptureTime.setOnClickListener {
+            MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.label_capture_time)
+                .setMessage(R.string.desc_capture_time)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
 
         // 標籤
         binding.chipGroupFlags.removeAllViews()
