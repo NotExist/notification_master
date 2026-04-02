@@ -201,7 +201,6 @@ class ArchiveExporter(
             put("color", n.color)
             put("contentHash", n.contentHash)
             put("actionCount", n.actionCount)
-            put("persistenceType", n.persistenceType)
             put("template", n.template)
             put("isMessagingStyle", n.isMessagingStyle)
             put("conversationTitle", n.conversationTitle)

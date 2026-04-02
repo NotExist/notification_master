@@ -468,16 +468,6 @@ class NotificationDetailFragment : Fragment() {
             }
         }
 
-        // persistenceType
-        binding.textPersistenceType.text = notification.persistenceType
-        binding.labelPersistenceType.setOnClickListener {
-            MaterialAlertDialogBuilder(context)
-                .setTitle(R.string.label_persistence_type)
-                .setMessage(R.string.desc_persistence_type)
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
-        }
-
         binding.textShortcutId.text = notification.shortcutId ?: "null"
 
         // color

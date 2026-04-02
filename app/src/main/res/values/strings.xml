@@ -188,7 +188,6 @@
     <string name="label_key">Key</string>
     <string name="label_content_hash">Content Hash</string>
     <string name="label_importance">importance</string>
-    <string name="label_persistence_type">persistenceType</string>
     <string name="label_color">color</string>
     <string name="label_flags">flags</string>
     <string name="label_intents">Intent 資訊</string>
@@ -214,7 +213,6 @@
 
     <string name="desc_importance">系統判定的通知重要性（API 26+），決定是否發聲、是否 heads-up、是否顯示。\n\nNONE(0)=不顯示\nMIN(1)=靜音，不在狀態列\nLOW(2)=靜音，在狀態列\nDEFAULT(3)=發聲\nHIGH(4)=發聲 + heads-up\nMAX(5)=同 HIGH</string>
     <string name="desc_importance_priority_appendix">\n\n此通知同時設有舊版 priority 值：%1$s</string>
-    <string name="desc_persistence_type">通知的持久性類型（推斷值）：\n\n• FOREGROUND_SERVICE：前景服務通知\n• ONGOING：持續通知（非前景服務）\n• PINNED：FLAG_NO_CLEAR 固定通知\n• TRANSIENT：一般短暫通知</string>
     <string name="desc_flags">通知的原始 flags 位元遮罩，各 flag 已由 chip 個別呈現。\n\n%1$s</string>
     <string name="desc_ranking">此為通知記錄時從 Ranking 擷取的快照值，僅反映當下狀態。後續可能因 RANKING 事件調整，變化紀錄請查看生命週期事件。</string>
     <string name="desc_notification_key">系統組合的唯一識別，同一 key 的通知為同一則的不同版本。\n\n組成：userId | packageName | notificationId | tag | uid\n\n• notificationId：App 發送通知時指定的 ID\n• tag：App 的可選標籤\n• 同 package + 同 id + 同 tag = 更新而非新增</string>

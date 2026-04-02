@@ -17,7 +17,6 @@ import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.core.dedup.ContentHashGenerator
 import com.notificationmaster.data.db.entity.ActionEntity
 import com.notificationmaster.data.db.entity.NotificationEntity
-import com.notificationmaster.data.db.entity.PersistenceType
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
@@ -221,9 +220,6 @@ class NotificationExtractor(private val context: Context) {
 
             // 完整原始 dump（截斷過長內容）
             rawDataJson = truncateJson(buildRawDataJson(sbn, notification, ranking)),
-
-            // 持久性類型
-            persistenceType = inferPersistenceType(flags),
 
             // 去重 Hash
             contentHash = contentHash,
@@ -478,17 +474,6 @@ class NotificationExtractor(private val context: Context) {
     }
 
     /**
-     * 推斷通知持久性類型
-     */
-    private fun inferPersistenceType(flags: Int): String {
-        return when {
-            ApiVersionHelper.isForegroundService(flags) -> PersistenceType.FOREGROUND_SERVICE
-            ApiVersionHelper.isOngoing(flags) -> PersistenceType.ONGOING
-            ApiVersionHelper.isNoClear(flags) -> PersistenceType.PINNED
-            else -> PersistenceType.TRANSIENT
-        }
-    }
-
     /**
      * 解析 RemoteViews layout resource name
      * 透過來源 App 的 Context 取得 resource name（如 "com.whatsapp:layout/notification_content"）

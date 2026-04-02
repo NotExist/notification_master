@@ -312,14 +312,6 @@ data class NotificationEntity(
     @ColumnInfo(name = "user_id")
     val userId: Int,
 
-    // === 持久性類型 ===
-    /**
-     * 通知持久性類型（推斷值）
-     * FOREGROUND_SERVICE / ONGOING / PINNED / TRANSIENT
-     */
-    @ColumnInfo(name = "persistence_type", defaultValue = "TRANSIENT")
-    val persistenceType: String = PersistenceType.TRANSIENT,
-
     // === Ranking 資訊 ===
     /** Ranking 中的 rank 值 */
     @ColumnInfo(name = "ranking_rank")
@@ -363,16 +355,3 @@ data class NotificationEntity(
     val contentIntentCreatorPackage: String?
 )
 
-/**
- * 通知持久性類型常數
- */
-object PersistenceType {
-    /** 前景服務通知 (FLAG_FOREGROUND_SERVICE) */
-    const val FOREGROUND_SERVICE = "FOREGROUND_SERVICE"
-    /** 持續通知 (FLAG_ONGOING_EVENT，非前景服務) */
-    const val ONGOING = "ONGOING"
-    /** 固定通知 (FLAG_NO_CLEAR，非前兩者) */
-    const val PINNED = "PINNED"
-    /** 短暫通知 (其餘) */
-    const val TRANSIENT = "TRANSIENT"
-}

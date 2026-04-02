@@ -7,7 +7,6 @@ import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.NotificationEventEntity
-import com.notificationmaster.data.db.entity.PersistenceType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -191,7 +190,6 @@ class ArchiveImporter(private val context: Context) {
             contentHash = json.optString("contentHash", ""),
             actionCount = json.optInt("actionCount", 0),
             userId = 0,
-            persistenceType = json.optString("persistenceType", PersistenceType.TRANSIENT),
             rankingRank = json.optInt("rankingRank", -1),
             isAmbient = json.optBoolean("isAmbient", false),
             isSuspended = json.optBoolean("isSuspended", false),
