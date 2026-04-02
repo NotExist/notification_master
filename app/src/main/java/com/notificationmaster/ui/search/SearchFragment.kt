@@ -7,18 +7,12 @@ import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
+import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.databinding.FragmentSearchBinding
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * 搜尋頁面 Fragment
@@ -28,8 +22,8 @@ class SearchFragment : Fragment() {
     private var _binding: FragmentSearchBinding? = null
     private val binding get() = _binding!!
 
+    private val viewModel: SearchViewModel by viewModels()
     private lateinit var notificationAdapter: NotificationAdapter
-    private var searchJob: Job? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -45,12 +39,18 @@ class SearchFragment : Fragment() {
 
         setupRecyclerView()
         setupSearchInput()
+        observeResults()
 
-        // 接收從時間軸過濾帶過來的查詢文字
-        val externalQuery = arguments?.getString("query")
-        if (!externalQuery.isNullOrBlank()) {
-            binding.editSearch.setText(externalQuery)
-            performSearch(externalQuery)
+        // 首次進入：接收外部帶入的 query
+        if (viewModel.query.value.isNullOrBlank()) {
+            val externalQuery = arguments?.getString("query")
+            if (!externalQuery.isNullOrBlank()) {
+                binding.editSearch.setText(externalQuery)
+                viewModel.search(externalQuery)
+            }
+        } else {
+            // 返回時還原查詢文字
+            binding.editSearch.setText(viewModel.query.value)
         }
     }
 
@@ -86,7 +86,7 @@ class SearchFragment : Fragment() {
     private fun setupSearchInput() {
         binding.editSearch.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                performSearch(binding.editSearch.text?.toString() ?: "")
+                viewModel.search(binding.editSearch.text?.toString() ?: "")
                 true
             } else {
                 false
@@ -94,27 +94,13 @@ class SearchFragment : Fragment() {
         }
     }
 
-    private fun performSearch(query: String) {
-        searchJob?.cancel()
-
-        if (query.isBlank()) {
-            notificationAdapter.submitList(emptyList())
-            binding.textEmpty.visibility = View.VISIBLE
-            return
-        }
-
-        searchJob = viewLifecycleOwner.lifecycleScope.launch {
-            // 防抖動
-            delay(300)
-
-            val database = NotificationMasterApp.getInstance().database
-            val results = withContext(Dispatchers.IO) {
-                database.notificationDao().searchNotifications(query, 100)
-            }
-
-            val binding = _binding ?: return@launch
+    private fun observeResults() {
+        viewModel.results.observe(viewLifecycleOwner) { results ->
+            val _binding = _binding ?: return@observe
             notificationAdapter.submitList(results)
-            binding.textEmpty.visibility = if (results.isEmpty()) View.VISIBLE else View.GONE
+            _binding.textEmpty.visibility =
+                if (results.isEmpty() && !viewModel.query.value.isNullOrBlank()) View.VISIBLE
+                else View.GONE
         }
     }
 }
