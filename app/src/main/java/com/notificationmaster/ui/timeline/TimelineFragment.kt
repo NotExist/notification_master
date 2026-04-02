@@ -198,18 +198,13 @@ class TimelineFragment : Fragment() {
 
     private fun setupSwipeRefresh() {
         binding.swipeRefresh.setOnRefreshListener {
-            val serviceConnected = NotificationCaptureService.isConnected
             Log.d(TAG, "swipeRefresh: permissionGranted=$wasPermissionGranted, " +
-                "serviceConnected=$serviceConnected")
-            if (wasPermissionGranted) {
-                if (serviceConnected) {
-                    // 服務已連線 — 手動擷取當前活躍通知（不重複插入）
-                    NotificationCaptureService.getInstance()?.captureActiveNotifications()
-                } else {
-                    // 服務未連線 — 嘗試觸發重新綁定
-                    ensureServiceConnected()
-                }
+                "serviceConnected=${NotificationCaptureService.isConnected}")
+            if (wasPermissionGranted && !NotificationCaptureService.isConnected) {
+                // 服務未連線 — 嘗試觸發重新綁定
+                ensureServiceConnected()
             }
+            // INITIAL 事件由 onListenerConnected 負責，下拉刷新只重新查詢 DB
             loadNotifications()
         }
     }
@@ -559,8 +554,7 @@ class TimelineFragment : Fragment() {
                     "(delay=${delayMs}ms): connected=$connected, instance=$instanceExists")
 
                 if (connected) {
-                    // 服務已連線，手動觸發一次擷取確保有資料
-                    NotificationCaptureService.getInstance()?.captureActiveNotifications()
+                    // 服務已連線，onListenerConnected 已處理 INITIAL 事件
                     return@launch
                 }
 

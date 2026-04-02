@@ -167,52 +167,6 @@ class NotificationCaptureService : NotificationListenerService() {
         }
     }
 
-    /**
-     * 手動擷取目前所有活躍通知
-     * 供 UI 層在下拉刷新時呼叫，避免 onListenerConnected 未觸發時無資料
-     * 會跳過已存在的通知（以 notificationKey 判斷）
-     */
-    fun captureActiveNotifications() {
-        if (!isConnected) {
-            Log.w(TAG, "captureActiveNotifications: service not connected, skip")
-            return
-        }
-        serviceScope.launch {
-            val notifications = try {
-                activeNotifications ?: emptyArray()
-            } catch (e: Exception) {
-                Log.e(TAG, "captureActiveNotifications: failed to get active notifications", e)
-                emptyArray()
-            }
-            Log.i(TAG, "captureActiveNotifications: ${notifications.size} active notifications")
-            if (notifications.isEmpty()) return@launch
-
-            val rankingMap = try {
-                getCurrentRanking()
-            } catch (e: Exception) {
-                Log.w(TAG, "captureActiveNotifications: failed to get current ranking", e)
-                null
-            }
-
-            var newCount = 0
-            var skipCount = 0
-            for (sbn in notifications) {
-                try {
-                    val key = ApiVersionHelper.getNotificationKey(sbn)
-                    if (database.notificationDao().existsByKey(key)) {
-                        skipCount++
-                    } else {
-                        processNotification(sbn, EventType.INITIAL, rankingMap)
-                        newCount++
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "captureActiveNotifications: error", e)
-                }
-            }
-            Log.i(TAG, "captureActiveNotifications complete: $newCount new, $skipCount skipped")
-        }
-    }
-
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         Log.w(TAG, "Listener disconnected")
