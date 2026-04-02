@@ -142,18 +142,7 @@ class NotificationCaptureService : NotificationListenerService() {
         // 擷取所有現有通知（標記為 INITIAL），使用快照而非重新呼叫 getter
         Log.i(TAG, "Processing ${snapshot.size} existing notifications")
         serviceScope.launch {
-            var successCount = 0
-            var failCount = 0
-            for (sbn in snapshot) {
-                try {
-                    processNotification(sbn, EventType.INITIAL, rankingSnapshot)
-                    successCount++
-                } catch (e: Exception) {
-                    failCount++
-                    Log.e(TAG, "Error processing notification: ${sbn.packageName} key=${ApiVersionHelper.getNotificationKey(sbn)}", e)
-                }
-            }
-            Log.i(TAG, "Initial capture complete: $successCount success, $failCount failed")
+            processInitialNotifications(snapshot, rankingSnapshot, "onListenerConnected")
         }
     }
 
@@ -165,7 +154,7 @@ class NotificationCaptureService : NotificationListenerService() {
     }
 
     /**
-     * 備援：擷取目前所有活躍通知，跳過已存在的 key（冪等）
+     * 備援：擷取目前所有活躍通知（冪等）
      * 供下拉刷新和 ensureServiceConnected 呼叫
      */
     fun captureActiveNotifications() {
@@ -175,32 +164,45 @@ class NotificationCaptureService : NotificationListenerService() {
         }
         serviceScope.launch {
             val notifications = try {
-                activeNotifications ?: emptyArray()
+                (activeNotifications ?: emptyArray()).toList()
             } catch (e: Exception) {
                 Log.e(TAG, "captureActiveNotifications: failed to get active notifications", e)
-                emptyArray()
+                emptyList()
             }
             if (notifications.isEmpty()) return@launch
 
             val rankingMap = try { getCurrentRanking() } catch (_: Exception) { null }
-
-            var newCount = 0
-            var skipCount = 0
-            for (sbn in notifications) {
-                try {
-                    val key = ApiVersionHelper.getNotificationKey(sbn)
-                    if (database.notificationDao().existsByKey(key)) {
-                        skipCount++
-                    } else {
-                        processNotification(sbn, EventType.INITIAL, rankingMap)
-                        newCount++
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "captureActiveNotifications: error", e)
-                }
-            }
-            Log.i(TAG, "captureActiveNotifications complete: $newCount new, $skipCount skipped")
+            processInitialNotifications(notifications, rankingMap, "captureActiveNotifications")
         }
+    }
+
+    /**
+     * 共用的 INITIAL 事件處理（冪等）
+     *
+     * 以 existsByKey 檢查跳過已存在的記錄，避免 process 恢復或手動備援時重複寫入。
+     * onListenerConnected 和 captureActiveNotifications 共用此方法。
+     */
+    private suspend fun processInitialNotifications(
+        notifications: List<StatusBarNotification>,
+        rankingMap: RankingMap?,
+        caller: String
+    ) {
+        var newCount = 0
+        var skipCount = 0
+        for (sbn in notifications) {
+            try {
+                val key = ApiVersionHelper.getNotificationKey(sbn)
+                if (database.notificationDao().existsByKey(key)) {
+                    skipCount++
+                } else {
+                    processNotification(sbn, EventType.INITIAL, rankingMap)
+                    newCount++
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "$caller: error processing ${sbn.packageName}", e)
+            }
+        }
+        Log.i(TAG, "$caller complete: $newCount new, $skipCount skipped")
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) {

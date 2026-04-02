@@ -1,12 +1,9 @@
 package com.notificationmaster.ui.timeline
 
 import android.annotation.SuppressLint
-import android.content.ComponentName
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.service.notification.NotificationListenerService
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
@@ -24,11 +21,11 @@ import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.R
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.databinding.FragmentTimelineBinding
+import com.notificationmaster.core.permission.NlsConnectionManager
 import com.notificationmaster.service.NotificationCaptureService
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -57,7 +54,6 @@ class TimelineFragment : Fragment() {
     private val dateFormat = SimpleDateFormat("yyyy年M月d日 EEEE", Locale.getDefault())
     private var bubbleHideRunnable: Runnable? = null
     private var wasPermissionGranted = false
-    private var rebindJob: Job? = null
 
     // === 天分頁漸進載入 ===
     /** 今天的資料（Flow 即時更新） */
@@ -76,12 +72,6 @@ class TimelineFragment : Fragment() {
 
     private companion object {
         private const val TAG = "TimelineFragment"
-        /** 首次檢查間隔 (ms) */
-        private const val REBIND_INITIAL_DELAY_MS = 1000L
-        /** 最大間隔 (ms) */
-        private const val REBIND_MAX_DELAY_MS = 16000L
-        /** 最多嘗試幾次 */
-        private const val MAX_REBIND_ATTEMPTS = 6
         /** 一天的毫秒數 */
         private const val ONE_DAY_MS = 24 * 60 * 60 * 1000L
     }
@@ -103,7 +93,7 @@ class TimelineFragment : Fragment() {
         setupFilterChips()
         setupSwipeRefresh()
         setupPermissionButton()
-        wasPermissionGranted = isNotificationListenerEnabled()
+        wasPermissionGranted = NlsConnectionManager.isNlsEnabled(requireContext())
         Log.d(TAG, "onViewCreated: permissionGranted=$wasPermissionGranted, " +
             "serviceConnected=${NotificationCaptureService.isConnected}, " +
             "serviceInstance=${NotificationCaptureService.getInstance() != null}")
@@ -114,20 +104,13 @@ class TimelineFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        val isGranted = isNotificationListenerEnabled()
+        val isGranted = NlsConnectionManager.isNlsEnabled(requireContext())
         Log.d(TAG, "onResume: isGranted=$isGranted, wasGranted=$wasPermissionGranted, " +
             "serviceConnected=${NotificationCaptureService.isConnected}")
-        if (isGranted && !wasPermissionGranted) {
-            // 權限剛授予 — 先更新 UI 並啟動 Flow 監聽
-            // 不立即觸發 rebind，讓系統有時間自然綁定服務
-            wasPermissionGranted = true
+        if (isGranted != wasPermissionGranted) {
+            wasPermissionGranted = isGranted
             updateEmptyStateForPermission()
-            loadNotifications()
-            ensureServiceConnected()
-        } else if (!isGranted && wasPermissionGranted) {
-            wasPermissionGranted = false
-            rebindJob?.cancel()
-            updateEmptyStateForPermission()
+            if (isGranted) loadNotifications()
         }
     }
 
@@ -206,7 +189,10 @@ class TimelineFragment : Fragment() {
                     NotificationCaptureService.getInstance()?.captureActiveNotifications()
                 } else {
                     // 服務未連線 — 嘗試觸發重新綁定
-                    ensureServiceConnected()
+                    NlsConnectionManager.ensureServiceConnected(
+                        requireContext().applicationContext,
+                        viewLifecycleOwner.lifecycleScope
+                    )
                 }
             }
             loadNotifications()
@@ -531,66 +517,6 @@ class TimelineFragment : Fragment() {
         val runnable = Runnable { _binding?.timeBubble?.visibility = View.GONE }
         bubbleHideRunnable = runnable
         binding.timeBubble.postDelayed(runnable, 1500L)
-    }
-
-    /**
-     * 確保 NotificationListenerService 在授權後成功連線
-     *
-     * 系統授權後通常會自動綁定服務，但部分裝置/ROM 可能延遲或不觸發。
-     * 此方法定期檢查服務狀態，在系統未自動綁定時透過 requestRebind (API 24+) 觸發。
-     *
-     * 注意：不使用 setComponentEnabledSetting 元件切換，
-     * 因為 disable 元件會導致系統從 enabled_notification_listeners 移除，撤銷授權。
-     */
-    private fun ensureServiceConnected() {
-        rebindJob?.cancel()
-        Log.d(TAG, "ensureServiceConnected: starting checks (exponential backoff, " +
-            "max=$MAX_REBIND_ATTEMPTS)")
-        rebindJob = viewLifecycleOwner.lifecycleScope.launch {
-            var delayMs = REBIND_INITIAL_DELAY_MS
-            for (attempt in 0 until MAX_REBIND_ATTEMPTS) {
-                delay(delayMs)
-                if (_binding == null) return@launch
-
-                val connected = NotificationCaptureService.isConnected
-                val instanceExists = NotificationCaptureService.getInstance() != null
-                Log.d(TAG, "ensureServiceConnected check #${attempt + 1} " +
-                    "(delay=${delayMs}ms): connected=$connected, instance=$instanceExists")
-
-                if (connected) {
-                    // 服務已連線，備援擷取（冪等，跳過已存在 key）
-                    NotificationCaptureService.getInstance()?.captureActiveNotifications()
-                    return@launch
-                }
-
-                if (Build.VERSION.SDK_INT >= 24) {
-                    try {
-                        val ctx = context ?: return@launch
-                        val cn = ComponentName(ctx, NotificationCaptureService::class.java)
-                        NotificationListenerService.requestRebind(cn)
-                        Log.d(TAG, "requestRebind sent (attempt ${attempt + 1})")
-                    } catch (e: Exception) {
-                        Log.w(TAG, "requestRebind failed", e)
-                    }
-                }
-
-                // Exponential backoff: 1s → 2s → 4s → 8s → 16s → 16s
-                delayMs = (delayMs * 2).coerceAtMost(REBIND_MAX_DELAY_MS)
-            }
-
-            Log.w(TAG, "Service not connected after $MAX_REBIND_ATTEMPTS attempts. " +
-                "User can pull-to-refresh to retry.")
-        }
-    }
-
-    private fun isNotificationListenerEnabled(): Boolean {
-        val ctx = context ?: return false
-        val componentName = ComponentName(ctx, NotificationCaptureService::class.java)
-        val flat = Settings.Secure.getString(
-            ctx.contentResolver,
-            "enabled_notification_listeners"
-        )
-        return flat?.contains(componentName.flattenToString()) == true
     }
 
     @SuppressLint("InlinedApi")
