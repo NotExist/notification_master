@@ -610,6 +610,15 @@ class NotificationExtractor(private val context: Context) {
                 if (Build.VERSION.SDK_INT >= 28) {
                     put("isSuspended", ranking.isSuspended)
                     put("canShowBadge", ranking.canShowBadge())
+                    ranking.channel?.let { ch ->
+                        put("channel", JSONObject().apply {
+                            put("id", ch.id)
+                            put("name", ch.name?.toString())
+                            put("description", ch.description)
+                            put("importance", ch.importance)
+                            put("group", ch.group)
+                        })
+                    }
                 }
                 if (Build.VERSION.SDK_INT >= 29) {
                     put("lastAudiblyAlertedMillis", ranking.lastAudiblyAlertedMillis)

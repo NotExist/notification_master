@@ -378,9 +378,13 @@ class NotificationCaptureService : NotificationListenerService() {
                         ranking.channel
                     } else null
                 } else null
-                // API 26+: fallback 到 NotificationManager（涵蓋 API 26-27 及 rankingMap 不可用時）
-                ?: (getSystemService(android.content.Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager)
-                    ?.getNotificationChannel(entity.channelId)
+                // API 26+: fallback 到來源 App 的 NotificationManager（涵蓋 API 26-27 及 rankingMap 不可用時）
+                ?: try {
+                    val sourceNm = createPackageContext(sbn.packageName, 0)
+                        .getSystemService(android.content.Context.NOTIFICATION_SERVICE)
+                        as? android.app.NotificationManager
+                    sourceNm?.getNotificationChannel(entity.channelId)
+                } catch (_: Exception) { null }
             updateChannel(sbn.packageName, entity.channelId, captureTime, notificationChannel)
         }
 
@@ -650,7 +654,7 @@ class NotificationCaptureService : NotificationListenerService() {
      * 更新 Channel 記錄 (API 26+)
      *
      * @param notificationChannel 從 Ranking.getChannel()（API 28+）或
-     *                            NotificationManager.getNotificationChannel()（API 26+ fallback）取得
+     *                            來源 App 的 NotificationManager.getNotificationChannel()（API 26+ fallback）取得
      */
     private suspend fun updateChannel(
         packageName: String,
