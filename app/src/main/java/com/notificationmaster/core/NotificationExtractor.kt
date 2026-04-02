@@ -60,9 +60,10 @@ class NotificationExtractor(private val context: Context) {
         val extras = notification.extras ?: Bundle()
         val flags = notification.flags
 
-        // 取得 Ranking 資訊
+        // 取得 Ranking 資訊（getRanking 失敗時視為不可用）
         val ranking = rankingMap?.let { map ->
-            Ranking().also { map.getRanking(ApiVersionHelper.getNotificationKey(sbn), it) }
+            val r = Ranking()
+            if (map.getRanking(ApiVersionHelper.getNotificationKey(sbn), r)) r else null
         }
 
         // Channel importance
