@@ -127,36 +127,26 @@ class NotificationCaptureService : NotificationListenerService() {
         Log.i(TAG, "Listener connected")
         isConnected = true
 
-        // Debug dump：傾印所有活躍通知的原始狀態
-        debugDumper.dumpActiveNotifications(activeNotifications, try { getCurrentRanking() } catch (_: Exception) { null })
+        // 同步捕獲快照（在回呼的 binder thread 上，此時 activeNotifications 一定可用）
+        val snapshot = try { activeNotifications?.toList() ?: emptyList() } catch (_: Exception) { emptyList() }
+        val rankingSnapshot = try { getCurrentRanking() } catch (_: Exception) { null }
+
+        // Debug dump
+        debugDumper.dumpActiveNotifications(snapshot.toTypedArray(), rankingSnapshot)
 
         // 若保活已開啟，確保前景服務運行中
         if (AppPreferences.isNlsKeepaliveEnabled(this)) {
             NlsKeepaliveService.start(this)
         }
 
-        // 擷取所有現有通知（標記為 INITIAL）
+        // 擷取所有現有通知（標記為 INITIAL），使用快照而非重新呼叫 getter
+        Log.i(TAG, "Processing ${snapshot.size} existing notifications")
         serviceScope.launch {
-            val activeNotifications = try {
-                activeNotifications ?: emptyArray()
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to get active notifications", e)
-                emptyArray()
-            }
-            Log.i(TAG, "Processing ${activeNotifications.size} existing notifications")
-
-            val rankingMap = try {
-                getCurrentRanking()
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to get current ranking", e)
-                null
-            }
-
             var successCount = 0
             var failCount = 0
-            for (sbn in activeNotifications) {
+            for (sbn in snapshot) {
                 try {
-                    processNotification(sbn, EventType.INITIAL, rankingMap)
+                    processNotification(sbn, EventType.INITIAL, rankingSnapshot)
                     successCount++
                 } catch (e: Exception) {
                     failCount++
@@ -172,6 +162,45 @@ class NotificationCaptureService : NotificationListenerService() {
         Log.w(TAG, "Listener disconnected")
         PendingIntentCache.clear()
         isConnected = false
+    }
+
+    /**
+     * 備援：擷取目前所有活躍通知，跳過已存在的 key（冪等）
+     * 供下拉刷新和 ensureServiceConnected 呼叫
+     */
+    fun captureActiveNotifications() {
+        if (!isConnected) {
+            Log.w(TAG, "captureActiveNotifications: service not connected, skip")
+            return
+        }
+        serviceScope.launch {
+            val notifications = try {
+                activeNotifications ?: emptyArray()
+            } catch (e: Exception) {
+                Log.e(TAG, "captureActiveNotifications: failed to get active notifications", e)
+                emptyArray()
+            }
+            if (notifications.isEmpty()) return@launch
+
+            val rankingMap = try { getCurrentRanking() } catch (_: Exception) { null }
+
+            var newCount = 0
+            var skipCount = 0
+            for (sbn in notifications) {
+                try {
+                    val key = ApiVersionHelper.getNotificationKey(sbn)
+                    if (database.notificationDao().existsByKey(key)) {
+                        skipCount++
+                    } else {
+                        processNotification(sbn, EventType.INITIAL, rankingMap)
+                        newCount++
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "captureActiveNotifications: error", e)
+                }
+            }
+            Log.i(TAG, "captureActiveNotifications complete: $newCount new, $skipCount skipped")
+        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) {
