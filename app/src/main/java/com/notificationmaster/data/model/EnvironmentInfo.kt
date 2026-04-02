@@ -68,7 +68,9 @@ data class FeatureItem(
     /** 功能名稱 */
     val name: String,
     /** 實質影響功能描述 */
-    val description: String
+    val description: String,
+    /** App 是否已實作此功能（false = 已知但尚未支援） */
+    val implemented: Boolean = true
 )
 
 /**
@@ -125,6 +127,8 @@ data class SupportedFeatures(
             31 -> "12"
             33 -> "13"
             34 -> "14"
+            35 -> "15"
+            36 -> "16"
             else -> "API $apiLevel"
         }
     }
@@ -253,6 +257,26 @@ data class SupportedFeatures(
                 supported = sdk >= 34,
                 features = listOf(
                     FeatureItem("PendingIntent 類型", "識別意圖類型（Activity / Service / Broadcast / FgService）")
+                )
+            ),
+            ApiFeatureGroup(
+                apiLevel = 35,
+                androidVersion = androidVersionName(35),
+                supported = sdk >= 35,
+                features = listOf(
+                    FeatureItem("敏感通知保護", "系統遮蔽 OTP/2FA 通知內容，未受信任的 NLS 只能取得消毒後的文字", implemented = false),
+                    FeatureItem("豐富振動效果", "NotificationChannel.setVibrationEffect() 取代 setVibrationPattern", implemented = false),
+                    FeatureItem("自訂佈局限制", "Custom view 強制套用系統標準模板裝飾", implemented = false)
+                )
+            ),
+            ApiFeatureGroup(
+                apiLevel = 36,
+                androidVersion = androidVersionName(36),
+                supported = sdk >= 36,
+                features = listOf(
+                    FeatureItem("ProgressStyle", "全新通知 Style，用於即時追蹤（外送/導航等），含 Segment 和 Point 結構", implemented = false),
+                    FeatureItem("Live Updates", "鎖屏全展開顯示、狀態列常駐 chip", implemented = false),
+                    FeatureItem("POST_PROMOTED_NOTIFICATIONS", "提升通知可見度的新權限", implemented = false)
                 )
             )
         )

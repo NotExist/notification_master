@@ -212,11 +212,14 @@ class HomeFragment : Fragment() {
 
             // 各功能項目：名稱 + 描述
             for (feature in group.features) {
+                val prefix = if (!feature.implemented) "⊘ " else ""
                 val nameText = TextView(ctx).apply {
-                    text = feature.name
+                    text = "$prefix${feature.name}"
                     textSize = 13f
                     setTextColor(ContextCompat.getColor(ctx,
-                        if (group.supported) R.color.text_secondary else R.color.text_tertiary))
+                        if (!feature.implemented) R.color.text_tertiary
+                        else if (group.supported) R.color.text_secondary
+                        else R.color.text_tertiary))
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT
