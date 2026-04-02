@@ -310,13 +310,24 @@ class NotificationDetailFragment : Fragment() {
         // 標籤
         binding.chipGroupFlags.removeAllViews()
 
-        // Importance chips（除 DEFAULT 外各等級獨立 chip）
-        when (notification.importance) {
-            0 -> addChip("NONE", R.color.status_disabled, R.string.tag_importance_none_desc)
-            1 -> addChip("MIN", R.color.tag_silent, R.string.tag_importance_min_desc)
-            2 -> addChip("LOW", R.color.tag_silent, R.string.tag_importance_low_desc)
-            4 -> addChip("HIGH", R.color.status_warning, R.string.tag_importance_high_desc)
-            5 -> addChip("MAX", R.color.status_warning, R.string.tag_importance_max_desc)
+        // Importance / Priority chips
+        if (notification.importance >= 0) {
+            // API 26+：顯示 importance chip
+            when (notification.importance) {
+                0 -> addChip("NONE", R.color.status_disabled, R.string.tag_importance_none_desc)
+                1 -> addChip("MIN", R.color.tag_silent, R.string.tag_importance_min_desc)
+                2 -> addChip("LOW", R.color.tag_silent, R.string.tag_importance_low_desc)
+                4 -> addChip("HIGH", R.color.status_warning, R.string.tag_importance_high_desc)
+                5 -> addChip("MAX", R.color.status_warning, R.string.tag_importance_max_desc)
+            }
+        } else {
+            // Pre-26：顯示 priority chip
+            when (notification.priority) {
+                -2 -> addChip("PRI:MIN", R.color.tag_silent, R.string.tag_priority_min_desc)
+                -1 -> addChip("PRI:LOW", R.color.tag_silent, R.string.tag_priority_low_desc)
+                1 -> addChip("PRI:HIGH", R.color.status_warning, R.string.tag_priority_high_desc)
+                2 -> addChip("PRI:MAX", R.color.status_warning, R.string.tag_priority_max_desc)
+            }
         }
 
         // 系統通知抽屜分類標籤
@@ -417,30 +428,41 @@ class NotificationDetailFragment : Fragment() {
         }
 
         // importance / priority
-        val importanceName = when (notification.importance) {
-            0 -> "NONE"; 1 -> "MIN"; 2 -> "LOW"; 3 -> "DEFAULT"; 4 -> "HIGH"; 5 -> "MAX"
-            else -> notification.importance.toString()
-        }
-        binding.textImportance.text = "$importanceName (${notification.importance})"
-        val priority = notification.priority
         binding.iconImportanceInfo.visibility = View.VISIBLE
-        if (priority != 0) {
-            val priorityName = when (priority) {
-                -2 -> "MIN"; -1 -> "LOW"; 0 -> "DEFAULT"; 1 -> "HIGH"; 2 -> "MAX"
-                else -> priority.toString()
+        if (notification.importance >= 0) {
+            // API 26+：顯示 importance
+            val importanceName = when (notification.importance) {
+                0 -> "NONE"; 1 -> "MIN"; 2 -> "LOW"; 3 -> "DEFAULT"; 4 -> "HIGH"; 5 -> "MAX"
+                else -> notification.importance.toString()
+            }
+            binding.textImportance.text = "$importanceName (${notification.importance})"
+            val descBuilder = StringBuilder(getString(R.string.desc_importance))
+            val priority = notification.priority
+            if (priority != 0) {
+                val priorityName = when (priority) {
+                    -2 -> "MIN"; -1 -> "LOW"; 0 -> "DEFAULT"; 1 -> "HIGH"; 2 -> "MAX"
+                    else -> priority.toString()
+                }
+                descBuilder.append(getString(R.string.desc_importance_priority_appendix, "$priorityName ($priority)"))
             }
             binding.iconImportanceInfo.setOnClickListener {
                 MaterialAlertDialogBuilder(context)
                     .setTitle(R.string.label_importance)
-                    .setMessage(getString(R.string.desc_importance_with_priority, "$priorityName ($priority)"))
+                    .setMessage(descBuilder.toString())
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
             }
         } else {
+            // Pre-26：顯示 priority
+            val priorityName = when (notification.priority) {
+                -2 -> "MIN"; -1 -> "LOW"; 0 -> "DEFAULT"; 1 -> "HIGH"; 2 -> "MAX"
+                else -> notification.priority.toString()
+            }
+            binding.textImportance.text = "$priorityName (${notification.priority})"
             binding.iconImportanceInfo.setOnClickListener {
                 MaterialAlertDialogBuilder(context)
-                    .setTitle(R.string.label_importance)
-                    .setMessage(R.string.desc_importance)
+                    .setTitle("priority")
+                    .setMessage(R.string.desc_priority_system)
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
             }
