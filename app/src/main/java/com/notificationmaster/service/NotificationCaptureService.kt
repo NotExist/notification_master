@@ -823,6 +823,13 @@ class NotificationCaptureService : NotificationListenerService() {
         val calendarId = AppPreferences.getRealtimeCalendarId(this)
         if (calendarId < 0) return
 
+        // 每次重新讀取帳號資訊（使用者可能在 Service 運行中變更設定）
+        val accName = AppPreferences.getRealtimeCalendarAccountName(this)
+        val accType = AppPreferences.getRealtimeCalendarAccountType(this)
+        if (accName != null && accType != null) {
+            calendarExporter.setTargetAccount(accName, accType)
+        }
+
         // 只匯出白名單匹配的通知
         val whitelistRules = RuleEngine.getRules(ActionType.CALENDAR_EXPORT)
         if (whitelistRules.isEmpty()) return  // 無白名單 → 不匯出（避免大量灌入）
