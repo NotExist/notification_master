@@ -29,6 +29,29 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- ══ 匹配目標 ══ -->
+        <LinearLayout
+            android:id="@+id/section_header_target"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/filter_section_target"
+                android:textAppearance="?attr/textAppearanceLabelMedium"
+                android:textColor="?attr/colorPrimary" />
+
+            <com.google.android.material.divider.MaterialDivider
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
+
         <!-- Package Name -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/layout_package_name"
@@ -53,7 +76,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="@string/filter_dialog_channel_id"
-            android:layout_marginBottom="12dp">
+            android:layout_marginBottom="8dp">
 
             <com.google.android.material.textfield.MaterialAutoCompleteTextView
                 android:id="@+id/edit_channel_id"
@@ -63,20 +86,28 @@
                 android:completionThreshold="1" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- 事件類型標題 + 全選按鈕 -->
+        <!-- ══ 事件類型 ══ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="4dp">
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp">
 
             <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/filter_dialog_event_types"
+                android:textAppearance="?attr/textAppearanceLabelMedium"
+                android:textColor="?attr/colorPrimary" />
+
+            <com.google.android.material.divider.MaterialDivider
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/filter_dialog_event_types"
-                android:textAppearance="?attr/textAppearanceBodyMedium" />
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_select_all"
@@ -87,12 +118,15 @@
                 android:minHeight="36dp" />
         </LinearLayout>
 
-        <!-- 事件類型 CheckBox 容器（程式動態填入） -->
+        <!-- 事件類型 CheckBox 容器（程式動態填入，單欄） -->
         <LinearLayout
             android:id="@+id/container_event_types"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical" />
+            android:orientation="vertical"
+            android:paddingStart="8dp"
+            android:paddingEnd="0dp"
+            android:descendantFocusability="blocksDescendants" />
 
         <!-- 關鍵字匹配（選填，預設收合） -->
         <com.google.android.material.button.MaterialButton
@@ -109,6 +143,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
+            android:paddingStart="8dp"
+            android:paddingEnd="0dp"
             android:visibility="gone">
 
             <com.google.android.material.textfield.TextInputLayout
@@ -126,48 +162,65 @@
 
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- 搜尋欄位 CheckBox 容器 -->
+            <!-- 搜尋欄位標題 -->
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/filter_keyword_fields_label"
+                android:textAppearance="?attr/textAppearanceLabelSmall"
+                android:textColor="?android:attr/textColorSecondary"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="4dp" />
+
+            <!-- 搜尋欄位 CheckBox 容器（程式動態填入，兩行兩欄） -->
             <LinearLayout
                 android:id="@+id/container_keyword_fields"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:orientation="horizontal" />
+                android:orientation="vertical"
+                android:descendantFocusability="blocksDescendants" />
 
             <!-- Regex 開關 -->
             <com.google.android.material.materialswitch.MaterialSwitch
                 android:id="@+id/switch_keyword_regex"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
                 android:text="@string/filter_keyword_regex" />
 
         </LinearLayout>
 
-        <!-- 預覽匹配結果 -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_preview_match"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/filter_preview_match"
-            android:minHeight="36dp" />
-
-        <!-- Channel 屬性匹配（選填，API 26+） -->
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/label_channel_property"
+        <!-- ══ Channel 屬性匹配（選填，API 26+） ══ -->
+        <LinearLayout
+            android:id="@+id/section_header_channel_property"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/filter_channel_property_title"
-            android:textAppearance="?attr/textAppearanceBodyMedium" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/label_channel_property"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/filter_channel_property_title"
+                android:textAppearance="?attr/textAppearanceLabelMedium"
+                android:textColor="?attr/colorPrimary" />
+
+            <com.google.android.material.divider.MaterialDivider
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
 
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/layout_min_importance"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginBottom="8dp"
             android:hint="@string/filter_min_importance">
 
             <com.google.android.material.textfield.MaterialAutoCompleteTextView
@@ -184,7 +237,6 @@
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
             android:hint="@string/filter_group_id">
 
             <com.google.android.material.textfield.MaterialAutoCompleteTextView
@@ -196,70 +248,112 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- 清除延遲（僅 AUTO_DISMISS 時顯示） -->
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/layout_dismiss_delay"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+        <!-- ══ 動作設定（僅特定 actionType 時顯示） ══ -->
+        <LinearLayout
+            android:id="@+id/layout_action_settings"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="@string/filter_dismiss_delay"
-            android:layout_marginTop="12dp"
+            android:orientation="vertical"
             android:visibility="gone">
 
-            <com.google.android.material.textfield.MaterialAutoCompleteTextView
-                android:id="@+id/dropdown_dismiss_delay"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="none"
-                android:editable="false" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="8dp">
 
-        </com.google.android.material.textfield.TextInputLayout>
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/filter_section_action"
+                    android:textAppearance="?attr/textAppearanceLabelMedium"
+                    android:textColor="?attr/colorPrimary" />
 
-        <!-- 自訂分鐘數（選擇「自訂…」時顯示） -->
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/layout_dismiss_delay_custom"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/filter_dismiss_delay_custom_hint"
-            android:layout_marginTop="8dp"
-            android:visibility="gone">
+                <com.google.android.material.divider.MaterialDivider
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/edit_dismiss_delay_custom"
+            <!-- 清除延遲（僅 AUTO_DISMISS 時顯示） -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/layout_dismiss_delay"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="number" />
+                android:hint="@string/filter_dismiss_delay"
+                android:layout_marginBottom="8dp"
+                android:visibility="gone">
 
-        </com.google.android.material.textfield.TextInputLayout>
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/dropdown_dismiss_delay"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none"
+                    android:editable="false" />
 
-        <!-- 鈴聲選擇（僅 PERSISTENT_ALERT 時顯示） -->
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- 自訂分鐘數（選擇「自訂…」時顯示） -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/layout_dismiss_delay_custom"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/filter_dismiss_delay_custom_hint"
+                android:layout_marginBottom="8dp"
+                android:visibility="gone">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/edit_dismiss_delay_custom"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- 鈴聲選擇（僅 PERSISTENT_ALERT 時顯示） -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_choose_sound"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="@string/filter_alert_choose_sound"
+                android:visibility="gone" />
+
+            <!-- 振動開關（僅 PERSISTENT_ALERT 時顯示） -->
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switch_alert_vibrate"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/filter_alert_vibrate"
+                android:checked="true"
+                android:visibility="gone" />
+
+            <!-- 音效通道（僅 PERSISTENT_ALERT 時顯示） -->
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switch_alarm_stream"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/filter_alert_alarm_stream"
+                android:checked="true"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
+        <!-- 預覽匹配結果 -->
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_choose_sound"
+            android:id="@+id/btn_preview_match"
             style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/filter_alert_choose_sound"
-            android:visibility="gone" />
-
-        <!-- 振動開關（僅 PERSISTENT_ALERT 時顯示） -->
-        <com.google.android.material.materialswitch.MaterialSwitch
-            android:id="@+id/switch_alert_vibrate"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/filter_alert_vibrate"
-            android:checked="true"
-            android:visibility="gone" />
-
-        <!-- 音效通道（僅 PERSISTENT_ALERT 時顯示） -->
-        <com.google.android.material.materialswitch.MaterialSwitch
-            android:id="@+id/switch_alarm_stream"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/filter_alert_alarm_stream"
-            android:checked="true"
-            android:visibility="gone" />
+            android:layout_marginTop="16dp"
+            android:text="@string/filter_preview_match"
+            android:minHeight="36dp" />
 
     </LinearLayout>
 </ScrollView>

@@ -119,11 +119,14 @@ object FilterRuleDialogHelper {
         }
 
         // ChannelProperty 相關 views
-        val labelChannelProperty = dialogView.findViewById<View>(R.id.label_channel_property)
+        val sectionHeaderChannelProperty = dialogView.findViewById<View>(R.id.section_header_channel_property)
         val layoutMinImportance = dialogView.findViewById<TextInputLayout>(R.id.layout_min_importance)
         val dropdownMinImportance = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.dropdown_min_importance)
         val layoutGroupId = dialogView.findViewById<TextInputLayout>(R.id.layout_group_id)
         val editGroupId = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.edit_group_id)
+
+        // 動作設定容器
+        val layoutActionSettings = dialogView.findViewById<LinearLayout>(R.id.layout_action_settings)
 
         // PersistentAlert 相關 views
         val btnChooseSound = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_choose_sound)
@@ -131,22 +134,28 @@ object FilterRuleDialogHelper {
         val switchAlarmStream = dialogView.findViewById<MaterialSwitch>(R.id.switch_alarm_stream)
         var selectedSoundUri: String? = null
 
-        // === Keyword 欄位 checkbox 動態生成 ===
-        val keywordFieldLabels = mapOf(
+        // === Keyword 欄位 checkbox 動態生成（兩行 × 兩欄） ===
+        val keywordFieldLabels = listOf(
             KeywordField.TITLE to context.getString(R.string.filter_keyword_field_title),
             KeywordField.TEXT to context.getString(R.string.filter_keyword_field_text),
             KeywordField.BIG_TEXT to context.getString(R.string.filter_keyword_field_big_text),
             KeywordField.SUB_TEXT to context.getString(R.string.filter_keyword_field_sub_text)
         )
         val keywordFieldCheckBoxes = mutableMapOf<KeywordField, MaterialCheckBox>()
-        for ((field, label) in keywordFieldLabels) {
+        val row1 = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+        val row2 = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+        for ((i, pair) in keywordFieldLabels.withIndex()) {
+            val (field, label) = pair
             val cb = MaterialCheckBox(context).apply {
                 text = label
                 isChecked = field == KeywordField.TITLE || field == KeywordField.TEXT
             }
             keywordFieldCheckBoxes[field] = cb
-            containerKeywordFields.addView(cb)
+            val params = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            if (i < 2) row1.addView(cb, params) else row2.addView(cb, params)
         }
+        containerKeywordFields.addView(row1)
+        containerKeywordFields.addView(row2)
 
         // === Importance dropdown 設定 ===
         data class ImportanceOption(val label: String, val value: Int?)
@@ -168,7 +177,7 @@ object FilterRuleDialogHelper {
 
         // ChannelProperty 區塊：API 26+ 才顯示
         if (!ApiVersionHelper.supportsNotificationChannel()) {
-            labelChannelProperty.visibility = View.GONE
+            sectionHeaderChannelProperty.visibility = View.GONE
             layoutMinImportance.visibility = View.GONE
             layoutGroupId.visibility = View.GONE
         }
@@ -189,22 +198,25 @@ object FilterRuleDialogHelper {
         var selectedDelayIndex = 0  // 預設「立即」
         var isCustomDelay = false
 
-        /** 根據目前有效的 actionType 切換延遲區塊顯示 */
-        fun updateDismissDelayVisibility(effectiveType: ActionType) {
-            val show = effectiveType == ActionType.AUTO_DISMISS
-            layoutDismissDelay.visibility = if (show) View.VISIBLE else View.GONE
-            if (!show) {
+        /** 根據目前有效的 actionType 切換動作設定區塊顯示 */
+        fun updateActionSettingsVisibility(effectiveType: ActionType) {
+            val showDismiss = effectiveType == ActionType.AUTO_DISMISS
+            val showAlert = effectiveType == ActionType.PERSISTENT_ALERT
+
+            // 容器整體顯示/隱藏
+            layoutActionSettings.visibility = if (showDismiss || showAlert) View.VISIBLE else View.GONE
+
+            // AUTO_DISMISS 子元件
+            layoutDismissDelay.visibility = if (showDismiss) View.VISIBLE else View.GONE
+            if (!showDismiss) {
                 layoutDismissDelayCustom.visibility = View.GONE
                 isCustomDelay = false
             }
-        }
 
-        /** 根據目前有效的 actionType 切換提醒設定區塊顯示 */
-        fun updateAlertOptionsVisibility(effectiveType: ActionType) {
-            val show = effectiveType == ActionType.PERSISTENT_ALERT
-            btnChooseSound.visibility = if (show) View.VISIBLE else View.GONE
-            switchAlertVibrate.visibility = if (show) View.VISIBLE else View.GONE
-            switchAlarmStream.visibility = if (show) View.VISIBLE else View.GONE
+            // PERSISTENT_ALERT 子元件
+            btnChooseSound.visibility = if (showAlert) View.VISIBLE else View.GONE
+            switchAlertVibrate.visibility = if (showAlert) View.VISIBLE else View.GONE
+            switchAlarmStream.visibility = if (showAlert) View.VISIBLE else View.GONE
         }
 
         // === EventType CheckBox 動態生成 ===
@@ -243,8 +255,7 @@ object FilterRuleDialogHelper {
             dropdownCategory.setText(categoryLabels[0], false)
             dropdownCategory.setOnItemClickListener { _, _, position, _ ->
                 selectedCategoryIndex = position
-                updateDismissDelayVisibility(categoryValues[position])
-                updateAlertOptionsVisibility(categoryValues[position])
+                updateActionSettingsVisibility(categoryValues[position])
                 updateEventTypeAvailability(categoryValues[position])
             }
         }
@@ -252,8 +263,7 @@ object FilterRuleDialogHelper {
         // 固定 actionType 或編輯模式時根據 actionType 決定延遲/提醒區塊
         val effectiveActionType = if (isEditMode) existingRule!!.action.actionType else actionType
         if (effectiveActionType != null) {
-            updateDismissDelayVisibility(effectiveActionType)
-            updateAlertOptionsVisibility(effectiveActionType)
+            updateActionSettingsVisibility(effectiveActionType)
             updateEventTypeAvailability(effectiveActionType)
         }
 

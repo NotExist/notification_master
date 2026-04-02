@@ -377,6 +377,11 @@
     <string name="filter_importance_display">importance ≥ %s</string>
     <string name="filter_group_id">Channel Group ID（選填）</string>
 
+    <!-- Filter Dialog 區段標題 -->
+    <string name="filter_section_target">匹配目標</string>
+    <string name="filter_section_action">動作設定</string>
+    <string name="filter_keyword_fields_label">搜尋欄位：</string>
+
     <!-- Channel -->
     <string name="channel_name_unset">Channel Name 未設定</string>
 

@@ -65,17 +65,19 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:textAppearance="?attr/textAppearanceLabelSmall"
-                tools:text="完全忽略" />
+                tools:text="POSTED, UPDATED — 5 分鐘後清除" />
 
             <TextView
                 android:id="@+id/text_keyword_info"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:drawablePadding="4dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textAppearance="?attr/textAppearanceLabelSmall"
                 android:textColor="?android:attr/textColorSecondary"
                 android:visibility="gone"
+                app:drawableStartCompat="@drawable/ic_search_small"
                 tools:text="&quot;廣告&quot; (標題, 內容)"
                 tools:visibility="visible" />
 
@@ -83,11 +85,13 @@
                 android:id="@+id/text_channel_property_info"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:drawablePadding="4dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textAppearance="?attr/textAppearanceLabelSmall"
                 android:textColor="?android:attr/textColorSecondary"
                 android:visibility="gone"
+                app:drawableStartCompat="@drawable/ic_tune_small"
                 tools:text="importance ≥ 高"
                 tools:visibility="visible" />
 
@@ -99,7 +103,7 @@
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/cancel"
-            android:src="@android:drawable/ic_menu_delete"
+            android:src="@drawable/ic_close"
             app:tint="?android:attr/textColorSecondary" />
 
     </LinearLayout>
