@@ -128,6 +128,7 @@ object FilterRuleDialogHelper {
         // PersistentAlert 相關 views
         val btnChooseSound = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_choose_sound)
         val switchAlertVibrate = dialogView.findViewById<MaterialSwitch>(R.id.switch_alert_vibrate)
+        val switchAlarmStream = dialogView.findViewById<MaterialSwitch>(R.id.switch_alarm_stream)
         var selectedSoundUri: String? = null
 
         // === Keyword 欄位 checkbox 動態生成 ===
@@ -203,6 +204,7 @@ object FilterRuleDialogHelper {
             val show = effectiveType == ActionType.PERSISTENT_ALERT
             btnChooseSound.visibility = if (show) View.VISIBLE else View.GONE
             switchAlertVibrate.visibility = if (show) View.VISIBLE else View.GONE
+            switchAlarmStream.visibility = if (show) View.VISIBLE else View.GONE
         }
 
         // === EventType CheckBox 動態生成 ===
@@ -301,6 +303,7 @@ object FilterRuleDialogHelper {
         (existingRule?.action as? RuleAction.PersistentAlert)?.let { alert ->
             selectedSoundUri = alert.soundUri
             switchAlertVibrate.isChecked = alert.vibrate
+            switchAlarmStream.isChecked = alert.audioStream == RuleAction.PersistentAlert.STREAM_ALARM
             if (alert.soundUri != null) {
                 btnChooseSound.text = RingtoneManager.getRingtone(
                     context, android.net.Uri.parse(alert.soundUri)
@@ -565,7 +568,11 @@ object FilterRuleDialogHelper {
                     ActionType.AUTO_DISMISS -> RuleAction.AutoDismiss(delayMs = dismissDelayMs)
                     ActionType.PERSISTENT_ALERT -> RuleAction.PersistentAlert(
                         soundUri = selectedSoundUri,
-                        vibrate = switchAlertVibrate.isChecked
+                        vibrate = switchAlertVibrate.isChecked,
+                        audioStream = if (switchAlarmStream.isChecked)
+                            RuleAction.PersistentAlert.STREAM_ALARM
+                        else
+                            RuleAction.PersistentAlert.STREAM_NOTIFICATION
                     )
                     ActionType.CLIPBOARD_COPY -> RuleAction.ClipboardCopy
                 }

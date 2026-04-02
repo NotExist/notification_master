@@ -903,6 +903,7 @@ class NotificationCaptureService : NotificationListenerService() {
             text = entity.text,
             soundUri = action.soundUri,
             vibrate = action.vibrate,
+            audioStream = action.audioStream,
             appName = appName,
             packageName = entity.packageName,
             eventType = eventType.name,

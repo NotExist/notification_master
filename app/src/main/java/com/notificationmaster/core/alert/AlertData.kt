@@ -14,6 +14,7 @@ data class AlertData(
     val text: String?,
     val soundUri: String?,
     val vibrate: Boolean,
+    val audioStream: String = "alarm",
     val appName: String,
     val packageName: String,
     val eventType: String,
@@ -31,6 +32,7 @@ data class AlertData(
                 text == other.text &&
                 soundUri == other.soundUri &&
                 vibrate == other.vibrate &&
+                audioStream == other.audioStream &&
                 appName == other.appName &&
                 packageName == other.packageName &&
                 eventType == other.eventType &&
@@ -47,6 +49,7 @@ data class AlertData(
         result = 31 * result + (text?.hashCode() ?: 0)
         result = 31 * result + (soundUri?.hashCode() ?: 0)
         result = 31 * result + vibrate.hashCode()
+        result = 31 * result + audioStream.hashCode()
         result = 31 * result + appName.hashCode()
         result = 31 * result + packageName.hashCode()
         result = 31 * result + eventType.hashCode()

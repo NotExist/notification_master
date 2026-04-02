@@ -73,7 +73,16 @@ class PersistentAlertService : Service() {
         // 鈴聲（循環）
         val uri = if (data.soundUri != null) Uri.parse(data.soundUri)
                   else RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        val usage = if (data.audioStream == "alarm")
+            android.media.AudioAttributes.USAGE_ALARM
+        else
+            android.media.AudioAttributes.USAGE_NOTIFICATION
+
         ringtone = RingtoneManager.getRingtone(this, uri)?.apply {
+            audioAttributes = android.media.AudioAttributes.Builder()
+                .setUsage(usage)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isLooping = true
             play()
         }

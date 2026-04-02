@@ -402,6 +402,7 @@
     <string name="filter_alert_choose_sound">選擇提醒鈴聲</string>
     <string name="filter_alert_sound_default">系統預設鬧鐘</string>
     <string name="filter_alert_vibrate">振動</string>
+    <string name="filter_alert_alarm_stream">使用鬧鈴通道（不受靜音影響）</string>
     <string name="alert_stop">停止提醒</string>
     <string name="alert_channel_name">持續提醒</string>
     <string name="settings_fullscreen_intent_hint">未授權全螢幕通知權限，鎖屏時將無法顯示全螢幕提醒。點擊前往設定。</string>

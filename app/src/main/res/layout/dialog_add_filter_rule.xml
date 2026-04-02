@@ -252,5 +252,14 @@
             android:checked="true"
             android:visibility="gone" />
 
+        <!-- 音效通道（僅 PERSISTENT_ALERT 時顯示） -->
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switch_alarm_stream"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/filter_alert_alarm_stream"
+            android:checked="true"
+            android:visibility="gone" />
+
     </LinearLayout>
 </ScrollView>

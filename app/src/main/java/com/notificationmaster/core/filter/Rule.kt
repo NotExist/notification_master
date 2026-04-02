@@ -218,13 +218,19 @@ sealed interface RuleAction {
     /** 持續提醒（PERSISTENT_ALERT） */
     data class PersistentAlert(
         val soundUri: String? = null,  // null = 系統預設鬧鐘鈴聲
-        val vibrate: Boolean = true
+        val vibrate: Boolean = true,
+        val audioStream: String = STREAM_ALARM  // "alarm" 或 "notification"
     ) : RuleAction {
+        companion object {
+            const val STREAM_ALARM = "alarm"
+            const val STREAM_NOTIFICATION = "notification"
+        }
         override val actionType = ActionType.PERSISTENT_ALERT
         override fun toJson() = JSONObject().apply {
             put("type", "PersistentAlert")
             put("soundUri", soundUri ?: JSONObject.NULL)
             put("vibrate", vibrate)
+            put("audioStream", audioStream)
         }
     }
 
@@ -241,7 +247,8 @@ sealed interface RuleAction {
             "AutoDismiss" -> AutoDismiss(json.optLong("delayMs", 0))
             "PersistentAlert" -> PersistentAlert(
                 soundUri = if (json.isNull("soundUri")) null else json.getString("soundUri"),
-                vibrate = json.optBoolean("vibrate", true)
+                vibrate = json.optBoolean("vibrate", true),
+                audioStream = json.optString("audioStream", PersistentAlert.STREAM_ALARM)
             )
             "ClipboardCopy" -> ClipboardCopy
             else -> throw IllegalArgumentException("Unknown action type: $type")
