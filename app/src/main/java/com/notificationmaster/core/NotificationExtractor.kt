@@ -474,7 +474,6 @@ class NotificationExtractor(private val context: Context) {
     }
 
     /**
-    /**
      * 解析 RemoteViews layout resource name
      * 透過來源 App 的 Context 取得 resource name（如 "com.whatsapp:layout/notification_content"）
      */
