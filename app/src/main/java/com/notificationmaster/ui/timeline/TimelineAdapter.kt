@@ -168,14 +168,28 @@ class TimelineAdapter(
             // 標籤
             binding.tagsContainer.removeAllViews()
 
+            // Importance / Priority tag
+            if (notification.importance >= 0) {
+                when (notification.importance) {
+                    0 -> addTag(binding.tagsContainer, "NONE", R.color.status_disabled, R.string.tag_importance_none_desc, "NONE")
+                    1 -> addTag(binding.tagsContainer, "MIN", R.color.tag_silent, R.string.tag_importance_min_desc, "MIN")
+                    2 -> addTag(binding.tagsContainer, "LOW", R.color.tag_silent, R.string.tag_importance_low_desc, "LOW")
+                    4 -> addTag(binding.tagsContainer, "HIGH", R.color.status_warning, R.string.tag_importance_high_desc, "HIGH")
+                    5 -> addTag(binding.tagsContainer, "MAX", R.color.status_warning, R.string.tag_importance_max_desc, "MAX")
+                }
+            } else {
+                when (notification.priority) {
+                    -2 -> addTag(binding.tagsContainer, "P:MIN", R.color.tag_silent, R.string.tag_priority_min_desc, "PRI:MIN")
+                    -1 -> addTag(binding.tagsContainer, "P:LOW", R.color.tag_silent, R.string.tag_priority_low_desc, "PRI:LOW")
+                    1 -> addTag(binding.tagsContainer, "P:HI", R.color.status_warning, R.string.tag_priority_high_desc, "PRI:HIGH")
+                    2 -> addTag(binding.tagsContainer, "P:MAX", R.color.status_warning, R.string.tag_priority_max_desc, "PRI:MAX")
+                }
+            }
+
             // 系統通知抽屜分類標籤
             if (notification.isConversation ||
                 (notification.isMessagingStyle && !notification.shortcutId.isNullOrEmpty())) {
                 addTag(binding.tagsContainer, "Conv", R.color.tag_conversation, R.string.tag_conversation_desc, "Conversation")
-            }
-
-            if (notification.importance in 1..2) {
-                addTag(binding.tagsContainer, "Sil", R.color.tag_silent, R.string.tag_silent_desc, "Silent")
             }
             if (notification.isMessagingStyle) {
                 addTag(binding.tagsContainer, "Msg", R.color.tag_messaging_style, R.string.tag_messaging_style_desc, "MessagingStyle")
@@ -185,33 +199,44 @@ class TimelineAdapter(
             if (notification.isOngoing) {
                 addTag(binding.tagsContainer, "OG", R.color.event_initial, R.string.tag_ongoing_desc, "Ongoing")
             }
-
+            if (notification.isNoClear) {
+                addTag(binding.tagsContainer, "NC", R.color.event_initial, R.string.tag_no_clear_desc, "NoClear")
+            }
             if (notification.isForegroundService) {
                 addTag(binding.tagsContainer, "FGS", R.color.event_ranking, R.string.tag_fg_service_desc, "FG Service")
             }
-
             if (notification.likelyHeadsup) {
                 addTag(binding.tagsContainer, "HU", R.color.status_warning, R.string.tag_headsup_desc, "Heads-up")
             }
-
             if (notification.isAudible) {
                 addTag(binding.tagsContainer, "Audi", R.color.tag_audible, R.string.tag_audible_desc, "Audible")
             }
-
             if (notification.isAutoCancel) {
                 addTag(binding.tagsContainer, "AC", R.color.event_updated, R.string.tag_auto_cancel_desc, "AutoCancel")
             }
-
+            if (notification.isHighPriority) {
+                addTag(binding.tagsContainer, "HP", R.color.status_warning, R.string.tag_high_priority_desc, "HighPriority")
+            }
+            if (notification.isLocalOnly) {
+                addTag(binding.tagsContainer, "Local", R.color.text_secondary, R.string.tag_local_only_desc, "LocalOnly")
+            }
             if (notification.isGroupSummary) {
                 addTag(binding.tagsContainer, "Sum", R.color.event_updated, R.string.tag_summary_desc, "Summary")
             }
-
             if (notification.hasBubbleMetadata) {
                 addTag(binding.tagsContainer, "Bub", R.color.status_enabled, R.string.tag_bubble_desc, "Bubble")
             }
-
             if (notification.hasCustomContentView || notification.hasCustomBigContentView || notification.hasCustomHeadsUpContentView) {
                 addTag(binding.tagsContainer, "CV", R.color.text_secondary, R.string.tag_custom_view_desc, "Custom View")
+            }
+            if (notification.showChronometer) {
+                addTag(binding.tagsContainer, "Chrono", R.color.event_ranking, R.string.tag_chronometer_desc, "Chronometer")
+            }
+            if (notification.isAmbient) {
+                addTag(binding.tagsContainer, "Amb", R.color.tag_silent, R.string.tag_ambient_desc, "Ambient")
+            }
+            if (notification.isSuspended) {
+                addTag(binding.tagsContainer, "Susp", R.color.status_disabled, R.string.tag_suspended_desc, "Suspended")
             }
 
             // Style 標籤（基於 template 尾綴匹配）

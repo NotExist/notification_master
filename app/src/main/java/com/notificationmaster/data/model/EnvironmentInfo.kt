@@ -167,6 +167,7 @@ data class SupportedFeatures(
                 features = listOf(
                     FeatureItem("通知頻道", "記錄頻道 ID、名稱、重要性等分類資訊"),
                     FeatureItem("頻道群組", "NotificationChannelGroup 支援頻道分組管理"),
+                    FeatureItem("Importance 取代 Priority", "Channel importance（0-5）取代舊版 priority（-2 到 2），兩者可並存"),
                     FeatureItem("通知屬性擴充", "Shortcut ID、角標類型、自動過期時間"),
                     FeatureItem("Ranking 擴充", "overrideGroupKey 等欄位"),
                     FeatureItem("發聲推斷（importance）", "Channel importance ≥ DEFAULT 推斷通知可能產生可感知提示（聲音或振動）")

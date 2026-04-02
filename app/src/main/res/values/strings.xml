@@ -111,7 +111,6 @@
     <string name="tag_bubble_desc">氣泡通知 (API 29+)，可浮動在其他 App 之上的圓形圖示。\n使用者可在系統設定中停用。\n\n判斷依據：Notification.BubbleMetadata 不為 null。</string>
     <string name="tag_custom_view_desc">此通知使用自訂 RemoteViews 呈現內容。\n視覺資訊存在於 RemoteViews 物件中，文字欄位可能不完整。\n已記錄 layout ID 與 package，extras Bundle 內容視來源 App 而定。\n\n判斷依據：contentView、bigContentView 或 headsUpContentView 任一不為 null。</string>
     <string name="tag_conversation_desc">對話通知，出現在系統通知抽屜最頂端的「對話」區段。\n\n判斷依據：\n• API 31+：系統 Ranking 直接標記\n• API 26–30：使用 MessagingStyle 且關聯 shortcutId\n\n使用者可長按通知設為「優先」或「靜音」對話。</string>
-    <string name="tag_silent_desc">靜音通知，不發出聲音或震動。\n出現在系統通知抽屜下方的「靜音通知」區段。\n\n判斷依據：Channel 重要性為 LOW 或 MIN。</string>
     <string name="tag_messaging_style_desc">使用 MessagingStyle 的通知，extras 中包含結構化的 android.messages 訊息陣列和 android.messagingUser 身份資訊。\n\n判斷依據：extras 包含 EXTRA_MESSAGES 或 EXTRA_MESSAGING_PERSON (API 24+)。</string>
     <string name="tag_big_text_style_desc">使用 BigTextStyle 的通知，展開時顯示多行長文字。\n\nextras 中包含 android.bigText 展開內容。\n\n判斷依據：extras 中 EXTRA_TEMPLATE 尾綴為 BigTextStyle。</string>
     <string name="tag_big_picture_style_desc">使用 BigPictureStyle 的通知，展開時顯示大圖片。\n\nextras 中包含 android.picture 點陣圖。\n\n判斷依據：extras 中 EXTRA_TEMPLATE 尾綴為 BigPictureStyle。</string>
