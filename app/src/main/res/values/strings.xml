@@ -218,6 +218,17 @@
     <string name="desc_capture_time">NLS 收到事件並寫入資料庫的時間。與發佈時間的差值反映系統處理和 App 排程的延遲。</string>
 
     <string name="desc_importance">系統判定的通知重要性（API 26+），決定是否發聲、是否 heads-up、是否顯示。\n\nNONE(0)=不顯示\nMIN(1)=靜音，不在狀態列\nLOW(2)=靜音，在狀態列\nDEFAULT(3)=發聲\nHIGH(4)=發聲 + heads-up\nMAX(5)=同 HIGH</string>
+    <string name="desc_channel_id">App 建立的通知頻道 ID，同一 App 的不同類型通知通常使用不同頻道。使用者可在系統設定中對各頻道獨立調整行為。</string>
+    <string name="desc_channel_name">頻道顯示名稱，由 App 在建立頻道時設定。此值從 Ranking 取得，若首次記錄時不可用則顯示「未取得」，後續事件會自動補齊。</string>
+    <string name="desc_channel_group">頻道所屬的群組 ID，App 可將多個頻道分組管理。</string>
+    <string name="desc_category">App 宣告的通知分類標記，如 msg（訊息）、email（郵件）、call（來電）、alarm（鬧鐘）等。系統可據此調整行為（如勿擾模式例外）。</string>
+    <string name="desc_group_key">App 設定的通知分組鍵，同一 groupKey 的通知在通知面板中折疊為一組。</string>
+    <string name="desc_override_group_key">系統覆寫的分組鍵，優先於 App 設定的 groupKey。系統可能自動將同一 App 的通知歸組。</string>
+    <string name="desc_visibility">通知在鎖屏上的顯示策略。\n\nPUBLIC=完整顯示\nPRIVATE=顯示基本資訊，隱藏內容\nSECRET=完全不顯示</string>
+    <string name="desc_sort_key">群組內的排序鍵，決定同一 groupKey 中通知的排列順序。</string>
+    <string name="desc_shortcut_id">對話捷徑 ID（API 26+），將通知與 App 的長按捷徑關聯，系統據此識別對話類型通知。</string>
+    <string name="desc_color">App 設定的通知強調色，用於通知圖示和部分 UI 元素的著色。</string>
+    <string name="desc_content_hash">通知內容的雜湊值，用於去重判斷。相同 hash 表示內容相同的通知。</string>
     <string name="desc_flags">通知的原始 flags 位元遮罩，各 flag 已由 chip 個別呈現。\n\n%1$s</string>
     <string name="desc_ranking">此為通知記錄時從 Ranking 擷取的快照值，僅反映當下狀態。後續可能因 RANKING 事件調整，變化紀錄請查看生命週期事件。</string>
     <string name="desc_notification_key">系統組合的唯一識別，同一 key 的通知為同一則的不同版本。\n\n組成：userId | packageName | notificationId | tag | uid\n\n• notificationId：App 發送通知時指定的 ID\n• tag：App 的可選標籤\n• 同 package + 同 id + 同 tag = 更新而非新增</string>
