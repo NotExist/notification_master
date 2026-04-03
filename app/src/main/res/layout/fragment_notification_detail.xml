@@ -707,9 +707,12 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/label_channel_id"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/label_channel"
+                        android:drawablePadding="4dp"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 
@@ -731,9 +734,12 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/label_channel_name"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/label_channel_name"
+                        android:drawablePadding="4dp"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 
@@ -754,29 +760,15 @@
                     android:layout_marginTop="12dp"
                     android:orientation="vertical">
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
+                    <TextView
+                        android:id="@+id/label_importance"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/label_importance"
-                            android:textAppearance="?attr/textAppearanceLabelMedium"
-                            android:textColor="?android:attr/textColorSecondary" />
-
-                        <ImageView
-                            android:id="@+id/icon_importance_info"
-                            android:layout_width="16dp"
-                            android:layout_height="16dp"
-                            android:layout_marginStart="4dp"
-                            android:src="@drawable/ic_info_outline"
-                            android:contentDescription="@string/label_importance"
-                            tools:visibility="visible" />
-
-                    </LinearLayout>
+                        android:text="@string/label_importance"
+                        android:drawablePadding="4dp"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
+                        android:textAppearance="?attr/textAppearanceLabelMedium"
+                        android:textColor="?android:attr/textColorSecondary" />
 
                     <TextView
                         android:id="@+id/text_importance"
@@ -799,9 +791,12 @@
                     tools:visibility="visible">
 
                     <TextView
+                        android:id="@+id/label_channel_group"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/label_channel_group"
+                        android:drawablePadding="4dp"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 
@@ -839,6 +834,34 @@
                     android:textAppearance="?attr/textAppearanceTitleSmall"
                     android:textStyle="bold" />
 
+                <!-- Notification Key -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/label_key"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_key"
+                        android:drawablePadding="4dp"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
+                        android:textAppearance="?attr/textAppearanceLabelMedium"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                    <TextView
+                        android:id="@+id/text_key"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:fontFamily="monospace"
+                        android:textIsSelectable="true"
+                        tools:text="0|com.example.app|123|null|10001" />
+
+                </LinearLayout>
+
                 <!-- groupKey -->
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -847,9 +870,12 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/label_group"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/label_group"
+                        android:drawablePadding="4dp"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 
@@ -874,9 +900,12 @@
                     tools:visibility="visible">
 
                     <TextView
+                        android:id="@+id/label_override_group_key"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/label_group_override"
+                        android:drawablePadding="4dp"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 
@@ -898,9 +927,12 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/label_category"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/label_category"
+                        android:drawablePadding="4dp"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 
@@ -914,6 +946,33 @@
 
                 </LinearLayout>
 
+                <!-- priority -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/label_priority"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_priority"
+                        android:drawablePadding="4dp"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
+                        android:textAppearance="?attr/textAppearanceLabelMedium"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                    <TextView
+                        android:id="@+id/text_priority"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                        android:textIsSelectable="true"
+                        tools:text="DEFAULT (0)" />
+
+                </LinearLayout>
+
                 <!-- visibility -->
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -922,9 +981,12 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/label_visibility"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/label_visibility"
+                        android:drawablePadding="4dp"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 
@@ -946,9 +1008,12 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/label_sort_key"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/label_sort_key"
+                        android:drawablePadding="4dp"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 
@@ -970,9 +1035,12 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/label_shortcut_id"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/label_shortcut_id"
+                        android:drawablePadding="4dp"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 
@@ -986,31 +1054,6 @@
 
                 </LinearLayout>
 
-                <!-- Key -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/label_key"
-                        android:textAppearance="?attr/textAppearanceLabelMedium"
-                        android:textColor="?android:attr/textColorSecondary" />
-
-                    <TextView
-                        android:id="@+id/text_key"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:textAppearance="?attr/textAppearanceBodySmall"
-                        android:fontFamily="monospace"
-                        android:textIsSelectable="true"
-                        tools:text="0|com.example.app|123|null|10001" />
-
-                </LinearLayout>
-
                 <!-- Content Hash -->
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -1019,9 +1062,12 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/label_content_hash"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/label_content_hash"
+                        android:drawablePadding="4dp"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 
@@ -1036,31 +1082,6 @@
 
                 </LinearLayout>
 
-                <!-- priority -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:id="@+id/label_priority"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/label_priority"
-                        android:textAppearance="?attr/textAppearanceLabelMedium"
-                        android:textColor="?android:attr/textColorSecondary" />
-
-                    <TextView
-                        android:id="@+id/text_priority"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textIsSelectable="true"
-                        tools:text="DEFAULT (0)" />
-
-                </LinearLayout>
-
                 <!-- color -->
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -1069,9 +1090,12 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/label_color"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/label_color"
+                        android:drawablePadding="4dp"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
                         android:textAppearance="?attr/textAppearanceLabelMedium"
                         android:textColor="?android:attr/textColorSecondary" />
 

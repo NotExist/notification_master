@@ -410,22 +410,16 @@ class NotificationDetailFragment : Fragment() {
 
         // 識別
         binding.textKey.text = notification.notificationKey
-        binding.textKey.setOnClickListener {
-            MaterialAlertDialogBuilder(context)
-                .setTitle("Notification Key")
-                .setMessage(R.string.desc_notification_key)
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
-        }
+        binding.labelKey.setOnClickListener { showDescDialog(R.string.label_key, R.string.desc_notification_key) }
 
         // 頻道資訊卡片（API 26+）
         if (notification.channelId != null) {
             binding.cardChannel.visibility = View.VISIBLE
             binding.textChannel.text = notification.channelId
-            binding.textChannel.setOnClickListener { showDescDialog(R.string.label_channel, R.string.desc_channel_id) }
+            binding.labelChannelId.setOnClickListener { showDescDialog(R.string.label_channel, R.string.desc_channel_id) }
             binding.textChannelName.text = channelEntity?.channelName
                 ?: getString(R.string.label_channel_name_unknown)
-            binding.textChannelName.setOnClickListener { showDescDialog(R.string.label_channel_name, R.string.desc_channel_name) }
+            binding.labelChannelName.setOnClickListener { showDescDialog(R.string.label_channel_name, R.string.desc_channel_name) }
 
             // importance
             if (notification.importance >= 0) {
@@ -437,28 +431,28 @@ class NotificationDetailFragment : Fragment() {
             } else {
                 binding.textImportance.text = getString(R.string.label_channel_name_unknown)
             }
-            binding.iconImportanceInfo.setOnClickListener { showDescDialog(R.string.label_importance, R.string.desc_importance) }
+            binding.labelImportance.setOnClickListener { showDescDialog(R.string.label_importance, R.string.desc_importance) }
 
             // channel group
             if (channelEntity?.groupId != null) {
                 binding.layoutChannelGroup.visibility = View.VISIBLE
                 binding.textChannelGroup.text = channelEntity.groupId
-                binding.textChannelGroup.setOnClickListener { showDescDialog(R.string.label_channel_group, R.string.desc_channel_group) }
+                binding.labelChannelGroup.setOnClickListener { showDescDialog(R.string.label_channel_group, R.string.desc_channel_group) }
             }
         }
 
         // 分類 / 群組
         binding.textCategory.text = notification.category ?: "null"
-        binding.textCategory.setOnClickListener { showDescDialog(R.string.label_category, R.string.desc_category) }
+        binding.labelCategory.setOnClickListener { showDescDialog(R.string.label_category, R.string.desc_category) }
         binding.textGroup.text = notification.groupKey ?: "null"
-        binding.textGroup.setOnClickListener { showDescDialog(R.string.label_group, R.string.desc_group_key) }
+        binding.labelGroup.setOnClickListener { showDescDialog(R.string.label_group, R.string.desc_group_key) }
         if (notification.overrideGroupKey != null) {
             binding.layoutOverrideGroupKey.visibility = View.VISIBLE
             binding.textOverrideGroupKey.text = notification.overrideGroupKey
-            binding.textOverrideGroupKey.setOnClickListener { showDescDialog(R.string.label_group_override, R.string.desc_override_group_key) }
+            binding.labelOverrideGroupKey.setOnClickListener { showDescDialog(R.string.label_group_override, R.string.desc_override_group_key) }
         }
         binding.textSortKey.text = notification.sortKey ?: "null"
-        binding.textSortKey.setOnClickListener { showDescDialog(R.string.label_sort_key, R.string.desc_sort_key) }
+        binding.labelSortKey.setOnClickListener { showDescDialog(R.string.label_sort_key, R.string.desc_sort_key) }
 
         // 狀態 / 行為屬性
         binding.textVisibility.text = when (notification.visibility) {
@@ -467,7 +461,7 @@ class NotificationDetailFragment : Fragment() {
             Notification.VISIBILITY_SECRET -> "SECRET"
             else -> notification.visibility.toString()
         }
-        binding.textVisibility.setOnClickListener { showDescDialog(R.string.label_visibility, R.string.desc_visibility) }
+        binding.labelVisibility.setOnClickListener { showDescDialog(R.string.label_visibility, R.string.desc_visibility) }
 
         // priority
         val priorityName = when (notification.priority) {
@@ -484,7 +478,7 @@ class NotificationDetailFragment : Fragment() {
         }
 
         binding.textShortcutId.text = notification.shortcutId ?: "null"
-        binding.textShortcutId.setOnClickListener { showDescDialog(R.string.label_shortcut_id, R.string.desc_shortcut_id) }
+        binding.labelShortcutId.setOnClickListener { showDescDialog(R.string.label_shortcut_id, R.string.desc_shortcut_id) }
 
         // color
         val color = notification.color
@@ -501,7 +495,7 @@ class NotificationDetailFragment : Fragment() {
             binding.viewColorPreview.visibility = View.GONE
             binding.textColor.text = "未設定"
         }
-        binding.textColor.setOnClickListener { showDescDialog(R.string.label_color, R.string.desc_color) }
+        binding.labelColor.setOnClickListener { showDescDialog(R.string.label_color, R.string.desc_color) }
 
         // flags
         val flags = notification.flags
@@ -528,7 +522,7 @@ class NotificationDetailFragment : Fragment() {
 
         // contentHash
         binding.textHash.text = getString(R.string.format_hash_truncated, notification.contentHash.take(16))
-        binding.textHash.setOnClickListener { showDescDialog(R.string.label_content_hash, R.string.desc_content_hash) }
+        binding.labelContentHash.setOnClickListener { showDescDialog(R.string.label_content_hash, R.string.desc_content_hash) }
 
         // 系統通知設定按鈕
         binding.btnAppNotificationSettings.setOnClickListener {

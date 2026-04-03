@@ -188,7 +188,7 @@
     <string name="label_visibility">visibility</string>
     <string name="label_sort_key">sortKey</string>
     <string name="label_shortcut_id">shortcutId</string>
-    <string name="label_key">Key</string>
+    <string name="label_key">Notification Key</string>
     <string name="label_content_hash">Content Hash</string>
     <string name="label_importance">importance</string>
     <string name="label_priority">priority</string>
