@@ -552,22 +552,26 @@ class NotificationDetailFragment : Fragment() {
                 sb.appendLine("removal_reason_desc: ${ApiVersionHelper.getRemovalReasonDescription(event.removalReason)}")
             }
 
-            // 變動內容
-            if (!event.contentDiff.isNullOrEmpty()) {
+            // 變動內容（UPDATED / RANKING 事件）
+            if (event.eventType == EventType.UPDATED || event.eventType == EventType.RANKING) {
                 sb.appendLine()
                 sb.appendLine("── 變動內容 ──")
-                try {
-                    val json = JSONObject(event.contentDiff)
-                    val keys = json.keys()
-                    while (keys.hasNext()) {
-                        val key = keys.next()
-                        val change = json.getJSONObject(key)
-                        val oldVal = change.opt("old")?.takeIf { it != JSONObject.NULL } ?: "(無)"
-                        val newVal = change.opt("new")?.takeIf { it != JSONObject.NULL } ?: "(無)"
-                        sb.appendLine("$key: $oldVal → $newVal")
+                if (!event.contentDiff.isNullOrEmpty()) {
+                    try {
+                        val json = JSONObject(event.contentDiff)
+                        val keys = json.keys()
+                        while (keys.hasNext()) {
+                            val key = keys.next()
+                            val change = json.getJSONObject(key)
+                            val oldVal = change.opt("old")?.takeIf { it != JSONObject.NULL } ?: "(無)"
+                            val newVal = change.opt("new")?.takeIf { it != JSONObject.NULL } ?: "(無)"
+                            sb.appendLine("$key: $oldVal → $newVal")
+                        }
+                    } catch (_: Exception) {
+                        sb.appendLine(event.contentDiff)
                     }
-                } catch (_: Exception) {
-                    sb.appendLine(event.contentDiff)
+                } else {
+                    sb.appendLine("(無變更)")
                 }
             }
 
