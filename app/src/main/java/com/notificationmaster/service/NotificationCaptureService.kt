@@ -368,8 +368,13 @@ class NotificationCaptureService : NotificationListenerService() {
                     val sourceNm = createPackageContext(sbn.packageName, 0)
                         .getSystemService(android.content.Context.NOTIFICATION_SERVICE)
                         as? android.app.NotificationManager
-                    sourceNm?.getNotificationChannel(entity.channelId)
-                } catch (_: Exception) { null }
+                    sourceNm?.getNotificationChannel(entity.channelId).also { ch ->
+                        if (ch == null) Log.w(TAG, "Channel fallback returned null: ${sbn.packageName}/${entity.channelId}")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Channel fallback failed: ${sbn.packageName}/${entity.channelId}", e)
+                    null
+                }
             updateChannel(sbn.packageName, entity.channelId, captureTime, notificationChannel)
         }
 

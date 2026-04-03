@@ -3,6 +3,7 @@ package com.notificationmaster.core
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.content.Context
+import android.util.Log
 import android.graphics.Bitmap
 import android.graphics.drawable.Icon
 import android.net.Uri
@@ -72,8 +73,12 @@ class NotificationExtractor(private val context: Context) {
                     try {
                         val sourceNm = context.createPackageContext(sbn.packageName, 0)
                             .getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
-                        sourceNm?.getNotificationChannel(channelId)?.importance ?: -1
-                    } catch (_: Exception) { -1 }
+                        sourceNm?.getNotificationChannel(channelId)?.importance
+                            ?: -1.also { Log.w("NotificationExtractor", "Importance fallback returned null: ${sbn.packageName}/$channelId") }
+                    } catch (e: Exception) {
+                        Log.w("NotificationExtractor", "Importance fallback failed: ${sbn.packageName}/$channelId", e)
+                        -1
+                    }
                 } else -1
             }
         } else {

@@ -31,9 +31,14 @@ interface ChannelDao {
 
     @Query("""
         UPDATE channels
-        SET channel_name = :channelName, description = :description, importance = :importance,
-            group_id = :groupId, show_badge = :showBadge, can_bubble = :canBubble,
-            sound_uri = :soundUri, vibrate_pattern = :vibratePattern, light_color = :lightColor,
+        SET channel_name = COALESCE(:channelName, channel_name),
+            description = COALESCE(:description, description),
+            importance = CASE WHEN :importance >= 0 THEN :importance ELSE importance END,
+            group_id = COALESCE(:groupId, group_id),
+            show_badge = :showBadge, can_bubble = :canBubble,
+            sound_uri = COALESCE(:soundUri, sound_uri),
+            vibrate_pattern = COALESCE(:vibratePattern, vibrate_pattern),
+            light_color = :lightColor,
             lock_screen_visibility = :lockScreenVisibility, is_blocked = :isBlocked,
             notification_count = notification_count + 1, last_updated = :updateTime
         WHERE package_name = :packageName AND channel_id = :channelId
