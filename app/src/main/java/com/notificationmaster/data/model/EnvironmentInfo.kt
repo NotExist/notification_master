@@ -235,7 +235,8 @@ data class SupportedFeatures(
                     FeatureItem("通知屬性擴充", "shortcutId、badgeIconType、timeoutAfter、settingsText", implemented = true),
                     FeatureItem("Ranking 擴充", "overrideGroupKey", implemented = true),
                     FeatureItem("Heads-up 推斷（importance）", "Channel importance ≥ HIGH 推斷 heads-up", implemented = true),
-                    FeatureItem("發聲推斷（importance）", "Channel importance ≥ DEFAULT 推斷可感知提示", implemented = true)
+                    FeatureItem("發聲推斷（importance）", "Channel importance ≥ DEFAULT 推斷可感知提示", implemented = true),
+                    FeatureItem("Ranking Channel 物件", "ranking.channel 取得通知所屬頻道的完整資訊（名稱、重要性等）", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -246,7 +247,6 @@ data class SupportedFeatures(
                     FeatureItem("語意動作", "識別動作按鈕類型（回覆、刪除、封存等）", implemented = true),
                     FeatureItem("Person 資訊", "提取通知中的人物名稱和頭像圖片", implemented = true),
                     FeatureItem("isGroupConversation", "識別群組對話通知", implemented = true),
-                    FeatureItem("Ranking Channel 物件", "ranking.channel 可存取完整頻道物件（API 26-27 由 NotificationManager 取得）", implemented = true),
                     FeatureItem("Ranking 擴充", "canShowBadge、isSuspended 等狀態欄位", implemented = true),
                     FeatureItem("App 暫停狀態", "記錄 App 是否被系統暫停（家長控制、企業管理）", implemented = true)
                 )

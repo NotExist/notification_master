@@ -3,7 +3,6 @@ package com.notificationmaster.core
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.content.Context
-import android.util.Log
 import android.graphics.Bitmap
 import android.graphics.drawable.Icon
 import android.net.Uri
@@ -65,22 +64,9 @@ class NotificationExtractor(private val context: Context) {
             if (map.getRanking(ApiVersionHelper.getNotificationKey(sbn), r)) r else null
         }
 
-        // Channel importance：ranking 優先，fallback 到來源 App 的 NotificationChannel
-        val channelImportance = if (Build.VERSION.SDK_INT >= 26) {
-            ranking?.importance ?: run {
-                val channelId = notification.channelId
-                if (channelId != null) {
-                    try {
-                        val sourceNm = context.createPackageContext(sbn.packageName, 0)
-                            .getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
-                        sourceNm?.getNotificationChannel(channelId)?.importance
-                            ?: -1.also { Log.w("NotificationExtractor", "Importance fallback returned null: ${sbn.packageName}/$channelId") }
-                    } catch (e: Exception) {
-                        Log.w("NotificationExtractor", "Importance fallback failed: ${sbn.packageName}/$channelId", e)
-                        -1
-                    }
-                } else -1
-            }
+        // Channel importance（唯一可靠來源：ranking.importance，API 24+）
+        val channelImportance = if (Build.VERSION.SDK_INT >= 24 && ranking != null) {
+            ranking.importance
         } else {
             -1
         }

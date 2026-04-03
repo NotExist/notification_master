@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.os.Build
 import android.os.IBinder
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -194,6 +195,10 @@ class NotificationCaptureService : NotificationListenerService() {
                 val key = ApiVersionHelper.getNotificationKey(sbn)
                 if (database.notificationDao().existsByKey(key)) {
                     skipCount++
+                    // 補齊 channel 資料（已存在的通知可能 channel name 為 null）
+                    if (ApiVersionHelper.supportsNotificationChannel() && rankingMap != null) {
+                        refreshChannelFromRanking(sbn, rankingMap, System.currentTimeMillis())
+                    }
                 } else {
                     processNotification(sbn, EventType.INITIAL, rankingMap)
                     newCount++
@@ -203,6 +208,28 @@ class NotificationCaptureService : NotificationListenerService() {
             }
         }
         Log.i(TAG, "$caller complete: $newCount new, $skipCount skipped")
+    }
+
+    /**
+     * 補齊 channel 資料（只補空缺）
+     * 當 ChannelEntity 存在但 channelName 為 null 時，從 ranking.channel 取得並更新。
+     */
+    private suspend fun refreshChannelFromRanking(
+        sbn: StatusBarNotification,
+        rankingMap: RankingMap,
+        captureTime: Long
+    ) {
+        val channelId = if (Build.VERSION.SDK_INT >= 26) sbn.notification.channelId else return
+        if (channelId == null) return
+        val existing = database.channelDao().getByPackageAndChannelId(sbn.packageName, channelId)
+        if (existing == null || existing.channelName != null) return
+
+        val ranking = Ranking()
+        if (rankingMap.getRanking(ApiVersionHelper.getNotificationKey(sbn), ranking)) {
+            ranking.channel?.let { channel ->
+                updateChannel(sbn.packageName, channelId, captureTime, channel)
+            }
+        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) {
@@ -353,28 +380,13 @@ class NotificationCaptureService : NotificationListenerService() {
         updateAppSource(sbn.packageName, captureTime)
 
         // 6. 更新 Channel (API 26+)
+        // 唯一可靠來源：ranking.channel（API 26+）
         if (ApiVersionHelper.supportsNotificationChannel() && entity.channelId != null) {
-            // API 28+: 優先從 Ranking 取得 NotificationChannel
-            val notificationChannel: android.app.NotificationChannel? =
-                if (ApiVersionHelper.supportsPerson()) {
-                    val ranking = Ranking()
-                    val key = ApiVersionHelper.getNotificationKey(sbn)
-                    if (rankingMap?.getRanking(key, ranking) == true) {
-                        ranking.channel
-                    } else null
-                } else null
-                // API 26+: fallback 到來源 App 的 NotificationManager（涵蓋 API 26-27 及 rankingMap 不可用時）
-                ?: try {
-                    val sourceNm = createPackageContext(sbn.packageName, 0)
-                        .getSystemService(android.content.Context.NOTIFICATION_SERVICE)
-                        as? android.app.NotificationManager
-                    sourceNm?.getNotificationChannel(entity.channelId).also { ch ->
-                        if (ch == null) Log.w(TAG, "Channel fallback returned null: ${sbn.packageName}/${entity.channelId}")
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Channel fallback failed: ${sbn.packageName}/${entity.channelId}", e)
-                    null
-                }
+            val notificationChannel: android.app.NotificationChannel? = if (rankingMap != null) {
+                val ranking = Ranking()
+                val key = ApiVersionHelper.getNotificationKey(sbn)
+                if (rankingMap.getRanking(key, ranking)) ranking.channel else null
+            } else null
             updateChannel(sbn.packageName, entity.channelId, captureTime, notificationChannel)
         }
 
@@ -543,6 +555,17 @@ class NotificationCaptureService : NotificationListenerService() {
                             contentDiff = diff.toString()
                         )
                         database.notificationEventDao().insert(event)
+                    }
+
+                    // Channel 資料補齊（只補空缺，name 已有的不重複寫入）
+                    if (ApiVersionHelper.supportsNotificationChannel() && latestNotification.channelId != null) {
+                        val existingChannel = database.channelDao().getByPackageAndChannelId(
+                            latestNotification.packageName, latestNotification.channelId)
+                        if (existingChannel != null && existingChannel.channelName == null) {
+                            ranking.channel?.let { channel ->
+                                updateChannel(latestNotification.packageName, latestNotification.channelId, captureTime, channel)
+                            }
+                        }
                     }
                 }
             }
@@ -820,9 +843,9 @@ class NotificationCaptureService : NotificationListenerService() {
         if (rankingMap == null) return null to null
         val ranking = Ranking()
         if (!rankingMap.getRanking(key, ranking)) return null to null
-        // Ranking.importance requires API 24+, Ranking.channel requires API 28+
+        // Ranking.importance requires API 24+, Ranking.channel requires API 26+
         val importance = if (ApiVersionHelper.supportsDirectReply()) ranking.importance else null
-        val groupId = if (ApiVersionHelper.supportsPerson()) ranking.channel?.group else null
+        val groupId = if (ApiVersionHelper.supportsNotificationChannel()) ranking.channel?.group else null
         return importance to groupId
     }
 
