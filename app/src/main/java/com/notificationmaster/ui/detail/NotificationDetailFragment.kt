@@ -34,6 +34,7 @@ import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.core.cache.PendingIntentCache
 import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.core.compat.ApiVersionHelper
+import com.notificationmaster.data.db.entity.ChannelEntity
 import com.notificationmaster.data.db.entity.ActionEntity
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.MediaAttachmentEntity
@@ -150,7 +151,12 @@ class NotificationDetailFragment : Fragment() {
             }
 
             if (notification != null) {
-                displayNotification(notification)
+                val channelEntity = withContext(Dispatchers.IO) {
+                    notification.channelId?.let { chId ->
+                        database.channelDao().getByPackageAndChannelId(notification.packageName, chId)
+                    }
+                }
+                displayNotification(notification, channelEntity)
 
                 // 載入動作按鈕與 Intent 資訊
                 val actionDao = database.actionDao()
@@ -201,7 +207,7 @@ class NotificationDetailFragment : Fragment() {
         }
     }
 
-    private fun displayNotification(notification: NotificationEntity) {
+    private fun displayNotification(notification: NotificationEntity, channelEntity: ChannelEntity? = null) {
         val context = requireContext()
 
         // App 資訊
@@ -412,11 +418,45 @@ class NotificationDetailFragment : Fragment() {
                 .show()
         }
 
-        // 頻道 / 分類 / 群組
-        binding.textChannel.text = notification.channelId ?: "null"
+        // 頻道資訊卡片（API 26+）
+        if (notification.channelId != null) {
+            binding.cardChannel.visibility = View.VISIBLE
+            binding.textChannel.text = notification.channelId
+            binding.textChannelName.text = channelEntity?.channelName
+                ?: getString(R.string.label_channel_name_unknown)
+
+            // importance
+            if (notification.importance >= 0) {
+                val importanceName = when (notification.importance) {
+                    0 -> "NONE"; 1 -> "MIN"; 2 -> "LOW"; 3 -> "DEFAULT"; 4 -> "HIGH"; 5 -> "MAX"
+                    else -> notification.importance.toString()
+                }
+                binding.textImportance.text = "$importanceName (${notification.importance})"
+            } else {
+                binding.textImportance.text = getString(R.string.label_channel_name_unknown)
+            }
+            binding.iconImportanceInfo.setOnClickListener {
+                MaterialAlertDialogBuilder(context)
+                    .setTitle(R.string.label_importance)
+                    .setMessage(R.string.desc_importance)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+
+            // channel group
+            if (channelEntity?.groupId != null) {
+                binding.layoutChannelGroup.visibility = View.VISIBLE
+                binding.textChannelGroup.text = channelEntity.groupId
+            }
+        }
+
+        // 分類 / 群組
         binding.textCategory.text = notification.category ?: "null"
         binding.textGroup.text = notification.groupKey ?: "null"
-        binding.textOverrideGroupKey.text = notification.overrideGroupKey ?: "null"
+        if (notification.overrideGroupKey != null) {
+            binding.layoutOverrideGroupKey.visibility = View.VISIBLE
+            binding.textOverrideGroupKey.text = notification.overrideGroupKey
+        }
         binding.textSortKey.text = notification.sortKey ?: "null"
 
         // 狀態 / 行為屬性
@@ -427,42 +467,28 @@ class NotificationDetailFragment : Fragment() {
             else -> notification.visibility.toString()
         }
 
-        // importance / priority
-        binding.iconImportanceInfo.visibility = View.VISIBLE
+        // priority
+        val priorityName = when (notification.priority) {
+            -2 -> "MIN"; -1 -> "LOW"; 0 -> "DEFAULT"; 1 -> "HIGH"; 2 -> "MAX"
+            else -> notification.priority.toString()
+        }
+        binding.textPriority.text = "$priorityName (${notification.priority})"
         if (notification.importance >= 0) {
-            // API 26+：顯示 importance
-            val importanceName = when (notification.importance) {
-                0 -> "NONE"; 1 -> "MIN"; 2 -> "LOW"; 3 -> "DEFAULT"; 4 -> "HIGH"; 5 -> "MAX"
-                else -> notification.importance.toString()
-            }
-            binding.textImportance.text = "$importanceName (${notification.importance})"
-            val descBuilder = StringBuilder(getString(R.string.desc_importance))
-            val priority = notification.priority
-            if (priority != 0) {
-                val priorityName = when (priority) {
-                    -2 -> "MIN"; -1 -> "LOW"; 0 -> "DEFAULT"; 1 -> "HIGH"; 2 -> "MAX"
-                    else -> priority.toString()
-                }
-                descBuilder.append(getString(R.string.desc_importance_priority_appendix, "$priorityName ($priority)"))
-            }
-            binding.iconImportanceInfo.setOnClickListener {
+            // 有 channel 時 priority 降級顯示
+            binding.labelPriority.setTextColor(
+                ContextCompat.getColor(context, R.color.text_tertiary))
+            binding.labelPriority.setOnClickListener {
                 MaterialAlertDialogBuilder(context)
-                    .setTitle(R.string.label_importance)
-                    .setMessage(descBuilder.toString())
+                    .setTitle(R.string.label_priority)
+                    .setMessage(R.string.desc_priority_with_channel)
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
             }
         } else {
-            // Pre-26：顯示 priority
-            val priorityName = when (notification.priority) {
-                -2 -> "MIN"; -1 -> "LOW"; 0 -> "DEFAULT"; 1 -> "HIGH"; 2 -> "MAX"
-                else -> notification.priority.toString()
-            }
-            binding.textImportance.text = "$priorityName (${notification.priority})"
-            binding.iconImportanceInfo.setOnClickListener {
+            binding.labelPriority.setOnClickListener {
                 MaterialAlertDialogBuilder(context)
-                    .setTitle("priority")
-                    .setMessage(R.string.desc_priority_system)
+                    .setTitle(R.string.label_priority)
+                    .setMessage(R.string.desc_priority)
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
             }

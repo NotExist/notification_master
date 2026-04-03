@@ -133,8 +133,7 @@
     <string name="tag_priority_low_desc">Priority LOW (-1)：低優先度（pre-API 26 優先度系統）。等同 API 26+ 的 Importance LOW。</string>
     <string name="tag_priority_high_desc">Priority HIGH (1)：高優先度（pre-API 26 優先度系統）。等同 API 26+ 的 Importance HIGH。</string>
     <string name="tag_priority_max_desc">Priority MAX (2)：最高優先度（pre-API 26 優先度系統）。等同 API 26+ 的 Importance MAX。</string>
-    <string name="desc_priority_system">通知優先度（API 26 前），API 26+ 已被 Channel importance 取代。\n\nMIN(-2)=最低\nLOW(-1)=低\nDEFAULT(0)=預設\nHIGH(1)=高，可能 heads-up\nMAX(2)=最高</string>
-    <string name="tag_importance_none_desc">Importance NONE (0)：通知頻道已被使用者關閉，通知完全不顯示。</string>
+<string name="tag_importance_none_desc">Importance NONE (0)：通知頻道已被使用者關閉，通知完全不顯示。</string>
     <string name="tag_importance_min_desc">Importance MIN (1)：靜音通知，不出現在狀態列，僅在下拉通知面板底部可見。</string>
     <string name="tag_importance_low_desc">Importance LOW (2)：靜音通知，出現在狀態列但不發聲不振動。</string>
     <string name="tag_importance_high_desc">Importance HIGH (4)：發聲通知，會以 Heads-up 方式在螢幕頂部彈出。</string>
@@ -178,16 +177,23 @@
     <string name="label_when_not_shown">（通知列不顯示）</string>
     <string name="label_tags_and_status">標籤與狀態</string>
     <string name="label_detail_info">詳細資訊</string>
+    <string name="label_channel_info">頻道資訊</string>
     <string name="label_channel">channel_id</string>
+    <string name="label_channel_name">channel_name</string>
+    <string name="label_channel_group">channel_group</string>
+    <string name="label_channel_name_unknown">（未取得）</string>
     <string name="label_group">groupKey</string>
-<string name="label_category">category</string>
+    <string name="label_group_override">overrideGroupKey</string>
+    <string name="label_category">category</string>
     <string name="label_visibility">visibility</string>
     <string name="label_sort_key">sortKey</string>
     <string name="label_shortcut_id">shortcutId</string>
-    <string name="label_override_group_key">overrideGroupKey</string>
     <string name="label_key">Key</string>
     <string name="label_content_hash">Content Hash</string>
     <string name="label_importance">importance</string>
+    <string name="label_priority">priority</string>
+    <string name="desc_priority">通知優先度（-2=MIN, -1=LOW, 0=DEFAULT, 1=HIGH, 2=MAX），控制顯示位置與 heads-up 行為。</string>
+    <string name="desc_priority_with_channel">通知自身宣告的優先度。系統優先參考 Channel importance。</string>
     <string name="label_color">color</string>
     <string name="label_flags">flags</string>
     <string name="label_intents">Intent 資訊</string>
@@ -212,7 +218,6 @@
     <string name="desc_capture_time">NLS 收到事件並寫入資料庫的時間。與發佈時間的差值反映系統處理和 App 排程的延遲。</string>
 
     <string name="desc_importance">系統判定的通知重要性（API 26+），決定是否發聲、是否 heads-up、是否顯示。\n\nNONE(0)=不顯示\nMIN(1)=靜音，不在狀態列\nLOW(2)=靜音，在狀態列\nDEFAULT(3)=發聲\nHIGH(4)=發聲 + heads-up\nMAX(5)=同 HIGH</string>
-    <string name="desc_importance_priority_appendix">\n\n此通知同時設有舊版 priority 值：%1$s</string>
     <string name="desc_flags">通知的原始 flags 位元遮罩，各 flag 已由 chip 個別呈現。\n\n%1$s</string>
     <string name="desc_ranking">此為通知記錄時從 Ranking 擷取的快照值，僅反映當下狀態。後續可能因 RANKING 事件調整，變化紀錄請查看生命週期事件。</string>
     <string name="desc_notification_key">系統組合的唯一識別，同一 key 的通知為同一則的不同版本。\n\n組成：userId | packageName | notificationId | tag | uid\n\n• notificationId：App 發送通知時指定的 ID\n• tag：App 的可選標籤\n• 同 package + 同 id + 同 tag = 更新而非新增</string>
