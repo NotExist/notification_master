@@ -52,22 +52,18 @@ class MainActivity : AppCompatActivity() {
             .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
         val navController = navHostFragment.navController
 
-        // 設定所有頂層目的地（不顯示返回按鈕）
+        // 各 tab 起始頁為頂層目的地（不顯示返回按鈕）
         val appBarConfiguration = AppBarConfiguration(
             setOf(
-                R.id.nav_timeline,
-                R.id.nav_archive,
-                R.id.nav_search,
-                R.id.nav_settings
+                R.id.timeline_home,
+                R.id.archive_home,
+                R.id.search_home,
+                R.id.settings_home
             )
         )
 
         setupActionBarWithNavController(navController, appBarConfiguration)
         binding.bottomNav.setupWithNavController(navController)
-        // setupWithNavController 預設行為：
-        // - 頂層目的地 → 自動選取對應 tab
-        // - 非頂層目的地 → tab 保持原狀（使用者從哪個 tab 進入就停在哪個 tab）
-        // 不需要自訂 OnDestinationChangedListener
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -84,7 +80,7 @@ class MainActivity : AppCompatActivity() {
                     .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
                 val navController = navHostFragment.navController
                 val args = NotificationDetailFragmentArgs(notificationId).toBundle()
-                navController.navigate(R.id.nav_detail, args)
+                navController.navigate(R.id.timeline_detail, args)
             }
             intent.action = null
         }

@@ -81,7 +81,7 @@ class ArchiveFragment : Fragment() {
     private fun setupRecyclerView() {
         appSourceAdapter = AppSourceAdapter(
             onItemClick = { appSource ->
-                val action = ArchiveFragmentDirections.actionArchiveToArchiveDetail(
+                val action = ArchiveFragmentDirections.actionArchiveHomeToArchiveSubDetail(
                     packageName = appSource.packageName,
                     title = appSource.appName ?: appSource.packageName
                 )
@@ -98,7 +98,7 @@ class ArchiveFragment : Fragment() {
 
         channelAdapter = ChannelAdapter(
             onItemClick = { channel ->
-                val action = ArchiveFragmentDirections.actionArchiveToArchiveDetail(
+                val action = ArchiveFragmentDirections.actionArchiveHomeToArchiveSubDetail(
                     packageName = channel.packageName,
                     channelId = channel.channelId,
                     title = channel.channelName ?: channel.channelId

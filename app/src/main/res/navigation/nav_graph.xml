@@ -5,120 +5,169 @@
     android:id="@+id/nav_graph"
     app:startDestination="@id/nav_timeline">
 
-    <fragment
+    <!-- Timeline tab -->
+    <navigation
         android:id="@+id/nav_timeline"
-        android:name="com.notificationmaster.ui.timeline.TimelineFragment"
-        android:label="@string/nav_timeline"
-        tools:layout="@layout/fragment_timeline">
+        app:startDestination="@id/timeline_home">
 
-        <action
-            android:id="@+id/action_timeline_to_detail"
-            app:destination="@id/nav_detail" />
+        <fragment
+            android:id="@+id/timeline_home"
+            android:name="com.notificationmaster.ui.timeline.TimelineFragment"
+            android:label="@string/nav_timeline"
+            tools:layout="@layout/fragment_timeline">
 
-    </fragment>
+            <action
+                android:id="@+id/action_timeline_home_to_timeline_detail"
+                app:destination="@id/timeline_detail" />
 
-    <fragment
+        </fragment>
+
+        <fragment
+            android:id="@+id/timeline_detail"
+            android:name="com.notificationmaster.ui.detail.NotificationDetailFragment"
+            android:label="@string/detail_title"
+            tools:layout="@layout/fragment_notification_detail">
+
+            <argument
+                android:name="notificationId"
+                app:argType="long" />
+
+        </fragment>
+
+    </navigation>
+
+    <!-- Archive tab -->
+    <navigation
         android:id="@+id/nav_archive"
-        android:name="com.notificationmaster.ui.archive.ArchiveFragment"
-        android:label="@string/nav_archive"
-        tools:layout="@layout/fragment_archive">
+        app:startDestination="@id/archive_home">
 
-        <action
-            android:id="@+id/action_archive_to_archive_detail"
-            app:destination="@id/nav_archive_detail" />
+        <fragment
+            android:id="@+id/archive_home"
+            android:name="com.notificationmaster.ui.archive.ArchiveFragment"
+            android:label="@string/nav_archive"
+            tools:layout="@layout/fragment_archive">
 
-    </fragment>
+            <action
+                android:id="@+id/action_archive_home_to_archive_sub_detail"
+                app:destination="@id/archive_sub_detail" />
 
-    <fragment
-        android:id="@+id/nav_archive_detail"
-        android:name="com.notificationmaster.ui.archive.ArchiveDetailFragment"
-        android:label="{title}"
-        tools:layout="@layout/fragment_archive_detail">
+        </fragment>
 
-        <argument
-            android:name="packageName"
-            app:argType="string" />
+        <fragment
+            android:id="@+id/archive_sub_detail"
+            android:name="com.notificationmaster.ui.archive.ArchiveDetailFragment"
+            android:label="{title}"
+            tools:layout="@layout/fragment_archive_detail">
 
-        <argument
-            android:name="channelId"
-            android:defaultValue=""
-            app:argType="string" />
+            <argument
+                android:name="packageName"
+                app:argType="string" />
 
-        <argument
-            android:name="title"
-            app:argType="string" />
+            <argument
+                android:name="channelId"
+                android:defaultValue=""
+                app:argType="string" />
 
-        <action
-            android:id="@+id/action_archive_detail_to_detail"
-            app:destination="@id/nav_detail" />
+            <argument
+                android:name="title"
+                app:argType="string" />
 
-    </fragment>
+            <action
+                android:id="@+id/action_archive_sub_detail_to_archive_notification_detail"
+                app:destination="@id/archive_notification_detail" />
 
-    <fragment
+        </fragment>
+
+        <fragment
+            android:id="@+id/archive_notification_detail"
+            android:name="com.notificationmaster.ui.detail.NotificationDetailFragment"
+            android:label="@string/detail_title"
+            tools:layout="@layout/fragment_notification_detail">
+
+            <argument
+                android:name="notificationId"
+                app:argType="long" />
+
+        </fragment>
+
+    </navigation>
+
+    <!-- Search tab -->
+    <navigation
         android:id="@+id/nav_search"
-        android:name="com.notificationmaster.ui.search.SearchFragment"
-        android:label="@string/nav_search"
-        tools:layout="@layout/fragment_search">
+        app:startDestination="@id/search_home">
 
-        <argument
-            android:name="query"
-            app:argType="string"
-            android:defaultValue="" />
+        <fragment
+            android:id="@+id/search_home"
+            android:name="com.notificationmaster.ui.search.SearchFragment"
+            android:label="@string/nav_search"
+            tools:layout="@layout/fragment_search">
 
-        <action
-            android:id="@+id/action_search_to_detail"
-            app:destination="@id/nav_detail" />
+            <argument
+                android:name="query"
+                app:argType="string"
+                android:defaultValue="" />
 
-    </fragment>
+            <action
+                android:id="@+id/action_search_home_to_search_detail"
+                app:destination="@id/search_detail" />
 
-    <fragment
+        </fragment>
+
+        <fragment
+            android:id="@+id/search_detail"
+            android:name="com.notificationmaster.ui.detail.NotificationDetailFragment"
+            android:label="@string/detail_title"
+            tools:layout="@layout/fragment_notification_detail">
+
+            <argument
+                android:name="notificationId"
+                app:argType="long" />
+
+        </fragment>
+
+    </navigation>
+
+    <!-- Settings tab -->
+    <navigation
         android:id="@+id/nav_settings"
-        android:name="com.notificationmaster.ui.settings.SettingsFragment"
-        android:label="@string/nav_settings"
-        tools:layout="@layout/fragment_settings">
+        app:startDestination="@id/settings_home">
 
-        <action
-            android:id="@+id/action_settings_to_home"
-            app:destination="@id/nav_home" />
+        <fragment
+            android:id="@+id/settings_home"
+            android:name="com.notificationmaster.ui.settings.SettingsFragment"
+            android:label="@string/nav_settings"
+            tools:layout="@layout/fragment_settings">
 
-        <action
-            android:id="@+id/action_settings_to_filter"
-            app:destination="@id/nav_filter_settings" />
+            <action
+                android:id="@+id/action_settings_home_to_settings_env"
+                app:destination="@id/settings_env" />
 
-    </fragment>
+            <action
+                android:id="@+id/action_settings_home_to_settings_filter"
+                app:destination="@id/settings_filter" />
 
-    <!-- 過濾設定頁面（從設定進入） -->
-    <fragment
-        android:id="@+id/nav_filter_settings"
-        android:name="com.notificationmaster.ui.settings.FilterSettingsFragment"
-        android:label=""
-        tools:layout="@layout/fragment_filter_settings">
+        </fragment>
 
-        <argument
-            android:name="actionType"
-            app:argType="string"
-            android:defaultValue="SKIP_RECORD" />
+        <fragment
+            android:id="@+id/settings_filter"
+            android:name="com.notificationmaster.ui.settings.FilterSettingsFragment"
+            android:label=""
+            tools:layout="@layout/fragment_filter_settings">
 
-    </fragment>
+            <argument
+                android:name="actionType"
+                app:argType="string"
+                android:defaultValue="SKIP_RECORD" />
 
-    <!-- 環境資訊頁面（從設定進入） -->
-    <fragment
-        android:id="@+id/nav_home"
-        android:name="com.notificationmaster.ui.main.HomeFragment"
-        android:label="@string/environment_info"
-        tools:layout="@layout/fragment_home" />
+        </fragment>
 
-    <!-- 通知詳情頁面 -->
-    <fragment
-        android:id="@+id/nav_detail"
-        android:name="com.notificationmaster.ui.detail.NotificationDetailFragment"
-        android:label="@string/detail_title"
-        tools:layout="@layout/fragment_notification_detail">
+        <fragment
+            android:id="@+id/settings_env"
+            android:name="com.notificationmaster.ui.main.HomeFragment"
+            android:label="@string/environment_info"
+            tools:layout="@layout/fragment_home" />
 
-        <argument
-            android:name="notificationId"
-            app:argType="long" />
-
-    </fragment>
+    </navigation>
 
 </navigation>

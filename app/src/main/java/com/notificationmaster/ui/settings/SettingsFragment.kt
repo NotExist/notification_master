@@ -171,7 +171,7 @@ class SettingsFragment : Fragment() {
 
     private fun setupEnvironmentCard() {
         binding.cardEnvironment.setOnClickListener {
-            findNavController().navigate(R.id.action_settings_to_home)
+            findNavController().navigate(R.id.action_settings_home_to_settings_env)
         }
     }
 
@@ -181,7 +181,7 @@ class SettingsFragment : Fragment() {
         binding.btnPersistentAlert.setOnClickListener {
             requestNotificationPermissionThen {
                 findNavController().navigate(
-                    R.id.action_settings_to_filter,
+                    R.id.action_settings_home_to_settings_filter,
                     bundleOf("actionType" to ActionType.PERSISTENT_ALERT.name)
                 )
             }
@@ -193,7 +193,7 @@ class SettingsFragment : Fragment() {
     private fun setupFilterButton(button: View, actionType: ActionType) {
         button.setOnClickListener {
             findNavController().navigate(
-                R.id.action_settings_to_filter,
+                R.id.action_settings_home_to_settings_filter,
                 bundleOf("actionType" to actionType.name)
             )
         }
@@ -441,7 +441,7 @@ class SettingsFragment : Fragment() {
         // 白名單
         binding.btnCalendarWhitelist.setOnClickListener {
             findNavController().navigate(
-                R.id.action_settings_to_filter,
+                R.id.action_settings_home_to_settings_filter,
                 bundleOf("actionType" to ActionType.CALENDAR_EXPORT.name)
             )
         }

@@ -55,7 +55,7 @@ class ArchiveDetailFragment : Fragment() {
     private fun setupRecyclerView() {
         adapter = TimelineAdapter(
             onItemClick = { notification ->
-                val action = ArchiveDetailFragmentDirections.actionArchiveDetailToDetail(notification.id)
+                val action = ArchiveDetailFragmentDirections.actionArchiveSubDetailToArchiveNotificationDetail(notification.id)
                 findNavController().navigate(action)
             },
             onItemLongClick = { notification ->

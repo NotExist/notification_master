@@ -577,7 +577,7 @@ class TimelineFragment : Fragment() {
 
     private fun navigateToDetail(notification: NotificationEntity) {
         // 導航到通知詳情頁面
-        val action = TimelineFragmentDirections.actionTimelineToDetail(notification.id)
+        val action = TimelineFragmentDirections.actionTimelineHomeToTimelineDetail(notification.id)
         findNavController().navigate(action)
     }
 }
