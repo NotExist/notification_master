@@ -212,30 +212,41 @@ class FilterSettingsFragment : Fragment() {
                     binding.textChannelInfo.visibility = View.GONE
                 }
 
-                // 事件類型 + 延遲時間
+                // 事件類型（匹配條件）
                 val allEventTypes = EventType.entries.map { it.name }.toSet()
-                val eventText = if (rule.eventTypes == allEventTypes) {
+                binding.textEventTypes.text = if (rule.eventTypes == allEventTypes) {
                     ctx.getString(R.string.filter_mode_ignore_all)
                 } else {
                     rule.eventTypes.joinToString()
                 }
-                val delayMs = (rule.action as? RuleAction.AutoDismiss)?.delayMs ?: 0L
-                val alertAction = rule.action as? RuleAction.PersistentAlert
-                binding.textFilterMode.text = if (actionType == ActionType.AUTO_DISMISS && delayMs > 0) {
-                    val delayText = formatDismissDelay(ctx, delayMs)
-                    "$eventText — ${ctx.getString(R.string.filter_dismiss_delay_format, delayText)}"
-                } else if (actionType == ActionType.PERSISTENT_ALERT && alertAction != null) {
-                    val vibrateLabel = if (alertAction.vibrate) ctx.getString(R.string.filter_alert_vibrate) else ""
-                    val soundLabel = if (alertAction.soundUri != null) {
-                        android.media.RingtoneManager.getRingtone(ctx, android.net.Uri.parse(alertAction.soundUri))
-                            ?.getTitle(ctx) ?: ""
-                    } else {
-                        ctx.getString(R.string.filter_alert_sound_default)
+
+                // 動作效果（獨立顯示）
+                val actionInfo = when {
+                    actionType == ActionType.AUTO_DISMISS -> {
+                        val delayMs = (rule.action as? RuleAction.AutoDismiss)?.delayMs ?: 0L
+                        if (delayMs > 0) ctx.getString(R.string.filter_dismiss_delay_format, formatDismissDelay(ctx, delayMs))
+                        else null
                     }
-                    val extras = listOf(soundLabel, vibrateLabel).filter { it.isNotEmpty() }.joinToString(", ")
-                    if (extras.isNotEmpty()) "$eventText — $extras" else eventText
+                    actionType == ActionType.PERSISTENT_ALERT -> {
+                        val alertAction = rule.action as? RuleAction.PersistentAlert
+                        if (alertAction != null) {
+                            val vibrateLabel = if (alertAction.vibrate) ctx.getString(R.string.filter_alert_vibrate) else ""
+                            val soundLabel = if (alertAction.soundUri != null) {
+                                android.media.RingtoneManager.getRingtone(ctx, android.net.Uri.parse(alertAction.soundUri))
+                                    ?.getTitle(ctx) ?: ""
+                            } else {
+                                ctx.getString(R.string.filter_alert_sound_default)
+                            }
+                            listOf(soundLabel, vibrateLabel).filter { it.isNotEmpty() }.joinToString(", ").ifEmpty { null }
+                        } else null
+                    }
+                    else -> null
+                }
+                if (actionInfo != null) {
+                    binding.textActionInfo.visibility = View.VISIBLE
+                    binding.textActionInfo.text = actionInfo
                 } else {
-                    eventText
+                    binding.textActionInfo.visibility = View.GONE
                 }
 
                 // Keyword 資訊
