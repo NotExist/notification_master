@@ -184,15 +184,20 @@ class HomeFragment : Fragment() {
             val noneImplemented = group.features.none { it.implemented }
             val statusText = TextView(ctx).apply {
                 text = when {
-                    !group.supported -> "✗"
-                    allImplemented -> "✓"
                     noneImplemented -> "⊘"
-                    else -> "△"
+                    !allImplemented -> "△"
+                    group.supported -> "✓"
+                    else -> "✗"
                 }
                 textSize = 14f
-                setTextColor(ContextCompat.getColor(ctx,
-                    if (group.supported && allImplemented) R.color.status_enabled
-                    else R.color.status_disabled))
+                setTextColor(when {
+                    group.supported && allImplemented -> ContextCompat.getColor(ctx, R.color.status_enabled)
+                    !allImplemented && !noneImplemented -> ContextCompat.getColor(ctx, R.color.status_warning)
+                    noneImplemented -> com.google.android.material.color.MaterialColors.getColor(
+                        ctx, android.R.attr.textColorSecondary,
+                        ContextCompat.getColor(ctx, R.color.text_secondary))
+                    else -> ContextCompat.getColor(ctx, R.color.status_disabled)
+                })
             }
 
             val titleText = TextView(ctx).apply {
