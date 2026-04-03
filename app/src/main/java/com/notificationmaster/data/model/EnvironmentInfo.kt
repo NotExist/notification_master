@@ -116,6 +116,11 @@ data class SupportedFeatures(
         }
 
         private fun androidVersionName(apiLevel: Int): String = when (apiLevel) {
+            4 -> "1.6 Donut"
+            14 -> "4.0 Ice Cream Sandwich"
+            16 -> "4.1 Jelly Bean"
+            18 -> "4.3 Jelly Bean"
+            20 -> "4.4 KitKat"
             21 -> "5.0 Lollipop"
             23 -> "6.0 Marshmallow"
             24 -> "7.0 Nougat"
@@ -140,17 +145,54 @@ data class SupportedFeatures(
         val sdk = Build.VERSION.SDK_INT
         return listOf(
             ApiFeatureGroup(
+                apiLevel = 4,
+                androidVersion = androidVersionName(4),
+                supported = sdk >= 4,
+                features = listOf(
+                    FeatureItem("Toast 擷取", "透過 AccessibilityService 監聽 TYPE_NOTIFICATION_STATE_CHANGED，擷取不經 NotificationManager 的短暫訊息", implemented = false)
+                )
+            ),
+            ApiFeatureGroup(
+                apiLevel = 14,
+                androidVersion = androidVersionName(14),
+                supported = sdk >= 14,
+                features = listOf(
+                    FeatureItem("日曆整合", "透過 CalendarContract 將通知記錄匯出為日曆事件", implemented = true)
+                )
+            ),
+            ApiFeatureGroup(
+                apiLevel = 16,
+                androidVersion = androidVersionName(16),
+                supported = sdk >= 16,
+                features = listOf(
+                    FeatureItem("Priority", "通知優先度（-2 到 2），控制通知顯示位置與排序", implemented = true)
+                )
+            ),
+            ApiFeatureGroup(
+                apiLevel = 18,
+                androidVersion = androidVersionName(18),
+                supported = sdk >= 18,
+                features = listOf(
+                    FeatureItem("通知監聽服務", "NotificationListenerService 擷取系統通知", implemented = true)
+                )
+            ),
+            ApiFeatureGroup(
+                apiLevel = 20,
+                androidVersion = androidVersionName(20),
+                supported = sdk >= 20,
+                features = listOf(
+                    FeatureItem("通知 Key", "系統提供唯一識別 key 追蹤通知生命週期", implemented = true),
+                    FeatureItem("群組與排序", "groupKey 群組折疊、sortKey 群組內排序", implemented = true)
+                )
+            ),
+            ApiFeatureGroup(
                 apiLevel = 21,
                 androidVersion = androidVersionName(21),
                 supported = sdk >= 21,
                 features = listOf(
-                    FeatureItem("通知監聽服務", "NotificationListenerService 擷取系統通知", implemented = true),
-                    FeatureItem("通知 Key", "系統提供唯一識別 key 追蹤通知生命週期", implemented = true),
                     FeatureItem("可見性", "鎖屏顯示策略（PUBLIC / PRIVATE / SECRET）", implemented = true),
                     FeatureItem("分類", "通知類別標記（msg / email / call / alarm 等）", implemented = true),
-                    FeatureItem("群組與排序", "groupKey 群組折疊、sortKey 群組內排序", implemented = true),
                     FeatureItem("視覺屬性", "通知強調色、大小圖示", implemented = true),
-                    FeatureItem("Priority", "通知優先度（-2 到 2），控制顯示位置和 heads-up 行為", implemented = true),
                     FeatureItem("Heads-up 推斷", "依 priority + 音效/振動推斷是否彈出 heads-up", implemented = true)
                 )
             ),

@@ -117,18 +117,6 @@ object PermissionDescriptions {
             rationale = "持續提醒觸發時以全螢幕 Activity 顯示，鎖屏時喚醒螢幕，確保使用者不會錯過提醒。API 34 以前自動授予，API 34+ 需使用者手動授權。",
             deniedImpact = "鎖屏時無法顯示全螢幕提醒，退回一般 heads-up 通知（約 5 秒後自動縮回）。",
             isRequired = false
-        ),
-        // === 未實作（預留） ===
-        PermissionInfo(
-            permission = "android.permission.BIND_ACCESSIBILITY_SERVICE",
-            displayName = "無障礙服務",
-            type = "系統權限",
-            relatedFeature = "Toast 訊息擷取（尚未實作）",
-            rationale = "透過 AccessibilityService 監聽 TYPE_NOTIFICATION_STATE_CHANGED 事件，" +
-                "擷取 Toast 等不經 NotificationManager 的短暫訊息。" +
-                "Toast 不屬於 Notification，NotificationListenerService 無法攔截。",
-            deniedImpact = "無法擷取 Toast 訊息，僅能記錄標準通知。",
-            isRequired = false
         )
     )
 
