@@ -180,11 +180,19 @@ class HomeFragment : Fragment() {
                 }
             }
 
+            val allImplemented = group.features.all { it.implemented }
+            val noneImplemented = group.features.none { it.implemented }
             val statusText = TextView(ctx).apply {
-                text = if (group.supported) "✓" else "✗"
+                text = when {
+                    !group.supported -> "✗"
+                    allImplemented -> "✓"
+                    noneImplemented -> "⊘"
+                    else -> "△"
+                }
                 textSize = 14f
                 setTextColor(ContextCompat.getColor(ctx,
-                    if (group.supported) R.color.status_enabled else R.color.status_disabled))
+                    if (group.supported && allImplemented) R.color.status_enabled
+                    else R.color.status_disabled))
             }
 
             val titleText = TextView(ctx).apply {
@@ -212,7 +220,7 @@ class HomeFragment : Fragment() {
 
             // 各功能項目：名稱 + 描述
             for (feature in group.features) {
-                val prefix = if (!feature.implemented) "⊘ " else ""
+                val prefix = if (!feature.implemented && !noneImplemented) "⊘ " else ""
                 val nameText = TextView(ctx).apply {
                     text = "$prefix${feature.name}"
                     textSize = 13f

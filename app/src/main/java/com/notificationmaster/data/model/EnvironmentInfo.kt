@@ -144,14 +144,14 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(21),
                 supported = sdk >= 21,
                 features = listOf(
-                    FeatureItem("通知監聽服務", "NotificationListenerService 擷取系統通知"),
-                    FeatureItem("通知 Key", "系統提供唯一識別 key 追蹤通知生命週期"),
-                    FeatureItem("可見性", "鎖屏顯示策略（PUBLIC / PRIVATE / SECRET）"),
-                    FeatureItem("分類", "通知類別標記（msg / email / call / alarm 等）"),
-                    FeatureItem("群組與排序", "groupKey 群組折疊、sortKey 群組內排序"),
-                    FeatureItem("視覺屬性", "通知強調色、大小圖示"),
-                    FeatureItem("Priority", "通知優先度（-2 到 2），控制顯示位置和 heads-up 行為"),
-                    FeatureItem("Heads-up 推斷", "依 priority + 音效/振動推斷是否彈出 heads-up")
+                    FeatureItem("通知監聽服務", "NotificationListenerService 擷取系統通知", implemented = true),
+                    FeatureItem("通知 Key", "系統提供唯一識別 key 追蹤通知生命週期", implemented = true),
+                    FeatureItem("可見性", "鎖屏顯示策略（PUBLIC / PRIVATE / SECRET）", implemented = true),
+                    FeatureItem("分類", "通知類別標記（msg / email / call / alarm 等）", implemented = true),
+                    FeatureItem("群組與排序", "groupKey 群組折疊、sortKey 群組內排序", implemented = true),
+                    FeatureItem("視覺屬性", "通知強調色、大小圖示", implemented = true),
+                    FeatureItem("Priority", "通知優先度（-2 到 2），控制顯示位置和 heads-up 行為", implemented = true),
+                    FeatureItem("Heads-up 推斷", "依 priority + 音效/振動推斷是否彈出 heads-up", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -159,7 +159,7 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(23),
                 supported = sdk >= 23,
                 features = listOf(
-                    FeatureItem("Icon 類別", "使用 Icon 類別提取高品質通知小圖示")
+                    FeatureItem("Icon 類別", "使用 Icon 類別提取高品質通知小圖示", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -167,11 +167,11 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(24),
                 supported = sdk >= 24,
                 features = listOf(
-                    FeatureItem("直接回覆", "記錄通知的 RemoteInput 直接回覆動作"),
-                    FeatureItem("MessagingStyle", "提取訊息通知的對話內容、sender 和媒體附件"),
-                    FeatureItem("Ranking", "記錄 rank / importance / isAmbient / suppressedVisualEffects"),
-                    FeatureItem("倒數計時器", "chronometerCountDown 支援倒數模式"),
-                    FeatureItem("服務重新綁定", "支援主動重新連接通知監聽服務")
+                    FeatureItem("直接回覆", "記錄通知的 RemoteInput 直接回覆動作", implemented = true),
+                    FeatureItem("MessagingStyle", "提取訊息通知的對話內容、sender 和媒體附件", implemented = true),
+                    FeatureItem("Ranking", "記錄 rank / importance / isAmbient / suppressedVisualEffects", implemented = true),
+                    FeatureItem("倒數計時器", "chronometerCountDown 支援倒數模式", implemented = true),
+                    FeatureItem("服務重新綁定", "支援主動重新連接通知監聽服務", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -179,7 +179,7 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(25),
                 supported = sdk >= 25,
                 features = listOf(
-                    FeatureItem("App Shortcut", "長按 App 圖示顯示快捷選單（如「最近發聲」）")
+                    FeatureItem("App Shortcut", "長按 App 圖示顯示快捷選單（如「最近發聲」）", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -187,13 +187,13 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(26),
                 supported = sdk >= 26,
                 features = listOf(
-                    FeatureItem("通知頻道", "記錄頻道 ID、名稱、重要性等分類資訊"),
-                    FeatureItem("頻道群組", "NotificationChannelGroup 支援頻道分組管理"),
-                    FeatureItem("Importance 取代 Priority", "Channel importance（0-5）取代 priority（-2 到 2），兩者可並存"),
-                    FeatureItem("通知屬性擴充", "shortcutId、badgeIconType、timeoutAfter、settingsText"),
-                    FeatureItem("Ranking 擴充", "overrideGroupKey"),
-                    FeatureItem("Heads-up 推斷（importance）", "Channel importance ≥ HIGH 推斷 heads-up"),
-                    FeatureItem("發聲推斷（importance）", "Channel importance ≥ DEFAULT 推斷可感知提示")
+                    FeatureItem("通知頻道", "記錄頻道 ID、名稱、重要性等分類資訊", implemented = true),
+                    FeatureItem("頻道群組", "NotificationChannelGroup 支援頻道分組管理", implemented = true),
+                    FeatureItem("Importance 取代 Priority", "Channel importance（0-5）取代 priority（-2 到 2），兩者可並存", implemented = true),
+                    FeatureItem("通知屬性擴充", "shortcutId、badgeIconType、timeoutAfter、settingsText", implemented = true),
+                    FeatureItem("Ranking 擴充", "overrideGroupKey", implemented = true),
+                    FeatureItem("Heads-up 推斷（importance）", "Channel importance ≥ HIGH 推斷 heads-up", implemented = true),
+                    FeatureItem("發聲推斷（importance）", "Channel importance ≥ DEFAULT 推斷可感知提示", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -201,12 +201,12 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(28),
                 supported = sdk >= 28,
                 features = listOf(
-                    FeatureItem("語意動作", "識別動作按鈕類型（回覆、刪除、封存等）"),
-                    FeatureItem("Person 資訊", "提取通知中的人物名稱和頭像圖片"),
-                    FeatureItem("isGroupConversation", "識別群組對話通知"),
-                    FeatureItem("Ranking Channel 物件", "ranking.channel 可存取完整頻道物件（API 26-27 由 NotificationManager 取得）"),
-                    FeatureItem("Ranking 擴充", "canShowBadge、isSuspended 等狀態欄位"),
-                    FeatureItem("App 暫停狀態", "記錄 App 是否被系統暫停（家長控制、企業管理）")
+                    FeatureItem("語意動作", "識別動作按鈕類型（回覆、刪除、封存等）", implemented = true),
+                    FeatureItem("Person 資訊", "提取通知中的人物名稱和頭像圖片", implemented = true),
+                    FeatureItem("isGroupConversation", "識別群組對話通知", implemented = true),
+                    FeatureItem("Ranking Channel 物件", "ranking.channel 可存取完整頻道物件（API 26-27 由 NotificationManager 取得）", implemented = true),
+                    FeatureItem("Ranking 擴充", "canShowBadge、isSuspended 等狀態欄位", implemented = true),
+                    FeatureItem("App 暫停狀態", "記錄 App 是否被系統暫停（家長控制、企業管理）", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -214,13 +214,13 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(29),
                 supported = sdk >= 29,
                 features = listOf(
-                    FeatureItem("發聲偵測", "lastAudiblyAlertedMillis 精確判斷通知是否產生可感知提示"),
-                    FeatureItem("氣泡通知", "記錄 BubbleMetadata（高度、自動展開等）"),
-                    FeatureItem("Ranking 擴充", "canBubble、smartReplies、smartActions"),
-                    FeatureItem("智慧建議", "記錄系統生成的建議回覆和建議動作"),
-                    FeatureItem("上下文動作", "Action.isContextual 識別情境相關動作按鈕"),
-                    FeatureItem("LocusId", "通知與 App 內容的關聯識別"),
-                    FeatureItem("網路類型偵測", "裝置狀態記錄 Wi-Fi / 行動數據等連線類型")
+                    FeatureItem("發聲偵測", "lastAudiblyAlertedMillis 精確判斷通知是否產生可感知提示", implemented = true),
+                    FeatureItem("氣泡通知", "記錄 BubbleMetadata（高度、自動展開等）", implemented = true),
+                    FeatureItem("Ranking 擴充", "canBubble、smartReplies、smartActions", implemented = true),
+                    FeatureItem("智慧建議", "記錄系統生成的建議回覆和建議動作", implemented = true),
+                    FeatureItem("上下文動作", "Action.isContextual 識別情境相關動作按鈕", implemented = true),
+                    FeatureItem("LocusId", "通知與 App 內容的關聯識別", implemented = true),
+                    FeatureItem("網路類型偵測", "裝置狀態記錄 Wi-Fi / 行動數據等連線類型", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -228,8 +228,8 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(30),
                 supported = sdk >= 30,
                 features = listOf(
-                    FeatureItem("氣泡自動展開", "bubbleAutoExpand 控制氣泡出現時是否自動展開"),
-                    FeatureItem("氣泡通知抑制", "isNotificationSuppressed 氣泡顯示時隱藏通知列")
+                    FeatureItem("氣泡自動展開", "bubbleAutoExpand 控制氣泡出現時是否自動展開", implemented = true),
+                    FeatureItem("氣泡通知抑制", "isNotificationSuppressed 氣泡顯示時隱藏通知列", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -237,10 +237,10 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(31),
                 supported = sdk >= 31,
                 features = listOf(
-                    FeatureItem("動作需認證", "Action.isAuthenticationRequired 記錄需要解鎖認證的按鈕"),
-                    FeatureItem("對話通知", "Ranking.isConversation + conversationShortcutInfo 識別對話類型"),
-                    FeatureItem("CallStyle", "通話專用通知 Style（來電/通話中/篩選）"),
-                    FeatureItem("VibratorManager", "取代已棄用的 VIBRATOR_SERVICE")
+                    FeatureItem("動作需認證", "Action.isAuthenticationRequired 記錄需要解鎖認證的按鈕", implemented = true),
+                    FeatureItem("對話通知", "Ranking.isConversation + conversationShortcutInfo 識別對話類型", implemented = true),
+                    FeatureItem("CallStyle", "通話專用通知 Style（來電/通話中/篩選）", implemented = true),
+                    FeatureItem("VibratorManager", "取代已棄用的 VIBRATOR_SERVICE", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -248,7 +248,7 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(33),
                 supported = sdk >= 33,
                 features = listOf(
-                    FeatureItem("POST_NOTIFICATIONS", "App 自身通知需要 runtime 權限授權")
+                    FeatureItem("POST_NOTIFICATIONS", "App 自身通知需要 runtime 權限授權", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -256,7 +256,7 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(34),
                 supported = sdk >= 34,
                 features = listOf(
-                    FeatureItem("PendingIntent 類型", "識別意圖類型（Activity / Service / Broadcast / FgService）")
+                    FeatureItem("PendingIntent 類型", "識別意圖類型（Activity / Service / Broadcast / FgService）", implemented = true)
                 )
             ),
             ApiFeatureGroup(
