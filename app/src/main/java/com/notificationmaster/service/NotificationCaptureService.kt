@@ -686,8 +686,7 @@ class NotificationCaptureService : NotificationListenerService() {
                 channelId = channelId,
                 channelName = notificationChannel?.name?.toString(),
                 description = notificationChannel?.description,
-                importance = notificationChannel?.importance
-                    ?: android.app.NotificationManager.IMPORTANCE_DEFAULT,
+                importance = notificationChannel?.importance ?: -1,
                 groupId = notificationChannel?.group,
                 showBadge = notificationChannel?.canShowBadge() ?: true,
                 canBubble = if (ApiVersionHelper.supportsBubbles()) {
