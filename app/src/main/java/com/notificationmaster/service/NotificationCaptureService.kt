@@ -677,6 +677,12 @@ class NotificationCaptureService : NotificationListenerService() {
     ) {
         if (!ApiVersionHelper.supportsNotificationChannel()) return
 
+        try {
+            java.io.File(filesDir, "channel_dump.log").appendText(
+                "${java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())} ${notificationChannel ?: "null"}\n"
+            )
+        } catch (_: Exception) { }
+
         val existing = database.channelDao().getByPackageAndChannelId(packageName, channelId)
 
         if (existing != null) {
@@ -700,6 +706,8 @@ class NotificationCaptureService : NotificationListenerService() {
                     isBlocked = notificationChannel.importance == android.app.NotificationManager.IMPORTANCE_NONE,
                     updateTime = captureTime
                 )
+                // 回填 NotificationEntity.importance（補 importance < 0 的記錄）
+                database.notificationDao().backfillImportance(packageName, channelId, notificationChannel.importance)
             } else {
                 // Channel 資訊不可用時僅遞增計數
                 database.channelDao().incrementNotificationCount(packageName, channelId, captureTime)
@@ -733,6 +741,10 @@ class NotificationCaptureService : NotificationListenerService() {
                 notificationCount = 1
             )
             database.channelDao().insert(channelEntity)
+            // 新增 Channel 時也回填
+            if (notificationChannel != null) {
+                database.notificationDao().backfillImportance(packageName, channelId, notificationChannel.importance)
+            }
         }
     }
 

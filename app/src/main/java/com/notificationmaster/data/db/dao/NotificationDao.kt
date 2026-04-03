@@ -33,6 +33,15 @@ interface NotificationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(notifications: List<NotificationEntity>): List<Long>
 
+    // === 更新 ===
+
+    /** Channel 資料取得後回填 importance（只補 importance < 0 的記錄） */
+    @Query("""
+        UPDATE notifications SET importance = :importance
+        WHERE package_name = :packageName AND channel_id = :channelId AND importance < 0
+    """)
+    suspend fun backfillImportance(packageName: String, channelId: String, importance: Int)
+
     // === 查詢 - 全部 ===
 
     @Query("SELECT * FROM notifications ORDER BY post_time DESC")

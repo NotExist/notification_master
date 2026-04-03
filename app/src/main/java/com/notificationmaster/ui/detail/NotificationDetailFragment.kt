@@ -421,13 +421,15 @@ class NotificationDetailFragment : Fragment() {
                 ?: getString(R.string.label_channel_name_unknown)
             binding.labelChannelName.setOnClickListener { showDescDialog(R.string.label_channel_name, R.string.desc_channel_name) }
 
-            // importance
-            if (notification.importance >= 0) {
-                val importanceName = when (notification.importance) {
+            // importance（優先 ChannelEntity，fallback NotificationEntity）
+            val effectiveImportance = channelEntity?.importance?.takeIf { it >= 0 }
+                ?: notification.importance.takeIf { it >= 0 }
+            if (effectiveImportance != null) {
+                val importanceName = when (effectiveImportance) {
                     0 -> "NONE"; 1 -> "MIN"; 2 -> "LOW"; 3 -> "DEFAULT"; 4 -> "HIGH"; 5 -> "MAX"
-                    else -> notification.importance.toString()
+                    else -> effectiveImportance.toString()
                 }
-                binding.textImportance.text = "$importanceName (${notification.importance})"
+                binding.textImportance.text = "$importanceName ($effectiveImportance)"
             } else {
                 binding.textImportance.text = getString(R.string.label_channel_name_unknown)
             }
