@@ -188,8 +188,7 @@ class NotificationCaptureService : NotificationListenerService() {
             } catch (_: Exception) { emptyList() }
             val rankingMap = try { getCurrentRanking() } catch (_: Exception) { null }
             if (rankingMap != null) {
-                // Dump 完整 RankingMap
-                dumpRankingMap(rankingMap)
+                dumpRankingMap(rankingMap, "force_refresh")
                 if (notifications.isNotEmpty()) {
                     forceRefreshAllChannels(notifications, rankingMap)
                     Log.i(TAG, "forceRefreshChannels: processed ${notifications.size} notifications")
@@ -521,6 +520,7 @@ class NotificationCaptureService : NotificationListenerService() {
      * 處理 Ranking 更新
      */
     private suspend fun processRankingUpdate(rankingMap: RankingMap) {
+        dumpRankingMap(rankingMap, "ranking_update")
         // Ranking 詳細資訊（rank, importance, isAmbient）需要 API 24+
         if (!ApiVersionHelper.supportsDirectReply()) return  // Ranking 需要 API 24+
 
@@ -705,12 +705,13 @@ class NotificationCaptureService : NotificationListenerService() {
     /**
      * Dump 完整 RankingMap 到外部目錄（debug 用）
      */
-    private fun dumpRankingMap(rankingMap: RankingMap) {
+    private fun dumpRankingMap(rankingMap: RankingMap, source: String) {
         try {
             val dumpDir = java.io.File(getExternalFilesDir(null) ?: filesDir, "channel_dump").apply { mkdirs() }
             val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
             val sb = StringBuilder()
             val keys = rankingMap.orderedKeys
+            sb.appendLine("source=$source")
             sb.appendLine("RankingMap: ${keys.size} entries")
             sb.appendLine()
             for (key in keys) {
@@ -724,7 +725,7 @@ class NotificationCaptureService : NotificationListenerService() {
                 }
                 sb.appendLine()
             }
-            java.io.File(dumpDir, "rankingmap_$ts.txt").writeText(sb.toString())
+            java.io.File(dumpDir, "${source}_$ts.txt").writeText(sb.toString())
         } catch (_: Exception) { }
     }
 
