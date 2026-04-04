@@ -236,16 +236,14 @@ class NotificationCaptureService : NotificationListenerService() {
         rankingMap: RankingMap,
         captureTime: Long
     ) {
-        val channelId = if (Build.VERSION.SDK_INT >= 26) sbn.notification.channelId else return
-        if (channelId == null) return
+        if (Build.VERSION.SDK_INT < 26) return
+        val channelId = sbn.notification.channelId ?: return
         val existing = database.channelDao().getByPackageAndChannelId(sbn.packageName, channelId)
         if (existing == null || existing.channelName != null) return
 
         val ranking = Ranking()
         if (rankingMap.getRanking(ApiVersionHelper.getNotificationKey(sbn), ranking)) {
-            ranking.channel?.let { channel ->
-                updateChannel(sbn.packageName, channelId, captureTime, channel)
-            }
+            ranking.channel?.let { updateChannel(sbn.packageName, channelId, captureTime, it) }
         }
     }
 
@@ -257,16 +255,14 @@ class NotificationCaptureService : NotificationListenerService() {
         notifications: List<StatusBarNotification>,
         rankingMap: RankingMap
     ) {
+        if (Build.VERSION.SDK_INT < 26) return
         val captureTime = System.currentTimeMillis()
         for (sbn in notifications) {
-            val channelId = if (Build.VERSION.SDK_INT >= 26) sbn.notification.channelId else continue
-            if (channelId == null) continue
+            val channelId = sbn.notification.channelId ?: continue
 
             val ranking = Ranking()
             if (rankingMap.getRanking(ApiVersionHelper.getNotificationKey(sbn), ranking)) {
-                ranking.channel?.let { channel ->
-                    updateChannel(sbn.packageName, channelId, captureTime, channel)
-                }
+                ranking.channel?.let { updateChannel(sbn.packageName, channelId, captureTime, it) }
             }
         }
     }
