@@ -178,6 +178,23 @@ class NotificationCaptureService : NotificationListenerService() {
     }
 
     /**
+     * 強制以當前 RankingMap 更新所有活躍通知的 Channel 資料（debug 用）
+     */
+    fun forceRefreshChannels() {
+        if (!isConnected) return
+        serviceScope.launch {
+            val notifications = try {
+                (activeNotifications ?: emptyArray()).toList()
+            } catch (_: Exception) { emptyList() }
+            val rankingMap = try { getCurrentRanking() } catch (_: Exception) { null }
+            if (notifications.isNotEmpty() && rankingMap != null) {
+                forceRefreshAllChannels(notifications, rankingMap)
+                Log.i(TAG, "forceRefreshChannels: processed ${notifications.size} notifications")
+            }
+        }
+    }
+
+    /**
      * 共用的 INITIAL 事件處理（冪等）
      *
      * 以 existsByKey 檢查跳過已存在的記錄，避免 process 恢復或手動備援時重複寫入。
@@ -228,6 +245,28 @@ class NotificationCaptureService : NotificationListenerService() {
         if (rankingMap.getRanking(ApiVersionHelper.getNotificationKey(sbn), ranking)) {
             ranking.channel?.let { channel ->
                 updateChannel(sbn.packageName, channelId, captureTime, channel)
+            }
+        }
+    }
+
+    /**
+     * 無條件以 RankingMap 更新所有活躍通知的 channel 資料（備用）
+     * COALESCE SQL 保護已有值不被 null 覆蓋。
+     */
+    private suspend fun forceRefreshAllChannels(
+        notifications: List<StatusBarNotification>,
+        rankingMap: RankingMap
+    ) {
+        val captureTime = System.currentTimeMillis()
+        for (sbn in notifications) {
+            val channelId = if (Build.VERSION.SDK_INT >= 26) sbn.notification.channelId else continue
+            if (channelId == null) continue
+
+            val ranking = Ranking()
+            if (rankingMap.getRanking(ApiVersionHelper.getNotificationKey(sbn), ranking)) {
+                ranking.channel?.let { channel ->
+                    updateChannel(sbn.packageName, channelId, captureTime, channel)
+                }
             }
         }
     }
@@ -678,9 +717,9 @@ class NotificationCaptureService : NotificationListenerService() {
         if (!ApiVersionHelper.supportsNotificationChannel()) return
 
         try {
-            java.io.File(filesDir, "channel_dump.log").appendText(
-                "${java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())} ${notificationChannel ?: "null"}\n"
-            )
+            val dumpDir = java.io.File(getExternalFilesDir(null) ?: filesDir, "channel_dump").apply { mkdirs() }
+            val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
+            java.io.File(dumpDir, "$ts.txt").writeText("${notificationChannel ?: "null"}\n")
         } catch (_: Exception) { }
 
         val existing = database.channelDao().getByPackageAndChannelId(packageName, channelId)

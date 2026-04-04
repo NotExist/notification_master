@@ -590,6 +590,14 @@
                     android:text="@string/settings_debug_test_alert"
                     style="@style/Widget.Material3.Button.OutlinedButton" />
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_refresh_channels"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/settings_debug_refresh_channels"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+
                 <!-- 簽章資訊（僅 debug build 顯示） -->
                 <TextView
                     android:id="@+id/text_signing_info"

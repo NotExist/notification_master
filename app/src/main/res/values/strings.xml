@@ -27,6 +27,7 @@
     <string name="settings_debug_mode_summary">將原始通知資料 dump 到外部儲存</string>
     <string name="settings_debug_clear">清除 Debug 資料</string>
     <string name="settings_debug_test_alert">測試持續提醒（10 秒後）</string>
+    <string name="settings_debug_refresh_channels">強制更新所有 Channel</string>
     <string name="settings_debug_test_alert_scheduled">持續提醒將在 10 秒後觸發</string>
     <string name="settings_calendar_integration">日曆整合</string>
     <string name="settings_export_ical">匯出到指定日曆</string>

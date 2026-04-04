@@ -32,6 +32,7 @@ import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.databinding.FragmentSettingsBinding
 import com.notificationmaster.debug.DebugDumper
+import com.notificationmaster.service.NotificationCaptureService
 import com.notificationmaster.service.NlsKeepaliveService
 import com.notificationmaster.export.archive.ArchiveExporter
 import com.notificationmaster.export.archive.ArchiveImporter
@@ -334,6 +335,16 @@ class SettingsFragment : Fragment() {
                 )
                 com.notificationmaster.core.alert.PersistentAlertService.start(requireContext(), data)
             }, 10_000L)
+        }
+
+        binding.btnRefreshChannels.setOnClickListener {
+            val service = NotificationCaptureService.getInstance()
+            if (service != null && NotificationCaptureService.isConnected) {
+                service.forceRefreshChannels()
+                Toast.makeText(requireContext(), "Channel 更新已觸發", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(requireContext(), "服務未連線", Toast.LENGTH_SHORT).show()
+            }
         }
 
         displaySigningInfo()
