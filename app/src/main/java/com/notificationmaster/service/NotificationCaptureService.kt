@@ -187,9 +187,13 @@ class NotificationCaptureService : NotificationListenerService() {
                 (activeNotifications ?: emptyArray()).toList()
             } catch (_: Exception) { emptyList() }
             val rankingMap = try { getCurrentRanking() } catch (_: Exception) { null }
-            if (notifications.isNotEmpty() && rankingMap != null) {
-                forceRefreshAllChannels(notifications, rankingMap)
-                Log.i(TAG, "forceRefreshChannels: processed ${notifications.size} notifications")
+            if (rankingMap != null) {
+                // Dump 完整 RankingMap
+                dumpRankingMap(rankingMap)
+                if (notifications.isNotEmpty()) {
+                    forceRefreshAllChannels(notifications, rankingMap)
+                    Log.i(TAG, "forceRefreshChannels: processed ${notifications.size} notifications")
+                }
             }
         }
     }
@@ -699,10 +703,35 @@ class NotificationCaptureService : NotificationListenerService() {
     }
 
     /**
+     * Dump 完整 RankingMap 到外部目錄（debug 用）
+     */
+    private fun dumpRankingMap(rankingMap: RankingMap) {
+        try {
+            val dumpDir = java.io.File(getExternalFilesDir(null) ?: filesDir, "channel_dump").apply { mkdirs() }
+            val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
+            val sb = StringBuilder()
+            val keys = rankingMap.orderedKeys
+            sb.appendLine("RankingMap: ${keys.size} entries")
+            sb.appendLine()
+            for (key in keys) {
+                val ranking = Ranking()
+                val ok = rankingMap.getRanking(key, ranking)
+                sb.appendLine("key=$key")
+                sb.appendLine("  getRanking=$ok")
+                if (ok && Build.VERSION.SDK_INT >= 26) {
+                    sb.appendLine("  channel=${ranking.channel}")
+                    sb.appendLine("  importance=${ranking.importance}")
+                }
+                sb.appendLine()
+            }
+            java.io.File(dumpDir, "rankingmap_$ts.txt").writeText(sb.toString())
+        } catch (_: Exception) { }
+    }
+
+    /**
      * 更新 Channel 記錄 (API 26+)
      *
-     * @param notificationChannel 從 Ranking.getChannel()（API 28+）或
-     *                            來源 App 的 NotificationManager.getNotificationChannel()（API 26+ fallback）取得
+     * @param notificationChannel 從 Ranking.getChannel()（API 26+）取得
      */
     private suspend fun updateChannel(
         packageName: String,
