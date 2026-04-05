@@ -132,6 +132,9 @@ class NotificationCaptureService : NotificationListenerService() {
         val snapshot = try { activeNotifications?.toList() ?: emptyList() } catch (_: Exception) { emptyList() }
         val rankingSnapshot = try { getCurrentRanking() } catch (_: Exception) { null }
 
+        // RankingMap dump
+        rankingSnapshot?.let { dumpRankingMap(it, "listener_connected") }
+
         // Debug dump
         debugDumper.dumpActiveNotifications(snapshot.toTypedArray(), rankingSnapshot)
 
@@ -741,12 +744,6 @@ class NotificationCaptureService : NotificationListenerService() {
         notificationChannel: android.app.NotificationChannel? = null
     ) {
         if (!ApiVersionHelper.supportsNotificationChannel()) return
-
-        try {
-            val dumpDir = java.io.File(getExternalFilesDir(null) ?: filesDir, "channel_dump").apply { mkdirs() }
-            val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
-            java.io.File(dumpDir, "$ts.txt").writeText("${notificationChannel ?: "null"}\n")
-        } catch (_: Exception) { }
 
         val existing = database.channelDao().getByPackageAndChannelId(packageName, channelId)
 
