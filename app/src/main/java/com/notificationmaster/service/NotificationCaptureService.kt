@@ -205,6 +205,7 @@ class NotificationCaptureService : NotificationListenerService() {
             if (notifications.isEmpty()) return@launch
 
             val rankingMap = try { getCurrentRanking() } catch (_: Exception) { null }
+            rankingMap?.let { dumpRankingMap(it, "capture_active") }
             processInitialNotifications(notifications, rankingMap, "captureActiveNotifications")
         }
     }
@@ -304,6 +305,7 @@ class NotificationCaptureService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) {
         Log.d(TAG, "Notification posted: ${sbn.packageName} - ${ApiVersionHelper.getNotificationKey(sbn)}")
+        rankingMap?.let { dumpRankingMap(it, "posted") }
         debugDumper.dumpEvent(sbn, "POSTED", rankingMap)
 
         serviceScope.launch {
@@ -326,6 +328,7 @@ class NotificationCaptureService : NotificationListenerService() {
         reason: Int
     ) {
         Log.d(TAG, "Notification removed: ${sbn.packageName} - reason: $reason (${ApiVersionHelper.categorizeRemovalReason(reason)})")
+        rankingMap?.let { dumpRankingMap(it, "removed") }
         debugDumper.dumpEvent(sbn, "REMOVED", rankingMap, removalReason = reason)
 
         // 取消待處理的延遲清除排程（通知已被移除，無需再清除）
