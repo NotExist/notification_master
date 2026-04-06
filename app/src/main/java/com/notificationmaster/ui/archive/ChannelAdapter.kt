@@ -10,6 +10,7 @@ import com.notificationmaster.R
 import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.data.db.entity.ChannelEntity
 import com.notificationmaster.databinding.ItemChannelBinding
+import com.notificationmaster.service.NotificationCaptureService
 import java.text.NumberFormat
 
 /**
@@ -64,9 +65,12 @@ class ChannelAdapter(
         fun bind(item: ChannelEntity) {
             val context = binding.root.context
 
-            // Line 1: channelName (description)，channelName 缺失時顯示「未設定」
+            // Line 1: channelName (description)，channelName 缺失時區分 RankingMap 狀態
             binding.textChannelName.text = when {
-                item.channelName == null -> context.getString(R.string.channel_name_unset)
+                item.channelName == null && !NotificationCaptureService.isRankingMapPopulated ->
+                    context.getString(R.string.channel_name_pending)
+                item.channelName == null ->
+                    context.getString(R.string.channel_name_unset)
                 item.description.isNullOrEmpty() -> item.channelName
                 else -> "${item.channelName} (${item.description})"
             }

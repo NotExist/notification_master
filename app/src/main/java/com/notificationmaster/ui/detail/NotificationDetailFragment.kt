@@ -42,6 +42,7 @@ import com.notificationmaster.data.db.entity.DeviceStateEntity
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.SemanticAction
 import com.notificationmaster.data.db.entity.NotificationEventEntity
+import com.notificationmaster.service.NotificationCaptureService
 import com.notificationmaster.databinding.FragmentNotificationDetailBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -418,7 +419,8 @@ class NotificationDetailFragment : Fragment() {
             binding.textChannel.text = notification.channelId
             binding.labelChannelId.setOnClickListener { showDescDialog(R.string.label_channel, R.string.desc_channel_id) }
             binding.textChannelName.text = channelEntity?.channelName
-                ?: getString(R.string.label_channel_name_unknown)
+                ?: if (!NotificationCaptureService.isRankingMapPopulated) getString(R.string.channel_name_pending)
+                else getString(R.string.label_channel_name_unknown)
             binding.labelChannelName.setOnClickListener { showDescDialog(R.string.label_channel_name, R.string.desc_channel_name) }
 
             // importance（優先 ChannelEntity，fallback NotificationEntity）
@@ -431,7 +433,8 @@ class NotificationDetailFragment : Fragment() {
                 }
                 binding.textImportance.text = "$importanceName ($effectiveImportance)"
             } else {
-                binding.textImportance.text = getString(R.string.label_channel_name_unknown)
+                binding.textImportance.text = if (!NotificationCaptureService.isRankingMapPopulated)
+                    getString(R.string.channel_name_pending) else getString(R.string.label_channel_name_unknown)
             }
             binding.labelImportance.setOnClickListener { showDescDialog(R.string.label_importance, R.string.desc_importance) }
 
