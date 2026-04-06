@@ -67,14 +67,14 @@ class NlsKeepaliveService : Service() {
 
     companion object {
         private const val TAG = "NlsKeepaliveService"
-        const val CHANNEL_ID = "nls_keepalive"
+        const val CHANNEL_ID = "workaround"
         private const val NOTIFICATION_ID = 900_001
 
         fun createNotificationChannel(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = NotificationChannel(
                     CHANNEL_ID,
-                    context.getString(R.string.keepalive_channel_name),
+                    context.getString(R.string.workaround_channel_name),
                     NotificationManager.IMPORTANCE_LOW
                 ).apply {
                     setShowBadge(false)

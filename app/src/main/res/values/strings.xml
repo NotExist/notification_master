@@ -27,7 +27,7 @@
     <string name="settings_debug_mode_summary">將原始通知資料 dump 到外部儲存</string>
     <string name="settings_debug_clear">清除 Debug 資料</string>
     <string name="settings_debug_test_alert">測試持續提醒（10 秒後）</string>
-    <string name="settings_debug_refresh_channels">強制更新所有 Channel</string>
+    <string name="settings_debug_update_ranking_map">更新 RankingMap</string>
     <string name="settings_debug_test_alert_scheduled">持續提醒將在 10 秒後觸發</string>
     <string name="settings_calendar_integration">日曆整合</string>
     <string name="settings_export_ical">匯出到指定日曆</string>
@@ -401,6 +401,7 @@
 
     <!-- Channel -->
     <string name="channel_name_unset">Channel Name 未設定</string>
+    <string name="channel_name_pending">（待更新）</string>
 
     <!-- 通知權限 -->
     <string name="permission_post_notifications_title">需要通知權限</string>
@@ -436,7 +437,13 @@
     <!-- 服務保活 -->
     <string name="settings_keepalive_title">服務保活</string>
     <string name="settings_keepalive_summary">以前景服務加強維護監聽服務的運作</string>
-    <string name="settings_keepalive_detail">啟用後會常駐一則低優先度通知，用以維持前景服務運作，降低監聽服務被系統回收的機率。\n\n如不想看到該通知，可在系統通知設定中關閉「服務保活」頻道的顯示，不影響保活效果。</string>
-    <string name="keepalive_channel_name">服務保活</string>
+    <string name="settings_keepalive_detail">啟用後會常駐一則低優先度通知，用以維持前景服務運作，降低監聽服務被系統回收的機率。\n\n如不想看到該通知，可在系統通知設定中關閉「Workaround」頻道的顯示，不影響保活效果。</string>
+    <string name="workaround_channel_name">Workaround</string>
     <string name="keepalive_notification_text">通知監聽服務運作中</string>
+    <string name="ranking_trigger_notification_text">觸發 RankingMap 更新</string>
+
+    <!-- RankingMap 狀態說明 -->
+    <string name="ranking_map_warning_title">RankingMap 尚未填充</string>
+    <string name="ranking_map_warning_banner">部分資訊尚未取得，點擊查看詳情</string>
+    <string name="ranking_map_warning_detail">部分通知資訊仰賴系統的 RankingMap 才能取得，包括：\n\n• Channel 名稱與群組\n• Channel Importance\n• Ranking 快照（rank、isAmbient 等）\n\n系統尚未推送 RankingMap，這些欄位暫時為空。\n\n解決方式：\n• 開啟「服務保活」（推薦）\n• 等待任意新通知到來\n• 使用 Debug 區的「更新 RankingMap」按鈕手動觸發</string>
 </resources>
