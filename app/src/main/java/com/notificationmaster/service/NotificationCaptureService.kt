@@ -102,6 +102,35 @@ class NotificationCaptureService : NotificationListenerService() {
         alertManager = PersistentAlertManager(this)
         RuleRepository.load(this)
         instance = this
+
+        // RankingMap 探針：從 onCreate 開始，每 5 秒檢查快取狀態，有資料後停止
+        serviceScope.launch {
+            val createTime = System.currentTimeMillis()
+            var i = 0
+            while (true) {
+                kotlinx.coroutines.delay(5_000)
+                i++
+                val elapsed = System.currentTimeMillis() - createTime
+                val probeMap = try { getCurrentRanking() } catch (_: Exception) { null }
+                val entries = probeMap?.orderedKeys?.size ?: -1
+                val connected = isConnected
+                val status = when {
+                    probeMap == null -> "null"
+                    entries == 0 -> "0 entries"
+                    else -> "$entries entries"
+                }
+                Log.d(TAG, "RankingMap probe #$i: ${elapsed}ms, connected=$connected, $status")
+                if (probeMap != null && entries > 0) {
+                    dumpRankingMap(probeMap, "probe_${elapsed}ms")
+                    break
+                } else {
+                    val dumpDir = java.io.File(getExternalFilesDir(null) ?: filesDir, "channel_dump").apply { mkdirs() }
+                    val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
+                    java.io.File(dumpDir, "probe_${elapsed}ms_$ts.txt")
+                        .writeText("source=probe #$i\nelapsed=${elapsed}ms\nisConnected=$connected\ngetCurrentRanking()=$status\n")
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
