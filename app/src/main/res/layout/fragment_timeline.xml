@@ -99,27 +99,74 @@
 
     </com.google.android.material.appbar.AppBarLayout>
 
-    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        android:id="@+id/swipe_refresh"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:orientation="vertical"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recycler_view"
+        <!-- RankingMap 未填充警告橫幅 -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/banner_ranking_warning"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:clipToPadding="false"
-            android:paddingVertical="4dp"
-            app:fastScrollEnabled="true"
-            app:fastScrollVerticalThumbDrawable="@drawable/fastscroll_thumb"
-            app:fastScrollVerticalTrackDrawable="@drawable/fastscroll_track"
-            app:fastScrollHorizontalThumbDrawable="@drawable/fastscroll_thumb"
-            app:fastScrollHorizontalTrackDrawable="@drawable/fastscroll_track"
-            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-            tools:listitem="@layout/item_timeline_notification" />
+            android:layout_height="wrap_content"
+            android:layout_margin="8dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="@android:color/transparent"
+            app:strokeColor="@color/status_warning"
+            app:strokeWidth="1dp"
+            tools:visibility="visible">
 
-    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="12dp">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="8dp"
+                    android:src="@drawable/ic_info_outline"
+                    app:tint="@color/status_warning"
+                    android:importantForAccessibility="no" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/ranking_map_warning_banner"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="@color/status_warning" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/swipe_refresh"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recycler_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingVertical="4dp"
+                app:fastScrollEnabled="true"
+                app:fastScrollVerticalThumbDrawable="@drawable/fastscroll_thumb"
+                app:fastScrollVerticalTrackDrawable="@drawable/fastscroll_track"
+                app:fastScrollHorizontalThumbDrawable="@drawable/fastscroll_thumb"
+                app:fastScrollHorizontalTrackDrawable="@drawable/fastscroll_track"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                tools:listitem="@layout/item_timeline_notification" />
+
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+    </LinearLayout>
 
     <!-- 時間索引氣泡 -->
     <TextView
