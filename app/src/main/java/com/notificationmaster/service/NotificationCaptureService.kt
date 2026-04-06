@@ -73,9 +73,15 @@ class NotificationCaptureService : NotificationListenerService() {
 
     companion object {
         private const val TAG = "NotificationCapture"
+        private const val RANKING_TRIGGER_NOTIFICATION_ID = 900_002
 
         @Volatile
         var isConnected = false
+            private set
+
+        /** RankingMap 是否已被填充（至少收到一次非空 RankingMap） */
+        @Volatile
+        var isRankingMapPopulated = false
             private set
 
         // 用於 UI 層查詢服務狀態
@@ -103,31 +109,33 @@ class NotificationCaptureService : NotificationListenerService() {
         RuleRepository.load(this)
         instance = this
 
-        // RankingMap 探針：從 onCreate 開始，每 5 秒檢查快取狀態，有資料後停止
-        serviceScope.launch {
-            val createTime = System.currentTimeMillis()
-            var i = 0
-            while (true) {
-                kotlinx.coroutines.delay(5_000)
-                i++
-                val elapsed = System.currentTimeMillis() - createTime
-                val probeMap = try { getCurrentRanking() } catch (_: Exception) { null }
-                val entries = probeMap?.orderedKeys?.size ?: -1
-                val connected = isConnected
-                val status = when {
-                    probeMap == null -> "null"
-                    entries == 0 -> "0 entries"
-                    else -> "$entries entries"
-                }
-                Log.d(TAG, "RankingMap probe #$i: ${elapsed}ms, connected=$connected, $status")
-                if (probeMap != null && entries > 0) {
-                    dumpRankingMap(probeMap, "probe_${elapsed}ms")
-                    break
-                } else {
-                    val dumpDir = java.io.File(getExternalFilesDir(null) ?: filesDir, "channel_dump").apply { mkdirs() }
-                    val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
-                    java.io.File(dumpDir, "probe_${elapsed}ms_$ts.txt")
-                        .writeText("source=probe #$i\nelapsed=${elapsed}ms\nisConnected=$connected\ngetCurrentRanking()=$status\n")
+        // RankingMap 探針（debug 模式限定）
+        if (debugDumper.isEnabled) {
+            serviceScope.launch {
+                val createTime = System.currentTimeMillis()
+                var i = 0
+                while (true) {
+                    kotlinx.coroutines.delay(5_000)
+                    i++
+                    val elapsed = System.currentTimeMillis() - createTime
+                    val probeMap = try { getCurrentRanking() } catch (_: Exception) { null }
+                    val entries = probeMap?.orderedKeys?.size ?: -1
+                    val connected = isConnected
+                    val status = when {
+                        probeMap == null -> "null"
+                        entries == 0 -> "0 entries"
+                        else -> "$entries entries"
+                    }
+                    Log.d(TAG, "RankingMap probe #$i: ${elapsed}ms, connected=$connected, $status")
+                    if (probeMap != null && entries > 0) {
+                        dumpRankingMap(probeMap, "probe_${elapsed}ms")
+                        break
+                    } else {
+                        val dumpDir = java.io.File(getExternalFilesDir(null) ?: filesDir, "channel_dump").apply { mkdirs() }
+                        val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
+                        java.io.File(dumpDir, "probe_${elapsed}ms_$ts.txt")
+                            .writeText("source=probe #$i\nelapsed=${elapsed}ms\nisConnected=$connected\ngetCurrentRanking()=$status\n")
+                    }
                 }
             }
         }
@@ -161,7 +169,11 @@ class NotificationCaptureService : NotificationListenerService() {
         val snapshot = try { activeNotifications?.toList() ?: emptyList() } catch (_: Exception) { emptyList() }
         val rankingSnapshot = try { getCurrentRanking() } catch (_: Exception) { null }
 
-        // RankingMap dump
+        // RankingMap 狀態檢查
+        if (!isRankingMapPopulated && rankingSnapshot?.orderedKeys?.isNotEmpty() == true) {
+            isRankingMapPopulated = true
+            Log.i(TAG, "RankingMap populated (via onListenerConnected)")
+        }
         rankingSnapshot?.let { dumpRankingMap(it, "listener_connected") }
 
         // Debug dump
@@ -184,6 +196,7 @@ class NotificationCaptureService : NotificationListenerService() {
         Log.w(TAG, "Listener disconnected")
         PendingIntentCache.clear()
         isConnected = false
+        isRankingMapPopulated = false
     }
 
     /**
@@ -211,23 +224,20 @@ class NotificationCaptureService : NotificationListenerService() {
     }
 
     /**
-     * 強制以當前 RankingMap 更新所有活躍通知的 Channel 資料（debug 用）
+     * 透過發送自身通知觸發 POSTED callback，使系統填充 mRankingMap。
+     * 用於 OEM 裝置在 onListenerConnected 時未提供 RankingMap 的 workaround。
      */
-    fun forceRefreshChannels() {
-        if (!isConnected) return
-        serviceScope.launch {
-            val notifications = try {
-                (activeNotifications ?: emptyArray()).toList()
-            } catch (_: Exception) { emptyList() }
-            val rankingMap = try { getCurrentRanking() } catch (_: Exception) { null }
-            if (rankingMap != null) {
-                dumpRankingMap(rankingMap, "force_refresh")
-                if (notifications.isNotEmpty()) {
-                    forceRefreshAllChannels(notifications, rankingMap)
-                    Log.i(TAG, "forceRefreshChannels: processed ${notifications.size} notifications")
-                }
-            }
-        }
+    fun triggerRankingMapUpdate() {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val notification = androidx.core.app.NotificationCompat.Builder(this, NlsKeepaliveService.CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(getString(R.string.ranking_trigger_notification_text))
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MIN)
+            .setOngoing(false)
+            .build()
+        nm.notify(RANKING_TRIGGER_NOTIFICATION_ID, notification)
+        Log.i(TAG, "triggerRankingMapUpdate: notification sent")
     }
 
     /**
@@ -283,28 +293,12 @@ class NotificationCaptureService : NotificationListenerService() {
         }
     }
 
-    /**
-     * 無條件以 RankingMap 更新所有活躍通知的 channel 資料（備用）
-     * COALESCE SQL 保護已有值不被 null 覆蓋。
-     */
-    private suspend fun forceRefreshAllChannels(
-        notifications: List<StatusBarNotification>,
-        rankingMap: RankingMap
-    ) {
-        if (Build.VERSION.SDK_INT < 26) return
-        val captureTime = System.currentTimeMillis()
-        for (sbn in notifications) {
-            val channelId = sbn.notification.channelId ?: continue
-
-            val ranking = Ranking()
-            if (rankingMap.getRanking(ApiVersionHelper.getNotificationKey(sbn), ranking)) {
-                ranking.channel?.let { updateChannel(sbn.packageName, channelId, captureTime, it) }
-            }
-        }
-    }
-
     override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) {
         Log.d(TAG, "Notification posted: ${sbn.packageName} - ${ApiVersionHelper.getNotificationKey(sbn)}")
+        if (!isRankingMapPopulated && rankingMap?.orderedKeys?.isNotEmpty() == true) {
+            isRankingMapPopulated = true
+            Log.i(TAG, "RankingMap populated (via POSTED)")
+        }
         rankingMap?.let { dumpRankingMap(it, "posted") }
         debugDumper.dumpEvent(sbn, "POSTED", rankingMap)
 
@@ -328,6 +322,10 @@ class NotificationCaptureService : NotificationListenerService() {
         reason: Int
     ) {
         Log.d(TAG, "Notification removed: ${sbn.packageName} - reason: $reason (${ApiVersionHelper.categorizeRemovalReason(reason)})")
+        if (!isRankingMapPopulated && rankingMap?.orderedKeys?.isNotEmpty() == true) {
+            isRankingMapPopulated = true
+            Log.i(TAG, "RankingMap populated (via REMOVED)")
+        }
         rankingMap?.let { dumpRankingMap(it, "removed") }
         debugDumper.dumpEvent(sbn, "REMOVED", rankingMap, removalReason = reason)
 
@@ -346,6 +344,11 @@ class NotificationCaptureService : NotificationListenerService() {
 
     override fun onNotificationRankingUpdate(rankingMap: RankingMap) {
         Log.d(TAG, "Ranking update received")
+        if (!isRankingMapPopulated && rankingMap.orderedKeys.isNotEmpty()) {
+            isRankingMapPopulated = true
+            Log.i(TAG, "RankingMap populated (via RANKING_UPDATE)")
+        }
+        dumpRankingMap(rankingMap, "ranking_update")
         debugDumper.dumpRankingUpdate(rankingMap)
 
         serviceScope.launch {
@@ -555,7 +558,6 @@ class NotificationCaptureService : NotificationListenerService() {
      * 處理 Ranking 更新
      */
     private suspend fun processRankingUpdate(rankingMap: RankingMap) {
-        dumpRankingMap(rankingMap, "ranking_update")
         // Ranking 詳細資訊（rank, importance, isAmbient）需要 API 24+
         if (!ApiVersionHelper.supportsDirectReply()) return  // Ranking 需要 API 24+
 
@@ -741,6 +743,7 @@ class NotificationCaptureService : NotificationListenerService() {
      * Dump 完整 RankingMap 到外部目錄（debug 用）
      */
     private fun dumpRankingMap(rankingMap: RankingMap, source: String) {
+        if (!debugDumper.isEnabled) return
         try {
             val dumpDir = java.io.File(getExternalFilesDir(null) ?: filesDir, "channel_dump").apply { mkdirs() }
             val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
