@@ -337,17 +337,26 @@ class SettingsFragment : Fragment() {
             }, 10_000L)
         }
 
-        binding.btnRefreshChannels.setOnClickListener {
+        binding.btnUpdateRankingMap.setOnClickListener {
             val service = NotificationCaptureService.getInstance()
             if (service != null && NotificationCaptureService.isConnected) {
-                service.forceRefreshChannels()
-                Toast.makeText(requireContext(), "Channel 更新已觸發", Toast.LENGTH_SHORT).show()
+                service.triggerRankingMapUpdate()
+                Toast.makeText(requireContext(), "RankingMap 更新已觸發", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(requireContext(), "服務未連線", Toast.LENGTH_SHORT).show()
             }
+            showRankingMapInfoDialog()
         }
 
         displaySigningInfo()
+    }
+
+    private fun showRankingMapInfoDialog() {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.ranking_map_warning_title)
+            .setMessage(R.string.ranking_map_warning_detail)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     private fun updateDebugInfo() {
