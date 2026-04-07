@@ -115,6 +115,13 @@ class TimelineFragment : Fragment() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        // 離開前景時取消氣泡隱藏排程並立即隱藏，避免回來時延遲消失
+        bubbleHideRunnable?.let { _binding?.timeBubble?.removeCallbacks(it) }
+        _binding?.timeBubble?.visibility = View.GONE
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
@@ -500,11 +507,17 @@ class TimelineFragment : Fragment() {
         if (maxScroll <= 0) return
 
         val fraction = scrollOffset.toFloat() / maxScroll
-        val swipeRefresh = binding.swipeRefresh
         val bubbleHeight = binding.timeBubble.height.toFloat()
-        val trackRange = (swipeRefresh.bottom - swipeRefresh.top).toFloat() - bubbleHeight
 
-        binding.timeBubble.translationY = swipeRefresh.top + trackRange * fraction
+        // 用 window 絕對座標對齊，避免 banner 等中間容器造成偏移
+        val rvLocation = IntArray(2)
+        val bubbleParentLocation = IntArray(2)
+        rv.getLocationInWindow(rvLocation)
+        (binding.timeBubble.parent as? View)?.getLocationInWindow(bubbleParentLocation)
+        val rvTop = rvLocation[1] - bubbleParentLocation[1]
+        val trackRange = rv.height.toFloat() - bubbleHeight
+
+        binding.timeBubble.translationY = rvTop + trackRange * fraction
     }
 
     /**
