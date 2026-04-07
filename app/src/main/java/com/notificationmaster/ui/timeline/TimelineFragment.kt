@@ -26,7 +26,6 @@ import com.notificationmaster.service.NotificationCaptureService
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -55,7 +54,6 @@ class TimelineFragment : Fragment() {
     private val dateFormat = SimpleDateFormat("yyyy年M月d日 EEEE", Locale.getDefault())
     private var bubbleHideRunnable: Runnable? = null
     private var wasPermissionGranted = false
-    private var rankingBannerJob: Job? = null
 
     // === 天分頁漸進載入 ===
     /** 今天的資料（Flow 即時更新） */
@@ -100,7 +98,7 @@ class TimelineFragment : Fragment() {
             "serviceConnected=${NotificationCaptureService.isConnected}, " +
             "serviceInstance=${NotificationCaptureService.getInstance() != null}")
         updateEmptyStateForPermission()
-        updateRankingBanner()
+        setupRankingBannerObserver()
 
         loadNotifications()
     }
@@ -115,18 +113,10 @@ class TimelineFragment : Fragment() {
             updateEmptyStateForPermission()
             if (isGranted) loadNotifications()
         }
-        startRankingBannerPolling()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        rankingBannerJob?.cancel()
-        rankingBannerJob = null
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
-        rankingBannerJob?.cancel()
         _binding = null
     }
 
@@ -552,44 +542,20 @@ class TimelineFragment : Fragment() {
     }
 
     /**
-     * RankingMap 警告橫幅：API 24+ 且已授權已連線但 RankingMap 尚未填充時顯示
+     * 觀察 Service 的 showRankingBanner LiveData，事件驅動顯示/隱藏橫幅。
+     * 連線時若 RankingMap 為空 → 顯示；填充後或斷線 → 隱藏。無需輪詢。
      */
-    private fun updateRankingBanner() {
-        val binding = _binding ?: return
-        val shouldShow = android.os.Build.VERSION.SDK_INT >= 24 &&
-            wasPermissionGranted &&
-            NotificationCaptureService.isConnected &&
-            !NotificationCaptureService.isRankingMapPopulated
-        binding.bannerRankingWarning.visibility = if (shouldShow) View.VISIBLE else View.GONE
-        if (shouldShow) {
-            binding.bannerRankingWarning.setOnClickListener {
-                MaterialAlertDialogBuilder(requireContext())
-                    .setTitle(R.string.ranking_map_warning_title)
-                    .setMessage(R.string.ranking_map_warning_detail)
-                    .setPositiveButton(android.R.string.ok, null)
-                    .show()
-            }
+    private fun setupRankingBannerObserver() {
+        binding.bannerRankingWarning.setOnClickListener {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.ranking_map_warning_title)
+                .setMessage(R.string.ranking_map_warning_detail)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
         }
-    }
-
-    /**
-     * 定期檢查 RankingMap 狀態，填充後隱藏橫幅
-     */
-    private fun startRankingBannerPolling() {
-        rankingBannerJob?.cancel()
-        if (NotificationCaptureService.isRankingMapPopulated) {
-            _binding?.bannerRankingWarning?.visibility = View.GONE
-            return
-        }
-        rankingBannerJob = viewLifecycleOwner.lifecycleScope.launch {
-            while (true) {
-                kotlinx.coroutines.delay(3_000)
-                if (_binding == null) break
-                if (NotificationCaptureService.isRankingMapPopulated) {
-                    _binding?.bannerRankingWarning?.visibility = View.GONE
-                    break
-                }
-            }
+        NotificationCaptureService.showRankingBanner.observe(viewLifecycleOwner) { show ->
+            _binding?.bannerRankingWarning?.visibility =
+                if (show && wasPermissionGranted) View.VISIBLE else View.GONE
         }
     }
 

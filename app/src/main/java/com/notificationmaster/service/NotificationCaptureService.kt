@@ -85,6 +85,13 @@ class NotificationCaptureService : NotificationListenerService() {
         var isRankingMapPopulated = false
             private set
 
+        /**
+         * RankingMap 警告橫幅狀態（事件驅動）
+         * true = 已連線但 RankingMap 尚未填充（API 24+）
+         * false = 未連線、或 RankingMap 已填充
+         */
+        val showRankingBanner = androidx.lifecycle.MutableLiveData(false)
+
         // 用於 UI 層查詢服務狀態
         private var instance: NotificationCaptureService? = null
 
@@ -173,7 +180,12 @@ class NotificationCaptureService : NotificationListenerService() {
         // RankingMap 狀態檢查
         if (!isRankingMapPopulated && rankingSnapshot?.orderedKeys?.isNotEmpty() == true) {
             isRankingMapPopulated = true
+            showRankingBanner.postValue(false)
             Log.i(TAG, "RankingMap populated (via onListenerConnected)")
+        }
+        // 連線後若 RankingMap 仍為空（OEM 異常），通知 UI 顯示警告
+        if (Build.VERSION.SDK_INT >= 24 && !isRankingMapPopulated) {
+            showRankingBanner.postValue(true)
         }
         rankingSnapshot?.let { dumpRankingMap(it, "listener_connected") }
 
@@ -198,6 +210,7 @@ class NotificationCaptureService : NotificationListenerService() {
         PendingIntentCache.clear()
         isConnected = false
         isRankingMapPopulated = false
+        showRankingBanner.postValue(false)
     }
 
     /**
@@ -298,6 +311,7 @@ class NotificationCaptureService : NotificationListenerService() {
         Log.d(TAG, "Notification posted: ${sbn.packageName} - ${ApiVersionHelper.getNotificationKey(sbn)}")
         if (!isRankingMapPopulated && rankingMap?.orderedKeys?.isNotEmpty() == true) {
             isRankingMapPopulated = true
+            showRankingBanner.postValue(false)
             Log.i(TAG, "RankingMap populated (via POSTED)")
         }
         rankingMap?.let { dumpRankingMap(it, "posted") }
@@ -325,6 +339,7 @@ class NotificationCaptureService : NotificationListenerService() {
         Log.d(TAG, "Notification removed: ${sbn.packageName} - reason: $reason (${ApiVersionHelper.categorizeRemovalReason(reason)})")
         if (!isRankingMapPopulated && rankingMap?.orderedKeys?.isNotEmpty() == true) {
             isRankingMapPopulated = true
+            showRankingBanner.postValue(false)
             Log.i(TAG, "RankingMap populated (via REMOVED)")
         }
         rankingMap?.let { dumpRankingMap(it, "removed") }
@@ -347,6 +362,7 @@ class NotificationCaptureService : NotificationListenerService() {
         Log.d(TAG, "Ranking update received")
         if (!isRankingMapPopulated && rankingMap.orderedKeys.isNotEmpty()) {
             isRankingMapPopulated = true
+            showRankingBanner.postValue(false)
             Log.i(TAG, "RankingMap populated (via RANKING_UPDATE)")
         }
         dumpRankingMap(rankingMap, "ranking_update")
