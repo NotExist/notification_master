@@ -146,6 +146,46 @@
             android:turnScreenOn="true"
             android:theme="@style/Theme.NotificationMaster.FullScreenAlert" />
 
+        <!-- Widget 設定 Activity -->
+        <activity
+            android:name=".ui.widget.WidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.NotificationMaster.Dialog">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- 清單式 Widget -->
+        <receiver
+            android:name=".ui.widget.NotificationWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/notification_widget_list_info" />
+        </receiver>
+
+        <!-- 單項式 Widget -->
+        <receiver
+            android:name=".ui.widget.NotificationSingleWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/notification_widget_single_info" />
+        </receiver>
+
+        <!-- Widget RemoteViews 資料服務 -->
+        <service
+            android:name=".ui.widget.NotificationRemoteViewsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
         <!-- NotificationListenerService -->
         <service
             android:name=".service.NotificationCaptureService"

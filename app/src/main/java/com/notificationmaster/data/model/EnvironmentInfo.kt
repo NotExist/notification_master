@@ -158,7 +158,8 @@ data class SupportedFeatures(
                 supported = sdk >= 14,
                 features = listOf(
                     FeatureItem("日曆整合", "透過 CalendarContract 將通知記錄匯出為日曆事件", implemented = true),
-                    FeatureItem("ACTION_SEND", "從分享選單搜尋通知記錄", implemented = true)
+                    FeatureItem("ACTION_SEND", "從分享選單搜尋通知記錄", implemented = true),
+                    FeatureItem("App Widget", "桌面小工具：清單式與單項式通知 Widget", implemented = true)
                 )
             ),
             ApiFeatureGroup(

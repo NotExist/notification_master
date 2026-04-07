@@ -12,6 +12,7 @@ import android.util.Log
 import androidx.room.withTransaction
 import com.notificationmaster.R
 import com.notificationmaster.NotificationMasterApp
+import com.notificationmaster.ui.widget.NotificationWidgetProvider
 import com.notificationmaster.core.NotificationExtractor
 import com.notificationmaster.core.cache.PendingIntentCache
 import com.notificationmaster.core.alert.AlertData
@@ -498,6 +499,9 @@ class NotificationCaptureService : NotificationListenerService() {
         }
 
         Log.d(TAG, "Saved notification: $notificationId, event: $eventType")
+
+        // 通知 Widget 更新
+        NotificationWidgetProvider.notifyUpdate(this@NotificationCaptureService)
     }
 
     /**
@@ -569,6 +573,9 @@ class NotificationCaptureService : NotificationListenerService() {
         )
 
         PendingIntentCache.remove(key)
+
+        // 通知 Widget 更新
+        NotificationWidgetProvider.notifyUpdate(this@NotificationCaptureService)
     }
 
     /**
