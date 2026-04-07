@@ -105,6 +105,36 @@
             </intent-filter>
         </activity>
 
+        <!-- 外部文字搜尋：選字選單 (API 23+) -->
+        <activity-alias
+            android:name=".ProcessTextAlias"
+            android:targetActivity=".ui.main.MainActivity"
+            android:label="@string/process_text_label"
+            android:icon="@mipmap/ic_launcher"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 外部文字搜尋：分享選單 -->
+        <activity-alias
+            android:name=".ShareTextAlias"
+            android:targetActivity=".ui.main.MainActivity"
+            android:label="@string/share_text_label"
+            android:icon="@mipmap/ic_launcher"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- 持續提醒全螢幕 Activity -->
         <activity
             android:name=".ui.alert.PersistentAlertActivity"

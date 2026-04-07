@@ -442,6 +442,17 @@
     <string name="keepalive_notification_text">通知監聽服務運作中</string>
     <string name="ranking_trigger_notification_text">觸發 RankingMap 更新</string>
 
+    <!-- 外部搜尋 -->
+    <string name="process_text_label">搜尋通知</string>
+    <string name="share_text_label">搜尋通知</string>
+    <string name="settings_external_search_section">外部搜尋</string>
+    <string name="settings_process_text_title">文字處理 (ACTION_PROCESS_TEXT)</string>
+    <string name="settings_process_text_summary">在其他 App 選取文字時，選單中出現「搜尋通知」選項</string>
+    <string name="settings_process_text_detail">啟用後，在任何 App 中選取文字時的彈出選單會出現「搜尋通知」選項。\n\n點選後會以選取的文字搜尋已記錄的通知。\n\n需要 Android 6.0 (API 23) 以上。</string>
+    <string name="settings_share_text_title">文字分享 (ACTION_SEND)</string>
+    <string name="settings_share_text_summary">在分享選單中出現「搜尋通知」選項</string>
+    <string name="settings_share_text_detail">啟用後，系統分享選單會出現「搜尋通知」選項。\n\n從瀏覽器、筆記等 App 分享文字時，會以該文字搜尋已記錄的通知。</string>
+
     <!-- RankingMap 狀態說明 -->
     <string name="ranking_map_warning_title">RankingMap 尚未填充</string>
     <string name="ranking_map_warning_banner">部分資訊尚未取得，點擊查看詳情</string>
