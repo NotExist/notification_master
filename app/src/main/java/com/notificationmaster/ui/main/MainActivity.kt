@@ -32,6 +32,7 @@ class MainActivity : AppCompatActivity() {
 
         setupNavigation()
         handleShortcutIntent(intent)
+        handleExternalTextIntent(intent)
 
         // 首次啟動且未設定備份目錄 → 靜默導航到設定頁
         if (savedInstanceState == null && !hasRedirectedToSettings
@@ -70,6 +71,7 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleShortcutIntent(intent)
+        handleExternalTextIntent(intent)
     }
 
     private fun handleShortcutIntent(intent: Intent?) {
@@ -83,6 +85,26 @@ class MainActivity : AppCompatActivity() {
                 navController.navigate(R.id.timeline_detail, args)
             }
             intent.action = null
+        }
+    }
+
+    private fun handleExternalTextIntent(intent: Intent?) {
+        val query = when (intent?.action) {
+            Intent.ACTION_PROCESS_TEXT ->
+                intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
+            Intent.ACTION_SEND ->
+                intent.getStringExtra(Intent.EXTRA_TEXT)
+            else -> null
+        }
+        if (!query.isNullOrBlank()) {
+            binding.bottomNav.selectedItemId = R.id.nav_search
+            val navHostFragment = supportFragmentManager
+                .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
+            val navController = navHostFragment.navController
+            navController.navigate(R.id.search_home, Bundle().apply {
+                putString("query", query)
+            })
+            intent?.action = null
         }
     }
 
