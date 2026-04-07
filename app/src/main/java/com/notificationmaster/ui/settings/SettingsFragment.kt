@@ -258,6 +258,7 @@ class SettingsFragment : Fragment() {
         updateRealtimeCalendarDisplay()
         updateBackupDirDisplay()
         updateFullScreenIntentHint()
+        _binding?.btnUpdateRankingMap?.isEnabled = !NotificationCaptureService.isRankingMapPopulated
     }
 
     override fun onDestroyView() {
@@ -393,18 +394,34 @@ class SettingsFragment : Fragment() {
             }, 10_000L)
         }
 
+        binding.btnUpdateRankingMap.isEnabled = !NotificationCaptureService.isRankingMapPopulated
         binding.btnUpdateRankingMap.setOnClickListener {
-            val service = NotificationCaptureService.getInstance()
-            if (service != null && NotificationCaptureService.isConnected) {
-                service.triggerRankingMapUpdate()
-                Toast.makeText(requireContext(), "RankingMap 更新已觸發", Toast.LENGTH_SHORT).show()
+            if (NotificationCaptureService.isRankingMapPopulated) {
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle(R.string.ranking_map_warning_title)
+                    .setMessage("目前 RankingMap 狀態正常，確定要送出更新通知嗎？")
+                    .setPositiveButton("送出") { _, _ ->
+                        sendRankingMapTrigger()
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
             } else {
-                Toast.makeText(requireContext(), "服務未連線", Toast.LENGTH_SHORT).show()
+                sendRankingMapTrigger()
             }
-            showRankingMapInfoDialog()
         }
 
         displaySigningInfo()
+    }
+
+    private fun sendRankingMapTrigger() {
+        val service = NotificationCaptureService.getInstance()
+        if (service != null && NotificationCaptureService.isConnected) {
+            service.triggerRankingMapUpdate()
+            Toast.makeText(requireContext(), "RankingMap 更新已觸發", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(requireContext(), "服務未連線", Toast.LENGTH_SHORT).show()
+        }
+        showRankingMapInfoDialog()
     }
 
     private fun showRankingMapInfoDialog() {
