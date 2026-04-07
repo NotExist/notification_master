@@ -166,6 +166,7 @@ class SettingsFragment : Fragment() {
         setupCalendarIntegration()
         setupDataManagement()
         setupKeepaliveSettings()
+        setupExternalSearchSettings()
 
         checkBackupAndSuggestImport()
     }
@@ -280,6 +281,61 @@ class SettingsFragment : Fragment() {
             com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.settings_keepalive_title)
                 .setMessage(R.string.settings_keepalive_detail)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
+    }
+
+    private fun setupExternalSearchSettings() {
+        val pm = requireContext().packageManager
+        val processTextComponent = android.content.ComponentName(
+            requireContext(), "com.notificationmaster.ProcessTextAlias"
+        )
+        val shareTextComponent = android.content.ComponentName(
+            requireContext(), "com.notificationmaster.ShareTextAlias"
+        )
+
+        // 初始狀態
+        binding.switchProcessText.isChecked =
+            pm.getComponentEnabledSetting(processTextComponent) == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        binding.switchShareText.isChecked =
+            pm.getComponentEnabledSetting(shareTextComponent) == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+
+        // API 23 以下停用 PROCESS_TEXT
+        if (android.os.Build.VERSION.SDK_INT < 23) {
+            binding.switchProcessText.isEnabled = false
+        }
+
+        binding.switchProcessText.setOnCheckedChangeListener { _, isChecked ->
+            pm.setComponentEnabledSetting(
+                processTextComponent,
+                if (isChecked) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                android.content.pm.PackageManager.DONT_KILL_APP
+            )
+        }
+
+        binding.switchShareText.setOnCheckedChangeListener { _, isChecked ->
+            pm.setComponentEnabledSetting(
+                shareTextComponent,
+                if (isChecked) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                android.content.pm.PackageManager.DONT_KILL_APP
+            )
+        }
+
+        binding.textProcessTextSummary.setOnClickListener {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.settings_process_text_title)
+                .setMessage(R.string.settings_process_text_detail)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
+
+        binding.textShareTextSummary.setOnClickListener {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.settings_share_text_title)
+                .setMessage(R.string.settings_share_text_detail)
                 .setPositiveButton(android.R.string.ok, null)
                 .show()
         }
