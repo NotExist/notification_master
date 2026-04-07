@@ -446,12 +446,12 @@
     <string name="process_text_label">搜尋通知</string>
     <string name="share_text_label">搜尋通知</string>
     <string name="settings_external_search_section">外部搜尋</string>
-    <string name="settings_process_text_title">文字處理 (ACTION_PROCESS_TEXT)</string>
-    <string name="settings_process_text_summary">在其他 App 選取文字時，選單中出現「搜尋通知」選項</string>
-    <string name="settings_process_text_detail">啟用後，在任何 App 中選取文字時的彈出選單會出現「搜尋通知」選項。\n\n點選後會以選取的文字搜尋已記錄的通知。\n\n需要 Android 6.0 (API 23) 以上。</string>
-    <string name="settings_share_text_title">文字分享 (ACTION_SEND)</string>
+    <string name="settings_process_text_title">文字處理</string>
+    <string name="settings_process_text_summary">選取文字後將文字用於「搜尋通知」</string>
+    <string name="settings_process_text_detail">啟用後，選取文字時的彈出選單會出現「搜尋通知」選項，點選後會以選取的文字搜尋已記錄的通知。\n\nIntent: ACTION_PROCESS_TEXT\n需要 Android 6.0 (API 23) 以上。</string>
+    <string name="settings_share_text_title">文字分享</string>
     <string name="settings_share_text_summary">在分享選單中出現「搜尋通知」選項</string>
-    <string name="settings_share_text_detail">啟用後，系統分享選單會出現「搜尋通知」選項。\n\n從瀏覽器、筆記等 App 分享文字時，會以該文字搜尋已記錄的通知。</string>
+    <string name="settings_share_text_detail">啟用後，系統分享選單會出現「搜尋通知」選項，分享文字時會以該文字搜尋已記錄的通知。\n\nIntent: ACTION_SEND\n所有 Android 版本皆支援。</string>
 
     <!-- RankingMap 狀態說明 -->
     <string name="ranking_map_warning_title">RankingMap 尚未填充</string>
