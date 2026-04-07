@@ -189,6 +189,12 @@ class TimelineFragment : Fragment() {
 
     private fun setupSwipeRefresh() {
         binding.swipeRefresh.setOnRefreshListener {
+            // 重新檢查權限狀態（使用者可能在不觸發 onResume 的路徑下授權）
+            val isGranted = NlsConnectionManager.isNlsEnabled(requireContext())
+            if (isGranted != wasPermissionGranted) {
+                wasPermissionGranted = isGranted
+                updateEmptyStateForPermission()
+            }
             Log.d(TAG, "swipeRefresh: permissionGranted=$wasPermissionGranted, " +
                 "serviceConnected=${NotificationCaptureService.isConnected}")
             if (wasPermissionGranted) {
@@ -568,7 +574,7 @@ class TimelineFragment : Fragment() {
         }
         NotificationCaptureService.showRankingBanner.observe(viewLifecycleOwner) { show ->
             _binding?.bannerRankingWarning?.visibility =
-                if (show && wasPermissionGranted) View.VISIBLE else View.GONE
+                if (show) View.VISIBLE else View.GONE
         }
     }
 

@@ -456,7 +456,7 @@
     <!-- RankingMap 狀態說明 -->
     <string name="ranking_map_warning_title">RankingMap 尚未填充</string>
     <string name="ranking_map_warning_banner">部分資訊尚未取得，點擊查看詳情</string>
-    <string name="ranking_map_warning_detail">部分通知資訊仰賴系統的 RankingMap 才能取得，包括：\n\n• Channel 名稱與群組\n• Channel Importance\n• Ranking 快照（rank、isAmbient 等）\n\n系統尚未推送 RankingMap，這些欄位暫時為空。\n\n解決方式：\n• 開啟「服務保活」（推薦）\n• 等待任意新通知到來\n• 使用 Debug 區的「更新 RankingMap」按鈕手動觸發</string>
+    <string name="ranking_map_warning_detail">部分通知資訊仰賴系統的 RankingMap 才能取得，包括：\n\n• Channel 名稱與群組\n• Channel Importance\n• Ranking 快照（rank、isAmbient 等）\n\n系統尚未推送 RankingMap，這些欄位暫時為空。\n\n依照 Android 原始設計（AOSP），RankingMap 應在監聽服務連線後（onListenerConnected）立即可用。但因各系統廠商實作差異，部分裝置可能延遲或未提供此資料，造成短暫空窗。\n\n解決方式：\n• 開啟「服務保活」（推薦）\n• 等待任意新通知到來\n• 使用 Debug 區的「更新 RankingMap」按鈕手動觸發</string>
 
     <!-- Widget -->
     <string name="widget_list_name">通知清單</string>
