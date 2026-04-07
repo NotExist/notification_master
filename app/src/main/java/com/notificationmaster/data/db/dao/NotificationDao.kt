@@ -278,6 +278,57 @@ interface NotificationDao {
     """)
     fun getRecentDismissedNotifications(limit: Int = 30): Flow<List<NotificationEntity>>
 
+    // === 同步查詢（Widget 用，RemoteViewsFactory 在 binder thread 執行） ===
+
+    @Query("""
+        SELECT * FROM notifications
+        WHERE id IN (
+            SELECT id FROM (
+                SELECT id, MAX(post_time) FROM notifications
+                WHERE is_audible = 1
+                GROUP BY notification_key
+            )
+        )
+        ORDER BY post_time DESC
+        LIMIT :limit
+    """)
+    fun getRecentAudibleNotificationsSync(limit: Int = 20): List<NotificationEntity>
+
+    @Query("""
+        SELECT * FROM notifications
+        WHERE id IN (
+            SELECT id FROM (
+                SELECT id, MAX(post_time) FROM notifications
+                WHERE likely_headsup = 1
+                GROUP BY notification_key
+            )
+        )
+        ORDER BY post_time DESC
+        LIMIT :limit
+    """)
+    fun getRecentHeadsupNotificationsSync(limit: Int = 20): List<NotificationEntity>
+
+    @Query("""
+        SELECT n.* FROM notifications n
+        INNER JOIN (
+            SELECT e.notification_id, MAX(e.event_time) AS removal_time
+            FROM notification_events e
+            WHERE e.event_type = 'REMOVED'
+            GROUP BY e.notification_id
+        ) r ON n.id = r.notification_id
+        WHERE n.id IN (
+            SELECT id FROM (
+                SELECT n2.id, MAX(n2.post_time) FROM notifications n2
+                INNER JOIN notification_events e2 ON n2.id = e2.notification_id
+                WHERE e2.event_type = 'REMOVED'
+                GROUP BY n2.notification_key
+            )
+        )
+        ORDER BY r.removal_time DESC
+        LIMIT :limit
+    """)
+    fun getRecentDismissedNotificationsSync(limit: Int = 30): List<NotificationEntity>
+
     // === 查詢 - 按來源 ===
 
     @Query("""

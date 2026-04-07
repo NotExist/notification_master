@@ -160,6 +160,25 @@ object AppPreferences {
             .apply()
     }
 
+    // === Widget ===
+
+    private const val KEY_WIDGET_TYPE_PREFIX = "widget_type_"
+
+    fun getWidgetType(context: Context, widgetId: Int): String? =
+        prefs(context).getString("$KEY_WIDGET_TYPE_PREFIX$widgetId", null)
+
+    fun setWidgetType(context: Context, widgetId: Int, type: String) {
+        prefs(context).edit()
+            .putString("$KEY_WIDGET_TYPE_PREFIX$widgetId", type)
+            .apply()
+    }
+
+    fun removeWidgetType(context: Context, widgetId: Int) {
+        prefs(context).edit()
+            .remove("$KEY_WIDGET_TYPE_PREFIX$widgetId")
+            .apply()
+    }
+
     // === 規則引擎 ===
 
     fun getRulesV2Json(context: Context): String? =
