@@ -157,7 +157,8 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(14),
                 supported = sdk >= 14,
                 features = listOf(
-                    FeatureItem("日曆整合", "透過 CalendarContract 將通知記錄匯出為日曆事件", implemented = true)
+                    FeatureItem("日曆整合", "透過 CalendarContract 將通知記錄匯出為日曆事件", implemented = true),
+                    FeatureItem("ACTION_SEND", "從分享選單搜尋通知記錄", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -201,7 +202,8 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(23),
                 supported = sdk >= 23,
                 features = listOf(
-                    FeatureItem("Icon 類別", "使用 Icon 類別提取高品質通知小圖示", implemented = true)
+                    FeatureItem("Icon 類別", "使用 Icon 類別提取高品質通知小圖示", implemented = true),
+                    FeatureItem("ACTION_PROCESS_TEXT", "選字選單直接搜尋通知記錄", implemented = true)
                 )
             ),
             ApiFeatureGroup(
