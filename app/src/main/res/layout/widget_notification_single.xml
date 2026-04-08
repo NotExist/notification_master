@@ -4,8 +4,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:padding="8dp"
-    android:background="?android:attr/colorBackground"
-    android:alpha="0.9">
+    android:background="@drawable/widget_background">
 
     <!-- 類型標籤 + 時間 -->
     <LinearLayout
@@ -19,6 +18,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:text="@string/widget_single_name"
             android:textSize="11sp"
             android:textColor="?android:attr/textColorSecondary" />
 
@@ -36,6 +36,7 @@
         android:id="@+id/widget_single_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:text="@string/widget_empty"
         android:maxLines="1"
         android:ellipsize="end"
         android:textStyle="bold"

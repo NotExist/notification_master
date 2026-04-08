@@ -53,15 +53,23 @@ class NotificationWidgetProvider : AppWidgetProvider() {
         }
 
         private fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
-            val type = AppPreferences.getWidgetType(context, appWidgetId) ?: return
+            val type = AppPreferences.getWidgetType(context, appWidgetId)
+            val views = RemoteViews(context.packageName, R.layout.widget_notification_list)
+
+            // 類型尚未設定（剛建立 / 設定取消 / preference 遺失）：仍 push 一份預設 RemoteViews，
+            // 顯示小工具名稱作為靜態識別，避免使用者看到全黑空白。
+            if (type == null) {
+                views.setTextViewText(R.id.widget_title, context.getString(R.string.widget_list_name))
+                appWidgetManager.updateAppWidget(appWidgetId, views)
+                return
+            }
+
             val title = when (type) {
                 WidgetConfigActivity.TYPE_AUDIBLE -> context.getString(R.string.widget_type_audible)
                 WidgetConfigActivity.TYPE_HEADSUP -> context.getString(R.string.widget_type_headsup)
                 WidgetConfigActivity.TYPE_DISMISSED -> context.getString(R.string.widget_type_dismissed)
-                else -> ""
+                else -> context.getString(R.string.widget_list_name)
             }
-
-            val views = RemoteViews(context.packageName, R.layout.widget_notification_list)
             views.setTextViewText(R.id.widget_title, title)
 
             // 標題點擊 → 對應 ShortcutActivity

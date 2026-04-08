@@ -17,7 +17,7 @@ import java.util.Locale
 
 /**
  * 單項式通知 Widget
- * 顯示最新一筆通知，點擊進入 Detail 頁
+ * 顯示指定類型（有聲/彈出/移除）的最新一筆通知，點擊進入 Detail 頁
  */
 class NotificationSingleWidgetProvider : AppWidgetProvider() {
 
@@ -37,7 +37,20 @@ class NotificationSingleWidgetProvider : AppWidgetProvider() {
         private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
         fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
-            val type = AppPreferences.getWidgetType(context, appWidgetId) ?: return
+            val type = AppPreferences.getWidgetType(context, appWidgetId)
+
+            // 類型尚未設定（剛建立 / 設定取消 / preference 遺失）：仍 push 一份預設 RemoteViews，
+            // 顯示小工具名稱作為靜態識別，避免使用者看到全黑空白。
+            if (type == null) {
+                val views = RemoteViews(context.packageName, R.layout.widget_notification_single)
+                views.setTextViewText(R.id.widget_single_type, context.getString(R.string.widget_single_name))
+                views.setTextViewText(R.id.widget_single_title, context.getString(R.string.widget_empty))
+                views.setTextViewText(R.id.widget_single_time, "")
+                views.setTextViewText(R.id.widget_single_content, "")
+                appWidgetManager.updateAppWidget(appWidgetId, views)
+                return
+            }
+
             val dao = NotificationMasterApp.getInstance().database.notificationDao()
 
             val notification = when (type) {

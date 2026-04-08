@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@android:color/transparent">
+    android:background="@drawable/widget_background">
 
     <!-- 標題列 -->
     <TextView
@@ -11,10 +11,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:padding="8dp"
+        android:text="@string/widget_list_name"
         android:textAppearance="@android:style/TextAppearance.Material.Body2"
-        android:textStyle="bold"
-        android:background="?android:attr/colorBackground"
-        android:alpha="0.9" />
+        android:textStyle="bold" />
 
     <!-- 通知清單 -->
     <ListView
@@ -23,9 +22,7 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:divider="@null"
-        android:dividerHeight="0dp"
-        android:background="?android:attr/colorBackground"
-        android:alpha="0.9" />
+        android:dividerHeight="0dp" />
 
     <!-- 空狀態 -->
     <TextView
@@ -34,7 +31,7 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:gravity="center"
-        android:text="@string/widget_empty"
+        android:text="@string/widget_loading"
         android:textColor="?android:attr/textColorSecondary"
         android:visibility="gone" />
 
