@@ -25,6 +25,7 @@ import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.databinding.FragmentFilterSettingsBinding
 import com.notificationmaster.databinding.ItemFilterRuleBinding
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
+import com.notificationmaster.ui.filter.SoundPickerLauncher
 
 /**
  * 過濾規則管理頁面
@@ -36,6 +37,8 @@ class FilterSettingsFragment : Fragment() {
 
     private var _binding: FragmentFilterSettingsBinding? = null
     private val binding get() = _binding!!
+
+    private val soundPicker = SoundPickerLauncher(this)
 
     private lateinit var actionType: ActionType
 
@@ -138,6 +141,7 @@ class FilterSettingsFragment : Fragment() {
         FilterRuleDialogHelper.showAddRuleDialog(
             context = ctx,
             actionType = actionType,
+            soundPicker = soundPicker,
             onRuleAdded = { refreshList() }
         )
     }
@@ -148,6 +152,7 @@ class FilterSettingsFragment : Fragment() {
             context = ctx,
             actionType = actionType,
             existingRule = rule,
+            soundPicker = soundPicker,
             onRuleAdded = { refreshList() }
         )
     }

@@ -14,6 +14,7 @@ import com.notificationmaster.R
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.databinding.FragmentArchiveBinding
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
+import com.notificationmaster.ui.filter.SoundPickerLauncher
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -25,6 +26,8 @@ class ArchiveFragment : Fragment() {
 
     private var _binding: FragmentArchiveBinding? = null
     private val binding get() = _binding!!
+
+    private val soundPicker = SoundPickerLauncher(this)
 
     private lateinit var appSourceAdapter: AppSourceAdapter
     private lateinit var channelAdapter: ChannelAdapter
@@ -91,7 +94,8 @@ class ArchiveFragment : Fragment() {
                 FilterRuleDialogHelper.showAddRuleDialog(
                     context = requireContext(),
                     actionType = null,
-                    prefillPackageName = appSource.packageName
+                    prefillPackageName = appSource.packageName,
+                    soundPicker = soundPicker
                 )
             }
         )
@@ -110,7 +114,8 @@ class ArchiveFragment : Fragment() {
                     context = requireContext(),
                     actionType = null,
                     prefillPackageName = channel.packageName,
-                    prefillChannelId = channel.channelId
+                    prefillChannelId = channel.channelId,
+                    soundPicker = soundPicker
                 )
             }
         )

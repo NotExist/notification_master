@@ -11,6 +11,7 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.notificationmaster.databinding.FragmentSearchBinding
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
+import com.notificationmaster.ui.filter.SoundPickerLauncher
 
 /**
  * 搜尋頁面 Fragment
@@ -19,6 +20,8 @@ class SearchFragment : Fragment() {
 
     private var _binding: FragmentSearchBinding? = null
     private val binding get() = _binding!!
+
+    private val soundPicker = SoundPickerLauncher(this)
 
     private val viewModel: SearchViewModel by viewModels()
     private lateinit var notificationAdapter: NotificationAdapter
@@ -68,7 +71,8 @@ class SearchFragment : Fragment() {
                     context = requireContext(),
                     actionType = null,
                     prefillPackageName = notification.packageName,
-                    prefillChannelId = notification.channelId
+                    prefillChannelId = notification.channelId,
+                    soundPicker = soundPicker
                 )
             }
         )

@@ -13,6 +13,7 @@ import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.databinding.FragmentArchiveDetailBinding
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
+import com.notificationmaster.ui.filter.SoundPickerLauncher
 import com.notificationmaster.ui.timeline.TimelineAdapter
 import com.notificationmaster.ui.timeline.TimelineItem
 import kotlinx.coroutines.flow.collectLatest
@@ -27,6 +28,8 @@ class ArchiveDetailFragment : Fragment() {
 
     private var _binding: FragmentArchiveDetailBinding? = null
     private val binding get() = _binding!!
+
+    private val soundPicker = SoundPickerLauncher(this)
 
     private val args: ArchiveDetailFragmentArgs by navArgs()
     private lateinit var adapter: TimelineAdapter
@@ -63,7 +66,8 @@ class ArchiveDetailFragment : Fragment() {
                     context = requireContext(),
                     actionType = null,
                     prefillPackageName = notification.packageName,
-                    prefillChannelId = notification.channelId
+                    prefillChannelId = notification.channelId,
+                    soundPicker = soundPicker
                 )
             }
         )

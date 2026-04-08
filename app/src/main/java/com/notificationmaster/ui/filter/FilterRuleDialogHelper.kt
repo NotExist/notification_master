@@ -68,6 +68,8 @@ object FilterRuleDialogHelper {
      * @param prefillPackageName 預填 packageName（新增模式）
      * @param prefillChannelId 預填 channelId（新增模式）
      * @param existingRule 既有規則（編輯模式），非 null 時為編輯
+     * @param soundPicker 持續提醒鈴聲系統選擇器；由呼叫端 Fragment 在 field initializer
+     *                    建立並傳入。為 null 時會 fallback 到 cursor-based 選單
      * @param onRuleAdded 規則新增/更新完成後的 callback（用於 refresh UI）
      */
     fun showAddRuleDialog(
@@ -76,6 +78,7 @@ object FilterRuleDialogHelper {
         prefillPackageName: String? = null,
         prefillChannelId: String? = null,
         existingRule: Rule? = null,
+        soundPicker: SoundPickerLauncher? = null,
         onRuleAdded: (() -> Unit)? = null
     ) {
         val isEditMode = existingRule != null
@@ -298,7 +301,7 @@ object FilterRuleDialogHelper {
 
         // 鈴聲選擇按鈕
         btnChooseSound.setOnClickListener {
-            showSoundPicker(context, selectedSoundUri) { uri ->
+            showSoundPicker(context, selectedSoundUri, soundPicker) { uri ->
                 selectedSoundUri = uri
                 btnChooseSound.text = if (uri != null) {
                     RingtoneManager.getRingtone(context, android.net.Uri.parse(uri))
@@ -667,12 +670,38 @@ object FilterRuleDialogHelper {
     }
 
     /**
-     * 顯示系統鈴聲選擇 Dialog（單選列表）
+     * 顯示鈴聲選擇器。
      *
-     * 使用 RingtoneManager.cursor 手動列出鈴聲清單，
-     * 避免依賴 ActivityResultLauncher（object 中不可用）。
+     * 優先使用系統原生 RingtonePicker（透過呼叫端 Fragment 提供的 SoundPickerLauncher），
+     * 有預聽、分類、捲動等完整體驗。當未傳入 launcher 時 fallback 到自訂 cursor 列表。
      */
-    private fun showSoundPicker(context: Context, currentUri: String?, onSelected: (String?) -> Unit) {
+    private fun showSoundPicker(
+        context: Context,
+        currentUri: String?,
+        soundPicker: SoundPickerLauncher?,
+        onSelected: (String?) -> Unit
+    ) {
+        if (soundPicker != null) {
+            soundPicker.pick(
+                currentUri = currentUri,
+                title = context.getString(R.string.filter_alert_choose_sound),
+                onSelected = onSelected
+            )
+        } else {
+            showSoundPickerFallback(context, currentUri, onSelected)
+        }
+    }
+
+    /**
+     * Fallback 鈴聲選擇器（cursor + AlertDialog 單選）。
+     *
+     * 用於沒有 SoundPickerLauncher 的呼叫端（例如未來可能從非 Fragment context 呼叫時）。
+     */
+    private fun showSoundPickerFallback(
+        context: Context,
+        currentUri: String?,
+        onSelected: (String?) -> Unit
+    ) {
         val rm = RingtoneManager(context)
         rm.setType(RingtoneManager.TYPE_ALARM or RingtoneManager.TYPE_NOTIFICATION)
         val cursor = rm.cursor
@@ -689,7 +718,7 @@ object FilterRuleDialogHelper {
 
         AlertDialog.Builder(context)
             .setTitle(R.string.filter_alert_choose_sound)
-            .setSingleChoiceItems(titles.toTypedArray(), checked) { dialog, which ->
+            .setSingleChoiceItems(titles.toTypedArray<CharSequence>(), checked) { dialog, which ->
                 onSelected(uris[which])
                 dialog.dismiss()
             }

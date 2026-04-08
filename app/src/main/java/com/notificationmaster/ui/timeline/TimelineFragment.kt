@@ -24,6 +24,7 @@ import com.notificationmaster.databinding.FragmentTimelineBinding
 import com.notificationmaster.core.permission.NlsConnectionManager
 import com.notificationmaster.service.NotificationCaptureService
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
+import com.notificationmaster.ui.filter.SoundPickerLauncher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
@@ -42,6 +43,9 @@ class TimelineFragment : Fragment() {
 
     private var _binding: FragmentTimelineBinding? = null
     private val binding get() = _binding!!
+
+    // 系統原生鈴聲選擇器（field initializer 確保在 Fragment STARTED 前完成註冊）
+    private val soundPicker = SoundPickerLauncher(this)
 
     private var adapter: TimelineAdapter? = null
     private var isDeduplicatedMode = true
@@ -139,7 +143,8 @@ class TimelineFragment : Fragment() {
                         context = requireContext(),
                         actionType = null,
                         prefillPackageName = notification.packageName,
-                        prefillChannelId = notification.channelId
+                        prefillChannelId = notification.channelId,
+                        soundPicker = soundPicker
                     )
                 }
             )
