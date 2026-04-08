@@ -159,6 +159,7 @@
         <!-- 清單式 Widget -->
         <receiver
             android:name=".ui.widget.NotificationWidgetProvider"
+            android:label="@string/widget_list_name"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -171,6 +172,7 @@
         <!-- 單項式 Widget -->
         <receiver
             android:name=".ui.widget.NotificationSingleWidgetProvider"
+            android:label="@string/widget_single_name"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
