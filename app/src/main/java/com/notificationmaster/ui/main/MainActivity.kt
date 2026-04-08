@@ -121,4 +121,13 @@ class MainActivity : AppCompatActivity() {
             .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
         return navHostFragment.navController.navigateUp() || super.onSupportNavigateUp()
     }
+
+    /**
+     * 設定 toolbar 右側計數文字。null/空字串會隱藏。
+     * 供 TimelineFragment 等需要顯示總數的頁面使用。
+     */
+    fun setToolbarCount(text: CharSequence?) {
+        binding.toolbarCount.text = text ?: ""
+        binding.toolbarCount.visibility = if (text.isNullOrEmpty()) View.GONE else View.VISIBLE
+    }
 }

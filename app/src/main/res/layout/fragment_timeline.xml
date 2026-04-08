@@ -40,57 +40,39 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- 篩選/去重選項列 -->
-        <LinearLayout
+        <!-- 篩選/去重選項列（計數已移到 MainActivity toolbar 右側） -->
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chip_group_filter"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
             android:paddingHorizontal="16dp"
-            android:paddingVertical="4dp">
+            android:paddingVertical="4dp"
+            app:singleSelection="true"
+            app:selectionRequired="false">
 
-            <com.google.android.material.chip.ChipGroup
-                android:id="@+id/chip_group_filter"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                app:singleSelection="true"
-                app:selectionRequired="false">
-
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/chip_deduplicated"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/timeline_show_deduplicated"
-                    android:checked="true"
-                    style="@style/Widget.Material3.Chip.Filter" />
-
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/chip_audible"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/timeline_audible_only"
-                    style="@style/Widget.Material3.Chip.Filter" />
-
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/chip_dismissed"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/timeline_dismissed_only"
-                    style="@style/Widget.Material3.Chip.Filter" />
-
-            </com.google.android.material.chip.ChipGroup>
-
-            <!-- 統計數字 -->
-            <TextView
-                android:id="@+id/text_count"
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_deduplicated"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textAppearance="?attr/textAppearanceLabelMedium"
-                android:textColor="?android:attr/textColorSecondary"
-                tools:text="42 筆" />
+                android:text="@string/timeline_show_deduplicated"
+                android:checked="true"
+                style="@style/Widget.Material3.Chip.Filter" />
 
-        </LinearLayout>
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_audible"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/timeline_audible_only"
+                style="@style/Widget.Material3.Chip.Filter" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_dismissed"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/timeline_dismissed_only"
+                style="@style/Widget.Material3.Chip.Filter" />
+
+        </com.google.android.material.chip.ChipGroup>
 
         <View
             android:layout_width="match_parent"

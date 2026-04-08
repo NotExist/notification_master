@@ -25,6 +25,7 @@ import com.notificationmaster.core.permission.NlsConnectionManager
 import com.notificationmaster.service.NotificationCaptureService
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import com.notificationmaster.ui.filter.SoundPickerLauncher
+import com.notificationmaster.ui.main.MainActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
@@ -126,10 +127,13 @@ class TimelineFragment : Fragment() {
         // 離開前景時取消氣泡隱藏排程並立即隱藏，避免回來時延遲消失
         bubbleHideRunnable?.let { _binding?.timeBubble?.removeCallbacks(it) }
         _binding?.timeBubble?.visibility = View.GONE
+        // 清除 toolbar 計數，避免在其他 tab/destination 仍顯示
+        (activity as? MainActivity)?.setToolbarCount(null)
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
+        (activity as? MainActivity)?.setToolbarCount(null)
         _binding = null
     }
 
@@ -403,7 +407,7 @@ class TimelineFragment : Fragment() {
         if (filtered.isEmpty()) {
             binding.emptyState.visibility = View.VISIBLE
             binding.recyclerView.visibility = View.GONE
-            refreshCountText(loadedOverride = 0)
+            refreshCountText(loadedOverride = filtered)
             updateEmptyStateForPermission()
         } else {
             binding.emptyState.visibility = View.GONE
@@ -431,24 +435,35 @@ class TimelineFragment : Fragment() {
                 }
 
                 adapter?.submitList(timelineItems)
-                refreshCountText(loadedOverride = filtered.size)
+                refreshCountText(loadedOverride = filtered)
             }
         }
     }
 
     /**
-     * 更新計數器文字：已載入 / 總數。
-     * 若 loadedOverride 為 null，使用目前過濾後的 allNotifications 筆數。
+     * 計算「已載入」的去重後筆數，與總數 Flow 採同單位以避免 loaded > total。
+     *
+     * - 全部模式：DAO 按天 GROUP BY notification_key，跨天可能重複 → client 端 distinctBy notification_key
+     * - 去重模式：DAO 按天 GROUP BY content_hash，跨天可能重複 → client 端 distinctBy content_hash
+     * - 有聲/已移除模式：DAO 已全域 GROUP BY notification_key，無跨天問題 → 直接 size
      */
-    private fun refreshCountText(loadedOverride: Int? = null) {
-        val binding = _binding ?: return
-        val loaded = loadedOverride
-            ?: filterNotifications(allNotifications, currentFilterText).size
-        binding.textCount.text = getString(
-            R.string.timeline_count_format_loaded_total,
-            loaded,
-            totalCount
-        )
+    private fun loadedCountForCounter(filtered: List<NotificationEntity>): Int {
+        return when {
+            isAudibleMode || isDismissedMode -> filtered.size
+            isDeduplicatedMode -> filtered.distinctBy { it.contentHash }.size
+            else -> filtered.distinctBy { it.notificationKey }.size
+        }
+    }
+
+    /**
+     * 更新 MainActivity toolbar 右側的計數文字：已載入 / 總數。
+     */
+    private fun refreshCountText(loadedOverride: List<NotificationEntity>? = null) {
+        val source = loadedOverride
+            ?: filterNotifications(allNotifications, currentFilterText)
+        val loaded = loadedCountForCounter(source)
+        val text = getString(R.string.timeline_count_format_loaded_total, loaded, totalCount)
+        (activity as? MainActivity)?.setToolbarCount(text)
     }
 
     /**
