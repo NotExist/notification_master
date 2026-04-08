@@ -49,13 +49,28 @@ class WidgetConfigActivity : AppCompatActivity() {
             .setTitle(R.string.widget_config_title)
             .setItems(types) { _, which ->
                 val selectedType = typeValues[which]
-                AppPreferences.setWidgetType(this, appWidgetId, selectedType)
 
-                // 觸發 Widget 初始更新
-                val updateIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
+                // (1) 同步寫盤，避免 process 立刻被殺造成設定遺失
+                AppPreferences.setWidgetTypeSync(this, appWidgetId, selectedType)
+
+                // (2) 直接呼叫對應 Provider 的 updateWidget。
+                //     兩款 widget 共用此 configure activity，需先查 provider class。
+                //     不依賴 sendBroadcast，避免隱式 broadcast 在不同 ROM 上的路由
+                //     差異與時序問題。
+                val appWidgetManager = AppWidgetManager.getInstance(this)
+                val providerClassName = appWidgetManager.getAppWidgetInfo(appWidgetId)?.provider?.className
+                when (providerClassName) {
+                    NotificationWidgetProvider::class.java.name ->
+                        NotificationWidgetProvider.updateWidget(this, appWidgetManager, appWidgetId)
+                    NotificationSingleWidgetProvider::class.java.name ->
+                        NotificationSingleWidgetProvider.updateWidget(this, appWidgetManager, appWidgetId)
+                    else -> {
+                        // 保險：providerInfo 取不到時兩個都呼叫一次
+                        // （updateAppWidget 對非擁有者是 no-op）
+                        NotificationWidgetProvider.updateWidget(this, appWidgetManager, appWidgetId)
+                        NotificationSingleWidgetProvider.updateWidget(this, appWidgetManager, appWidgetId)
+                    }
                 }
-                sendBroadcast(updateIntent)
 
                 setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
                 finish()
