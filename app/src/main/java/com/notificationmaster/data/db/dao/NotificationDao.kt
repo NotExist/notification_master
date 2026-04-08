@@ -437,6 +437,15 @@ interface NotificationDao {
     """)
     fun getDismissedTotalCountFlow(): Flow<Int>
 
+    /**
+     * 取得所有有 REMOVED 事件的 notification id 列表（供 timeline 淡化已移除通知用）
+     */
+    @Query("""
+        SELECT DISTINCT notification_id FROM notification_events
+        WHERE event_type = 'REMOVED'
+    """)
+    fun getRemovedNotificationIdsFlow(): Flow<List<Long>>
+
     @Query("SELECT COUNT(*) FROM notifications WHERE post_time >= :startOfDay")
     suspend fun getTodayCount(startOfDay: Long): Int
 

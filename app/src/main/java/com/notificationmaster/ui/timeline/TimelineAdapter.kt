@@ -36,6 +36,18 @@ class TimelineAdapter(
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     private val dateFormat = SimpleDateFormat("yyyy年M月d日 EEEE", Locale.getDefault())
 
+    /**
+     * 已被移除的 notification id 集合（有 REMOVED 事件的）。
+     * setter 觸發全列表重繪以更新 alpha。
+     */
+    var removedIds: Set<Long> = emptySet()
+        set(value) {
+            if (field != value) {
+                field = value
+                notifyDataSetChanged()
+            }
+        }
+
     companion object {
         private const val VIEW_TYPE_DATE_HEADER = 0
         private const val VIEW_TYPE_NOTIFICATION = 1
@@ -143,6 +155,9 @@ class TimelineAdapter(
         fun bind(item: TimelineItem.NotificationItem) {
             val notification = item.notification
             val context = binding.root.context
+
+            // 已移除通知淡化（alpha=0.55）
+            binding.root.alpha = if (removedIds.contains(notification.id)) 0.55f else 1.0f
 
             // 標題
             binding.textTitle.text = notification.title ?: context.getString(R.string.no_title)

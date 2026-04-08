@@ -251,6 +251,19 @@ class TimelineFragment : Fragment() {
                 }
             }
 
+            // 訂閱已移除通知 id 集合（供 adapter 套用淡化）。
+            // 已移除模式本身項目全為 removed，不套用以免整片變灰。
+            if (!isDismissedMode) {
+                launch {
+                    dao.getRemovedNotificationIdsFlow().collectLatest { ids ->
+                        if (_binding == null) return@collectLatest
+                        adapter?.removedIds = ids.toSet()
+                    }
+                }
+            } else {
+                adapter?.removedIds = emptySet()
+            }
+
             if (isAudibleMode) {
                 // Audible 模式（全域查詢，不分天）
                 dao.getRecentAudibleNotifications().collectLatest { notifications ->
