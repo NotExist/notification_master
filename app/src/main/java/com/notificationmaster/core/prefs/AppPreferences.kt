@@ -173,6 +173,17 @@ object AppPreferences {
             .apply()
     }
 
+    /**
+     * Widget 配置專用：同步寫盤版本，避免 config activity finish 後 process 立刻被殺
+     * 造成設定遺失。僅在 WidgetConfigActivity 呼叫；commit() 會阻塞 UI thread 但
+     * 單一 key 寫入 <10ms 可接受。
+     */
+    fun setWidgetTypeSync(context: Context, widgetId: Int, type: String) {
+        prefs(context).edit()
+            .putString("$KEY_WIDGET_TYPE_PREFIX$widgetId", type)
+            .commit()
+    }
+
     fun removeWidgetType(context: Context, widgetId: Int) {
         prefs(context).edit()
             .remove("$KEY_WIDGET_TYPE_PREFIX$widgetId")
