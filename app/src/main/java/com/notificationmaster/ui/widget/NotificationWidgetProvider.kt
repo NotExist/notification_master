@@ -52,18 +52,11 @@ class NotificationWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        private fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
+        fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             val type = AppPreferences.getWidgetType(context, appWidgetId)
             val views = RemoteViews(context.packageName, R.layout.widget_notification_list)
 
-            // 類型尚未設定（剛建立 / 設定取消 / preference 遺失）：仍 push 一份預設 RemoteViews，
-            // 顯示小工具名稱作為靜態識別，避免使用者看到全黑空白。
-            if (type == null) {
-                views.setTextViewText(R.id.widget_title, context.getString(R.string.widget_list_name))
-                appWidgetManager.updateAppWidget(appWidgetId, views)
-                return
-            }
-
+            // 標題：type null 時退回 widget 名稱作為靜態識別
             val title = when (type) {
                 WidgetConfigActivity.TYPE_AUDIBLE -> context.getString(R.string.widget_type_audible)
                 WidgetConfigActivity.TYPE_HEADSUP -> context.getString(R.string.widget_type_headsup)
@@ -72,7 +65,18 @@ class NotificationWidgetProvider : AppWidgetProvider() {
             }
             views.setTextViewText(R.id.widget_title, title)
 
-            // 標題點擊 → 對應 ShortcutActivity
+            // 無論 type 是否 null，都要綁 adapter + empty view。
+            // Factory.onDataSetChanged() 在 type==null 時會回 emptyList，
+            // empty view 機制就會把「尚無通知記錄」自動顯示出來，避免 widget
+            // 進入「壞掉但無法自癒」的狀態。
+            val serviceIntent = Intent(context, NotificationRemoteViewsService::class.java).apply {
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
+            }
+            views.setRemoteAdapter(R.id.widget_list_view, serviceIntent)
+            views.setEmptyView(R.id.widget_list_view, R.id.widget_empty)
+
+            // 標題點擊 → 對應 ShortcutActivity（type null 時不綁，點了也沒意義）
             val shortcutActivityClass = when (type) {
                 WidgetConfigActivity.TYPE_AUDIBLE -> AudibleShortcutActivity::class.java
                 WidgetConfigActivity.TYPE_HEADSUP -> HeadsupShortcutActivity::class.java
@@ -88,14 +92,6 @@ class NotificationWidgetProvider : AppWidgetProvider() {
                 views.setOnClickPendingIntent(R.id.widget_title, titleIntent)
             }
 
-            // 綁定 RemoteViewsService（清單資料來源）
-            val serviceIntent = Intent(context, NotificationRemoteViewsService::class.java).apply {
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
-            }
-            views.setRemoteAdapter(R.id.widget_list_view, serviceIntent)
-            views.setEmptyView(R.id.widget_list_view, R.id.widget_empty)
-
             // 項目點擊 PendingIntent template → Detail 頁
             val detailIntent = Intent(context, MainActivity::class.java).apply {
                 action = MainActivity.ACTION_SHOW_DETAIL
@@ -108,6 +104,8 @@ class NotificationWidgetProvider : AppWidgetProvider() {
             views.setPendingIntentTemplate(R.id.widget_list_view, pendingTemplate)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
+            // 新綁的 adapter 不會自動拉資料，明確踢一次
+            appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.widget_list_view)
         }
     }
 }
