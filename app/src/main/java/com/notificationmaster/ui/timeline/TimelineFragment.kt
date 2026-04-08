@@ -50,6 +50,8 @@ class TimelineFragment : Fragment() {
     private var currentFilterText = ""
     private var allNotifications: List<NotificationEntity> = emptyList()
     private var loadJob: Job? = null
+    /** 目前模式對應的資料庫總數（由 count Flow 更新） */
+    private var totalCount: Int = 0
     // App 名稱快取委派給 AppLabelCache（共用、帶 TTL）
     private val dateFormat = SimpleDateFormat("yyyy年M月d日 EEEE", Locale.getDefault())
     private var bubbleHideRunnable: Runnable? = null
@@ -229,7 +231,26 @@ class TimelineFragment : Fragment() {
         val database = NotificationMasterApp.getInstance().database
         val dao = database.notificationDao()
 
+        // 重設計數器狀態
+        totalCount = 0
+
         loadJob = viewLifecycleOwner.lifecycleScope.launch {
+            // 訂閱目前模式的資料庫總數（獨立於漸進載入，自動響應資料變動）
+            launch {
+                val countFlow = when {
+                    isAudibleMode -> dao.getAudibleTotalCountFlow()
+                    isDismissedMode -> dao.getDismissedTotalCountFlow()
+                    isDeduplicatedMode -> dao.getDeduplicatedTotalCountFlow()
+                    else -> dao.getTotalKeyCountFlow()
+                }
+                countFlow.collectLatest { total ->
+                    if (_binding == null) return@collectLatest
+                    totalCount = total
+                    // 觸發計數器文字更新（不改變列表資料）
+                    refreshCountText()
+                }
+            }
+
             if (isAudibleMode) {
                 // Audible 模式（全域查詢，不分天）
                 dao.getRecentAudibleNotifications().collectLatest { notifications ->
@@ -364,7 +385,7 @@ class TimelineFragment : Fragment() {
         if (filtered.isEmpty()) {
             binding.emptyState.visibility = View.VISIBLE
             binding.recyclerView.visibility = View.GONE
-            binding.textCount.text = getString(R.string.timeline_count_format, 0)
+            refreshCountText(loadedOverride = 0)
             updateEmptyStateForPermission()
         } else {
             binding.emptyState.visibility = View.GONE
@@ -392,9 +413,24 @@ class TimelineFragment : Fragment() {
                 }
 
                 adapter?.submitList(timelineItems)
-                _binding?.textCount?.text = getString(R.string.timeline_count_format, filtered.size)
+                refreshCountText(loadedOverride = filtered.size)
             }
         }
+    }
+
+    /**
+     * 更新計數器文字：已載入 / 總數。
+     * 若 loadedOverride 為 null，使用目前過濾後的 allNotifications 筆數。
+     */
+    private fun refreshCountText(loadedOverride: Int? = null) {
+        val binding = _binding ?: return
+        val loaded = loadedOverride
+            ?: filterNotifications(allNotifications, currentFilterText).size
+        binding.textCount.text = getString(
+            R.string.timeline_count_format_loaded_total,
+            loaded,
+            totalCount
+        )
     }
 
     /**

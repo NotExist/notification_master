@@ -398,6 +398,45 @@ interface NotificationDao {
     @Query("SELECT COUNT(*) FROM notifications")
     suspend fun getTotalCount(): Int
 
+    /**
+     * 全部模式：以 notification_key 去重的總數（Flow，自動響應資料庫變動）
+     */
+    @Query("SELECT COUNT(DISTINCT notification_key) FROM notifications")
+    fun getTotalKeyCountFlow(): Flow<Int>
+
+    /**
+     * 去重模式：以 content_hash 去重的「最新版本」總數
+     */
+    @Query("""
+        SELECT COUNT(DISTINCT content_hash) FROM notifications
+        WHERE id IN (
+            SELECT id FROM (
+                SELECT id, MAX(post_time) FROM notifications
+                GROUP BY notification_key
+            )
+        )
+    """)
+    fun getDeduplicatedTotalCountFlow(): Flow<Int>
+
+    /**
+     * 有聲模式：以 notification_key 去重的可感知提示總數
+     */
+    @Query("""
+        SELECT COUNT(DISTINCT notification_key) FROM notifications
+        WHERE is_audible = 1
+    """)
+    fun getAudibleTotalCountFlow(): Flow<Int>
+
+    /**
+     * 已移除模式：有 REMOVED 事件的 notification_key 總數
+     */
+    @Query("""
+        SELECT COUNT(DISTINCT n.notification_key) FROM notifications n
+        INNER JOIN notification_events e ON n.id = e.notification_id
+        WHERE e.event_type = 'REMOVED'
+    """)
+    fun getDismissedTotalCountFlow(): Flow<Int>
+
     @Query("SELECT COUNT(*) FROM notifications WHERE post_time >= :startOfDay")
     suspend fun getTodayCount(startOfDay: Long): Int
 
