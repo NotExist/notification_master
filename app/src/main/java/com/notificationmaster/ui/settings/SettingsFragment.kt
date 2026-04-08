@@ -258,7 +258,6 @@ class SettingsFragment : Fragment() {
         updateRealtimeCalendarDisplay()
         updateBackupDirDisplay()
         updateFullScreenIntentHint()
-        _binding?.btnUpdateRankingMap?.isEnabled = !NotificationCaptureService.isRankingMapPopulated
     }
 
     override fun onDestroyView() {
@@ -394,7 +393,9 @@ class SettingsFragment : Fragment() {
             }, 10_000L)
         }
 
-        binding.btnUpdateRankingMap.isEnabled = !NotificationCaptureService.isRankingMapPopulated
+        NotificationCaptureService.showRankingBanner.observe(viewLifecycleOwner) { show ->
+            _binding?.btnUpdateRankingMap?.alpha = if (show) 1.0f else 0.5f
+        }
         binding.btnUpdateRankingMap.setOnClickListener {
             if (NotificationCaptureService.isRankingMapPopulated) {
                 MaterialAlertDialogBuilder(requireContext())
@@ -421,15 +422,6 @@ class SettingsFragment : Fragment() {
         } else {
             Toast.makeText(requireContext(), "服務未連線", Toast.LENGTH_SHORT).show()
         }
-        showRankingMapInfoDialog()
-    }
-
-    private fun showRankingMapInfoDialog() {
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.ranking_map_warning_title)
-            .setMessage(R.string.ranking_map_warning_detail)
-            .setPositiveButton(android.R.string.ok, null)
-            .show()
     }
 
     private fun updateDebugInfo() {
