@@ -310,7 +310,11 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(35),
                 supported = sdk >= 35,
                 features = listOf(
-                    FeatureItem("敏感通知保護", "系統遮蔽 OTP/2FA 通知內容，未受信任的 NLS 只能取得消毒後的文字", implemented = false),
+                    FeatureItem(
+                        "敏感通知保護 (RECEIVE_SENSITIVE_NOTIFICATIONS)",
+                        "Android 15 起 NotificationManagerService 對含 OTP/2FA 等敏感內容的通知進行 redaction，僅持有 RECEIVE_SENSITIVE_NOTIFICATIONS 權限的 NLS 可取得完整內容。該權限 protectionLevel 為 signature|role|module，僅平台簽章 App 或系統 role 持有者可取得，第三方 App 無法主張或被授予 — 故此項標記為未實作屬於系統先天限制",
+                        implemented = false
+                    ),
                     FeatureItem("豐富振動效果", "NotificationChannel.setVibrationEffect() 取代 setVibrationPattern", implemented = false),
                     FeatureItem("自訂佈局限制", "Custom view 強制套用系統標準模板裝飾", implemented = false)
                 )
