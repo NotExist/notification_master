@@ -2,9 +2,11 @@ package com.notificationmaster.ui.main
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.TypedValue
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -167,6 +169,22 @@ class HomeFragment : Fragment() {
         val ctx = requireContext()
         val margin = resources.getDimensionPixelSize(R.dimen.feature_item_margin)
 
+        // 計算 minSdk / targetSdk 分隔線插入位置
+        // targetSdkVersion: API 1+ 皆可用
+        // minSdkVersion: API 24+ 才有此欄位，低版本不顯示該線
+        val appInfo = ctx.applicationInfo
+        val targetSdk = appInfo.targetSdkVersion
+        val minSdk: Int? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            appInfo.minSdkVersion
+        } else {
+            null
+        }
+        val minBoundary = minSdk?.let { ms ->
+            groups.filter { it.apiLevel <= ms }.maxByOrNull { it.apiLevel }?.apiLevel
+        }
+        val targetBoundary = groups.filter { it.apiLevel <= targetSdk }
+            .maxByOrNull { it.apiLevel }?.apiLevel
+
         for (group in groups) {
             // API 層級標題行：✓/✗ + "API 24 — Android 7.0 Nougat"
             val headerLayout = LinearLayout(ctx).apply {
@@ -257,7 +275,64 @@ class HomeFragment : Fragment() {
                 }
                 container.addView(descText)
             }
+
+            // 在 minSdk / targetSdk 對應 group 結尾插入分隔線
+            if (group.apiLevel == minBoundary) {
+                container.addView(buildSdkDivider(ctx, getString(R.string.env_sdk_divider_min), margin))
+            }
+            if (group.apiLevel == targetBoundary) {
+                container.addView(buildSdkDivider(ctx, getString(R.string.env_sdk_divider_target), margin))
+            }
         }
+    }
+
+    /**
+     * 建立帶中間標籤的水平分隔線（用於 minSdk / targetSdk 位置標示）
+     */
+    private fun buildSdkDivider(ctx: android.content.Context, label: String, margin: Int): View {
+        val row = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = margin * 3
+            }
+        }
+
+        val dividerColor = com.google.android.material.color.MaterialColors.getColor(
+            ctx, com.google.android.material.R.attr.colorOutline,
+            ContextCompat.getColor(ctx, R.color.text_tertiary)
+        )
+        val accentColor = com.google.android.material.color.MaterialColors.getColor(
+            ctx, com.google.android.material.R.attr.colorPrimary,
+            ContextCompat.getColor(ctx, R.color.status_enabled)
+        )
+
+        fun lineView() = View(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(0, (1 * resources.displayMetrics.density).toInt(), 1f)
+            setBackgroundColor(dividerColor)
+        }
+
+        val labelView = TextView(ctx).apply {
+            text = label
+            textSize = 11f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(accentColor)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginStart = margin * 2
+                marginEnd = margin * 2
+            }
+        }
+
+        row.addView(lineView())
+        row.addView(labelView)
+        row.addView(lineView())
+        return row
     }
 
     /**

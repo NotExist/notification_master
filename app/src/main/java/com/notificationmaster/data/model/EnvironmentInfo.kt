@@ -216,7 +216,8 @@ data class SupportedFeatures(
                     FeatureItem("MessagingStyle", "提取訊息通知的對話內容、sender 和媒體附件", implemented = true),
                     FeatureItem("Ranking", "記錄 rank / importance / isAmbient / suppressedVisualEffects", implemented = true),
                     FeatureItem("倒數計時器", "chronometerCountDown 支援倒數模式", implemented = true),
-                    FeatureItem("服務重新綁定", "支援主動重新連接通知監聽服務", implemented = true)
+                    FeatureItem("服務重新綁定", "支援主動重新連接通知監聽服務", implemented = true),
+                    FeatureItem("minSdkVersion 讀取", "ApplicationInfo.minSdkVersion 欄位用於在環境資訊顯示 minSdk 分隔線；API < 24 裝置無此欄位故不顯示該線", implemented = true)
                 )
             ),
             ApiFeatureGroup(

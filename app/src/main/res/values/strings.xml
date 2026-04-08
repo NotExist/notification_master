@@ -5,6 +5,8 @@
     <!-- 主畫面 -->
     <string name="environment_info">環境資訊</string>
     <string name="supported_features">支援功能</string>
+    <string name="env_sdk_divider_min">minSdk (以上必然支援)</string>
+    <string name="env_sdk_divider_target">targetSdk (以下尚未考量)</string>
     <string name="statistics">統計</string>
     <string name="today_notifications">今日通知</string>
     <string name="total_notifications">總計</string>
