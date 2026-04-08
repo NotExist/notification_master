@@ -36,12 +36,14 @@ class NotificationWidgetProvider : AppWidgetProvider() {
     companion object {
         fun notifyUpdate(context: Context) {
             val appWidgetManager = AppWidgetManager.getInstance(context)
-            // 清單式 Widget
+            // 清單式 Widget：直接呼叫 updateWidget 重設 title/adapter/emptyView，
+            // 讓首次 config 失敗的 widget 在新通知到達時能自我修復
+            // （updateWidget 內部已會 notifyAppWidgetViewDataChanged 觸發資料刷新）
             val listIds = appWidgetManager.getAppWidgetIds(
                 ComponentName(context, NotificationWidgetProvider::class.java)
             )
-            if (listIds.isNotEmpty()) {
-                appWidgetManager.notifyAppWidgetViewDataChanged(listIds, R.id.widget_list_view)
+            for (id in listIds) {
+                updateWidget(context, appWidgetManager, id)
             }
             // 單項式 Widget
             val singleIds = appWidgetManager.getAppWidgetIds(
