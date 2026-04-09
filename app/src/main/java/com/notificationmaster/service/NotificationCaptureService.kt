@@ -276,6 +276,11 @@ class NotificationCaptureService : NotificationListenerService() {
         for (sbn in notifications) {
             try {
                 val key = ApiVersionHelper.getNotificationKey(sbn)
+                // PendingIntentCache 僅存於 in-memory，process 重啟後必須無條件重建。
+                // entity 去重只保證不重複寫 DB，不能連帶讓 cache 也跳過，否則
+                // 舊通知在 Detail 頁會全部顯示灰燈（即便 token 仍在 shade 中有效）。
+                cachePendingIntents(sbn)
+
                 if (database.notificationDao().existsByKey(key)) {
                     skipCount++
                     // 補齊 channel 資料（已存在的通知可能 channel name 為 null）
