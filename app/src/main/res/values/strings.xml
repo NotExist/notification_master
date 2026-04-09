@@ -466,7 +466,6 @@
     <string name="widget_single_name">單項通知</string>
     <string name="widget_list_description">顯示指定類型的通知清單，可捲動查看多筆</string>
     <string name="widget_single_description">顯示指定類型的單筆通知摘要</string>
-    <string name="widget_loading">載入中…</string>
     <string name="widget_config_title">選擇通知類型</string>
     <string name="widget_empty">尚無通知記錄</string>
     <string name="widget_type_audible">最近有聲</string>
