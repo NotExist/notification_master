@@ -75,6 +75,8 @@ class TimelineFragment : Fragment() {
     private var hasReachedEnd = false
     /** 資料庫最早記錄時間（一次性查詢） */
     private var earliestPostTime: Long? = null
+    /** 已被移除的 notification id 集合（供建構 TimelineItem 時標記 isRemoved） */
+    private var removedIds: Set<Long> = emptySet()
 
 
     private companion object {
@@ -233,6 +235,7 @@ class TimelineFragment : Fragment() {
         historicalDays.clear()
         isLoadingMore = false
         hasReachedEnd = false
+        removedIds = emptySet()
 
         // 顯示載入指示器
         binding.swipeRefresh.isRefreshing = true
@@ -260,17 +263,21 @@ class TimelineFragment : Fragment() {
                 }
             }
 
-            // 訂閱已移除通知 id 集合（供 adapter 套用淡化）。
+            // 訂閱已移除通知 id 集合（供建構 TimelineItem 時標記 isRemoved）。
             // 已移除模式本身項目全為 removed，不套用以免整片變灰。
             if (!isDismissedMode) {
                 launch {
                     dao.getRemovedNotificationIdsFlow().collectLatest { ids ->
                         if (_binding == null) return@collectLatest
-                        adapter?.removedIds = ids.toSet()
+                        val newSet = ids.toSet()
+                        if (removedIds != newSet) {
+                            removedIds = newSet
+                            applyFilterAndDisplay()
+                        }
                     }
                 }
             } else {
-                adapter?.removedIds = emptySet()
+                removedIds = emptySet()
             }
 
             if (isAudibleMode) {
@@ -507,7 +514,10 @@ class TimelineFragment : Fragment() {
                 lastDate = notificationDate
             }
 
-            items.add(TimelineItem.NotificationItem(notification))
+            items.add(TimelineItem.NotificationItem(
+                notification = notification,
+                isRemoved = removedIds.contains(notification.id)
+            ))
         }
 
         return items
@@ -539,7 +549,11 @@ class TimelineFragment : Fragment() {
                 dao.getDeduplicatedCount(notification.contentHash, dayStart, dayEnd)
             }
 
-            items.add(TimelineItem.NotificationItem(notification, similarCount))
+            items.add(TimelineItem.NotificationItem(
+                notification = notification,
+                similarCount = similarCount,
+                isRemoved = removedIds.contains(notification.id)
+            ))
         }
 
         return items
