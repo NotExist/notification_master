@@ -1,5 +1,6 @@
 package com.notificationmaster.core.filter
 
+import com.notificationmaster.R
 import com.notificationmaster.data.db.entity.EventType
 import org.json.JSONArray
 import org.json.JSONObject
@@ -34,6 +35,19 @@ enum class KeywordField {
 }
 
 /**
+ * Notification.flags bit flag 定義（供 UI 顯示用）
+ */
+enum class NotificationFlag(val bit: Int, val labelResId: Int) {
+    ONGOING(0x02, R.string.flag_ongoing),
+    AUTO_CANCEL(0x10, R.string.flag_auto_cancel),
+    NO_CLEAR(0x20, R.string.flag_no_clear),
+    FOREGROUND_SERVICE(0x40, R.string.flag_foreground_service),
+    HIGH_PRIORITY(0x80, R.string.flag_high_priority),
+    LOCAL_ONLY(0x100, R.string.flag_local_only),
+    GROUP_SUMMARY(0x200, R.string.flag_group_summary)
+}
+
+/**
  * 匹配上下文：封裝通知的各項屬性供 Matcher 判斷
  */
 data class MatchContext(
@@ -47,7 +61,13 @@ data class MatchContext(
     val subText: String? = null,
     // Channel 屬性（ChannelPropertyMatcher 需要）
     val channelImportance: Int? = null,
-    val channelGroupId: String? = null
+    val channelGroupId: String? = null,
+    // Flags matcher 用
+    val flags: Int? = null,
+    // DerivedProperty matcher 用
+    val isAudible: Boolean? = null,
+    val likelyHeadsup: Boolean? = null,
+    val isRemoved: Boolean? = null
 )
 
 /**
@@ -158,6 +178,62 @@ sealed interface Matcher {
         }
     }
 
+    /**
+     * 依 Notification.flags bitmask 匹配
+     *
+     * requiredFlags 中的 bit 必須全部被設定，excludedFlags 中的 bit 必須全部未被設定。
+     * 兩者不可重疊。全為 0 = 全部不限，永遠通過。
+     */
+    data class Flags(
+        val requiredFlags: Int = 0,
+        val excludedFlags: Int = 0
+    ) : Matcher {
+        init {
+            require(requiredFlags and excludedFlags == 0) {
+                "requiredFlags and excludedFlags must not overlap"
+            }
+        }
+
+        override fun matches(context: MatchContext): Boolean {
+            val f = context.flags ?: return false
+            if (requiredFlags != 0 && (f and requiredFlags) != requiredFlags) return false
+            if (excludedFlags != 0 && (f and excludedFlags) != 0) return false
+            return true
+        }
+
+        override fun toJson() = JSONObject().apply {
+            put("type", "Flags")
+            put("requiredFlags", requiredFlags)
+            put("excludedFlags", excludedFlags)
+        }
+    }
+
+    /**
+     * 依推斷屬性匹配（isAudible / likelyHeadsup / isRemoved）
+     *
+     * 每個欄位：true = 必須, false = 排除, null = 不限。
+     * 全為 null = 永遠通過。
+     */
+    data class DerivedProperty(
+        val isAudible: Boolean? = null,
+        val likelyHeadsup: Boolean? = null,
+        val isRemoved: Boolean? = null
+    ) : Matcher {
+        override fun matches(context: MatchContext): Boolean {
+            if (isAudible != null && context.isAudible != isAudible) return false
+            if (likelyHeadsup != null && context.likelyHeadsup != likelyHeadsup) return false
+            if (isRemoved != null && context.isRemoved != isRemoved) return false
+            return true
+        }
+
+        override fun toJson() = JSONObject().apply {
+            put("type", "DerivedProperty")
+            put("isAudible", isAudible ?: JSONObject.NULL)
+            put("likelyHeadsup", likelyHeadsup ?: JSONObject.NULL)
+            put("isRemoved", isRemoved ?: JSONObject.NULL)
+        }
+    }
+
     companion object {
         fun fromJson(json: JSONObject): Matcher = when (val type = json.getString("type")) {
             "Package" -> Package(json.getString("packageName"))
@@ -180,6 +256,15 @@ sealed interface Matcher {
             "ChannelProperty" -> ChannelProperty(
                 minImportance = if (json.isNull("minImportance")) null else json.getInt("minImportance"),
                 groupId = if (json.isNull("groupId")) null else json.getString("groupId")
+            )
+            "Flags" -> Flags(
+                requiredFlags = json.optInt("requiredFlags", 0),
+                excludedFlags = json.optInt("excludedFlags", 0)
+            )
+            "DerivedProperty" -> DerivedProperty(
+                isAudible = if (json.isNull("isAudible")) null else json.getBoolean("isAudible"),
+                likelyHeadsup = if (json.isNull("likelyHeadsup")) null else json.getBoolean("likelyHeadsup"),
+                isRemoved = if (json.isNull("isRemoved")) null else json.getBoolean("isRemoved")
             )
             else -> throw IllegalArgumentException("Unknown matcher type: $type")
         }

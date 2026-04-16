@@ -352,6 +352,11 @@ data class NotificationEntity(
 
     /** contentIntent 建立者包名 */
     @ColumnInfo(name = "content_intent_creator_package")
-    val contentIntentCreatorPackage: String?
+    val contentIntentCreatorPackage: String?,
+
+    // === 移除狀態 ===
+    /** 移除時間戳。null = 未移除，非 null = 已移除 */
+    @ColumnInfo(name = "removed_at")
+    val removedAt: Long? = null
 )
 

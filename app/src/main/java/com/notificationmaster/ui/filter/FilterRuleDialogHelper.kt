@@ -29,6 +29,7 @@ import com.notificationmaster.core.filter.ActionType
 import com.notificationmaster.core.filter.KeywordField
 import com.notificationmaster.core.filter.MatchContext
 import com.notificationmaster.core.filter.Matcher
+import com.notificationmaster.core.filter.NotificationFlag
 import com.notificationmaster.core.filter.Rule
 import com.notificationmaster.core.filter.RuleAction
 import com.notificationmaster.core.filter.RuleRepository
@@ -71,6 +72,10 @@ object FilterRuleDialogHelper {
      * @param soundPicker 持續提醒鈴聲系統選擇器；由呼叫端 Fragment 在 field initializer
      *                    建立並傳入。為 null 時會 fallback 到 cursor-based 選單
      * @param onRuleAdded 規則新增/更新完成後的 callback（用於 refresh UI）
+     * @param widgetMode Widget 模式：隱藏 ActionType/EventType/Action 區塊，Package 非必填
+     * @param existingWidgetMatchers Widget 重新設定時的既有 matchers（widgetMode 專用）
+     * @param onMatchersReady Widget 模式確認後回傳 matchers（widgetMode 專用）
+     * @param onWidgetCancelled Widget 模式取消回呼（widgetMode 專用）
      */
     fun showAddRuleDialog(
         context: Context,
@@ -79,7 +84,11 @@ object FilterRuleDialogHelper {
         prefillChannelId: String? = null,
         existingRule: Rule? = null,
         soundPicker: SoundPickerLauncher? = null,
-        onRuleAdded: (() -> Unit)? = null
+        onRuleAdded: (() -> Unit)? = null,
+        widgetMode: Boolean = false,
+        existingWidgetMatchers: List<Matcher>? = null,
+        onMatchersReady: ((List<Matcher>) -> Unit)? = null,
+        onWidgetCancelled: (() -> Unit)? = null
     ) {
         val isEditMode = existingRule != null
         val dialogView = LayoutInflater.from(context)
@@ -127,6 +136,123 @@ object FilterRuleDialogHelper {
         val dropdownMinImportance = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.dropdown_min_importance)
         val layoutGroupId = dialogView.findViewById<TextInputLayout>(R.id.layout_group_id)
         val editGroupId = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.edit_group_id)
+
+        // Flags / DerivedProperty 相關 views
+        val btnToggleFlags = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_toggle_flags)
+        val layoutFlagsSection = dialogView.findViewById<LinearLayout>(R.id.layout_flags_section)
+        val containerFlags = dialogView.findViewById<LinearLayout>(R.id.container_flags)
+        val containerDerived = dialogView.findViewById<LinearLayout>(R.id.container_derived)
+
+        // Flags 區塊收合/展開
+        btnToggleFlags.setOnClickListener {
+            val expanded = layoutFlagsSection.visibility == View.VISIBLE
+            layoutFlagsSection.visibility = if (expanded) View.GONE else View.VISIBLE
+            btnToggleFlags.text = context.getString(
+                if (expanded) R.string.filter_flags_expand else R.string.filter_flags_collapse
+            )
+            if (!expanded) {
+                btnToggleFlags.post {
+                    dialogScrollView.smoothScrollTo(0, btnToggleFlags.top)
+                }
+            }
+        }
+
+        // === Flags 三態列動態生成 ===
+        data class FlagToggle(val id: Int, val group: com.google.android.material.button.MaterialButtonToggleGroup)
+
+        fun createTriStateRow(parent: LinearLayout, label: String): com.google.android.material.button.MaterialButtonToggleGroup {
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = 4 }
+            }
+            val tv = TextView(context).apply {
+                text = label
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                textSize = 13f
+            }
+            val toggleGroup = com.google.android.material.button.MaterialButtonToggleGroup(context).apply {
+                isSingleSelection = true
+                isSelectionRequired = true
+            }
+            val btnRequire = com.google.android.material.button.MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                id = View.generateViewId()
+                text = context.getString(R.string.flag_state_require)
+                textSize = 11f
+                minWidth = 0
+                minimumWidth = 0
+                setPadding(12, 0, 12, 0)
+                minHeight = 0
+                minimumHeight = 0
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 72)
+            }
+            val btnExclude = com.google.android.material.button.MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                id = View.generateViewId()
+                text = context.getString(R.string.flag_state_exclude)
+                textSize = 11f
+                minWidth = 0
+                minimumWidth = 0
+                setPadding(12, 0, 12, 0)
+                minHeight = 0
+                minimumHeight = 0
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 72)
+            }
+            val btnIgnore = com.google.android.material.button.MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                id = View.generateViewId()
+                text = context.getString(R.string.flag_state_ignore)
+                textSize = 11f
+                minWidth = 0
+                minimumWidth = 0
+                setPadding(12, 0, 12, 0)
+                minHeight = 0
+                minimumHeight = 0
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 72)
+            }
+            toggleGroup.addView(btnRequire)
+            toggleGroup.addView(btnExclude)
+            toggleGroup.addView(btnIgnore)
+            toggleGroup.check(btnIgnore.id) // 預設：不限
+            // tag 存放 3 個 button id 供讀取用
+            toggleGroup.tag = Triple(btnRequire.id, btnExclude.id, btnIgnore.id)
+
+            row.addView(tv)
+            row.addView(toggleGroup)
+            parent.addView(row)
+            return toggleGroup
+        }
+
+        // 建立 7 個 bit flag 列
+        val flagToggleGroups = mutableMapOf<com.notificationmaster.core.filter.NotificationFlag, com.google.android.material.button.MaterialButtonToggleGroup>()
+        for (flag in com.notificationmaster.core.filter.NotificationFlag.entries) {
+            flagToggleGroups[flag] = createTriStateRow(containerFlags, context.getString(flag.labelResId))
+        }
+
+        // 建立 3 個 derived property 列
+        data class DerivedDef(val key: String, val labelResId: Int)
+        val derivedDefs = listOf(
+            DerivedDef("isAudible", R.string.derived_audible),
+            DerivedDef("likelyHeadsup", R.string.derived_headsup),
+            DerivedDef("isRemoved", R.string.derived_removed)
+        )
+        val derivedToggleGroups = mutableMapOf<String, com.google.android.material.button.MaterialButtonToggleGroup>()
+        for (def in derivedDefs) {
+            derivedToggleGroups[def.key] = createTriStateRow(containerDerived, context.getString(def.labelResId))
+        }
+
+        // 讀取 toggle group 的三態值
+        fun readTriState(group: com.google.android.material.button.MaterialButtonToggleGroup): Int {
+            // 回傳 1=require, -1=exclude, 0=ignore
+            @Suppress("UNCHECKED_CAST")
+            val (reqId, exclId, _) = group.tag as Triple<Int, Int, Int>
+            return when (group.checkedButtonId) {
+                reqId -> 1
+                exclId -> -1
+                else -> 0
+            }
+        }
 
         // 動作設定容器
         val layoutActionSettings = dialogView.findViewById<LinearLayout>(R.id.layout_action_settings)
@@ -270,6 +396,73 @@ object FilterRuleDialogHelper {
             updateEventTypeAvailability(effectiveActionType)
         }
 
+        // === Widget 模式：隱藏 ActionType/EventType/Action 區塊 ===
+        if (widgetMode) {
+            layoutCategory.visibility = View.GONE
+            // 隱藏事件類型區段（標題 + checkbox）
+            dialogView.findViewById<View>(R.id.section_header_event_types)?.visibility = View.GONE
+            containerEventTypes.visibility = View.GONE
+            // 隱藏動作設定
+            layoutActionSettings.visibility = View.GONE
+
+            // Widget 編輯模式：回填既有 matchers
+            if (existingWidgetMatchers != null) {
+                existingWidgetMatchers.filterIsInstance<Matcher.Package>().firstOrNull()?.let {
+                    editPackageName.setText(it.packageName)
+                }
+                existingWidgetMatchers.filterIsInstance<Matcher.Channel>().firstOrNull()?.let {
+                    editChannelId.setText(it.channelId)
+                }
+                existingWidgetMatchers.filterIsInstance<Matcher.Keyword>().firstOrNull()?.let { kw ->
+                    editKeywordPattern.setText(kw.pattern)
+                    switchKeywordRegex.isChecked = kw.isRegex
+                    keywordFieldCheckBoxes.forEach { (field, cb) -> cb.isChecked = field in kw.fields }
+                    layoutKeywordSection.visibility = View.VISIBLE
+                    btnToggleKeyword.text = context.getString(R.string.filter_keyword_collapse)
+                }
+                existingWidgetMatchers.filterIsInstance<Matcher.ChannelProperty>().firstOrNull()?.let { cp ->
+                    cp.minImportance?.let { imp ->
+                        val idx = importanceOptions.indexOfFirst { it.value == imp }
+                        if (idx >= 0) {
+                            selectedImportance = imp
+                            dropdownMinImportance.setText(importanceOptions[idx].label, false)
+                        }
+                    }
+                    cp.groupId?.let { editGroupId.setText(it) }
+                }
+                // Flags + DerivedProperty 回填
+                var hasFlags = false
+                existingWidgetMatchers.filterIsInstance<Matcher.Flags>().firstOrNull()?.let { fm ->
+                    for ((flag, group) in flagToggleGroups) {
+                        val (reqId, exclId, ignId) = group.tag as Triple<Int, Int, Int>
+                        when {
+                            fm.requiredFlags and flag.bit != 0 -> { group.check(reqId); hasFlags = true }
+                            fm.excludedFlags and flag.bit != 0 -> { group.check(exclId); hasFlags = true }
+                            else -> group.check(ignId)
+                        }
+                    }
+                }
+                existingWidgetMatchers.filterIsInstance<Matcher.DerivedProperty>().firstOrNull()?.let { dp ->
+                    fun fillDerived(key: String, value: Boolean?) {
+                        val group = derivedToggleGroups[key] ?: return
+                        val (reqId, exclId, ignId) = group.tag as Triple<Int, Int, Int>
+                        when (value) {
+                            true -> { group.check(reqId); hasFlags = true }
+                            false -> { group.check(exclId); hasFlags = true }
+                            null -> group.check(ignId)
+                        }
+                    }
+                    fillDerived("isAudible", dp.isAudible)
+                    fillDerived("likelyHeadsup", dp.likelyHeadsup)
+                    fillDerived("isRemoved", dp.isRemoved)
+                }
+                if (hasFlags) {
+                    layoutFlagsSection.visibility = View.VISIBLE
+                    btnToggleFlags.text = context.getString(R.string.filter_flags_collapse)
+                }
+            }
+        }
+
         // === 延遲 Dropdown 設定 ===
         val delayAdapter = ArrayAdapter(context, android.R.layout.simple_dropdown_item_1line, delayLabels)
         dropdownDismissDelay.setAdapter(delayAdapter)
@@ -346,6 +539,39 @@ object FilterRuleDialogHelper {
                 }
                 cp.groupId?.let { editGroupId.setText(it) }
             }
+
+            // 回填 Flags
+            var hasFlags = false
+            existingRule.matchers.filterIsInstance<Matcher.Flags>().firstOrNull()?.let { fm ->
+                for ((flag, group) in flagToggleGroups) {
+                    val (reqId, exclId, ignId) = group.tag as Triple<Int, Int, Int>
+                    when {
+                        fm.requiredFlags and flag.bit != 0 -> { group.check(reqId); hasFlags = true }
+                        fm.excludedFlags and flag.bit != 0 -> { group.check(exclId); hasFlags = true }
+                        else -> group.check(ignId)
+                    }
+                }
+            }
+            // 回填 DerivedProperty
+            existingRule.matchers.filterIsInstance<Matcher.DerivedProperty>().firstOrNull()?.let { dp ->
+                fun fillDerived(key: String, value: Boolean?) {
+                    val group = derivedToggleGroups[key] ?: return
+                    val (reqId, exclId, ignId) = group.tag as Triple<Int, Int, Int>
+                    when (value) {
+                        true -> { group.check(reqId); hasFlags = true }
+                        false -> { group.check(exclId); hasFlags = true }
+                        null -> group.check(ignId)
+                    }
+                }
+                fillDerived("isAudible", dp.isAudible)
+                fillDerived("likelyHeadsup", dp.likelyHeadsup)
+                fillDerived("isRemoved", dp.isRemoved)
+            }
+            // 有值時自動展開
+            if (hasFlags) {
+                layoutFlagsSection.visibility = View.VISIBLE
+                btnToggleFlags.text = context.getString(R.string.filter_flags_collapse)
+            }
         }
 
         // === 預填值 ===
@@ -418,23 +644,30 @@ object FilterRuleDialogHelper {
          */
         fun buildMatchersFromDialog(): List<Matcher>? {
             val packageName = editPackageName.text.toString().trim()
-            if (packageName.isEmpty()) {
+            if (!widgetMode && packageName.isEmpty()) {
                 layoutPackageName.error = context.getString(R.string.filter_package_name_required)
                 return null
             }
             layoutPackageName.error = null
 
-            val selectedEventTypes = eventTypes.filterIndexed { i, _ -> checkBoxes[i].isChecked && checkBoxes[i].isEnabled }
-                .map { it.name }.toSet()
-            if (selectedEventTypes.isEmpty()) {
-                Toast.makeText(context, R.string.filter_event_type_required, Toast.LENGTH_SHORT).show()
-                return null
+            if (!widgetMode) {
+                val selectedEventTypes = eventTypes.filterIndexed { i, _ -> checkBoxes[i].isChecked && checkBoxes[i].isEnabled }
+                    .map { it.name }.toSet()
+                if (selectedEventTypes.isEmpty()) {
+                    Toast.makeText(context, R.string.filter_event_type_required, Toast.LENGTH_SHORT).show()
+                    return null
+                }
             }
 
-            val matchers = mutableListOf<Matcher>(Matcher.Package(packageName))
+            val matchers = mutableListOf<Matcher>()
+            if (packageName.isNotEmpty()) matchers.add(Matcher.Package(packageName))
             val channelId = editChannelId.text.toString().trim().ifEmpty { null }
             if (channelId != null) matchers.add(Matcher.Channel(channelId))
-            matchers.add(Matcher.EventTypes(selectedEventTypes))
+            if (!widgetMode) {
+                val selectedEventTypes = eventTypes.filterIndexed { i, _ -> checkBoxes[i].isChecked && checkBoxes[i].isEnabled }
+                    .map { it.name }.toSet()
+                matchers.add(Matcher.EventTypes(selectedEventTypes))
+            }
 
             val kwPattern = editKeywordPattern.text?.toString()?.trim().orEmpty()
             if (kwPattern.isNotEmpty()) {
@@ -450,6 +683,28 @@ object FilterRuleDialogHelper {
             if (selectedImportance != null || gid != null) {
                 matchers.add(Matcher.ChannelProperty(minImportance = selectedImportance, groupId = gid))
             }
+
+            // Flags matcher
+            var requiredFlags = 0
+            var excludedFlags = 0
+            for ((flag, group) in flagToggleGroups) {
+                when (readTriState(group)) {
+                    1 -> requiredFlags = requiredFlags or flag.bit
+                    -1 -> excludedFlags = excludedFlags or flag.bit
+                }
+            }
+            if (requiredFlags != 0 || excludedFlags != 0) {
+                matchers.add(Matcher.Flags(requiredFlags, excludedFlags))
+            }
+
+            // DerivedProperty matcher
+            val audible = when (readTriState(derivedToggleGroups["isAudible"]!!)) { 1 -> true; -1 -> false; else -> null }
+            val headsup = when (readTriState(derivedToggleGroups["likelyHeadsup"]!!)) { 1 -> true; -1 -> false; else -> null }
+            val removed = when (readTriState(derivedToggleGroups["isRemoved"]!!)) { 1 -> true; -1 -> false; else -> null }
+            if (audible != null || headsup != null || removed != null) {
+                matchers.add(Matcher.DerivedProperty(audible, headsup, removed))
+            }
+
             return matchers
         }
 
@@ -485,7 +740,11 @@ object FilterRuleDialogHelper {
                                 channelImportance = r.notification.importance.takeIf { it >= 0 },
                                 channelGroupId = r.notification.channelId?.let { chId ->
                                     channelGroupMap[r.notification.packageName to chId]
-                                }
+                                },
+                                flags = r.notification.flags,
+                                isAudible = r.notification.isAudible,
+                                likelyHeadsup = r.notification.likelyHeadsup,
+                                isRemoved = r.notification.removedAt != null
                             )
                             tempRule.matches(mc)
                         }
@@ -543,7 +802,11 @@ object FilterRuleDialogHelper {
         // 確保規則已載入
         RuleRepository.load(context)
 
-        val dialogTitle = if (isEditMode) R.string.filter_dialog_edit_title else R.string.filter_dialog_title
+        val dialogTitle = when {
+            widgetMode -> R.string.widget_config_title_edit
+            isEditMode -> R.string.filter_dialog_edit_title
+            else -> R.string.filter_dialog_title
+        }
         val dialog = MaterialAlertDialogBuilder(context)
             .setTitle(dialogTitle)
             .setView(dialogView)
@@ -551,11 +814,27 @@ object FilterRuleDialogHelper {
             .setNegativeButton(R.string.cancel, null)
             .create()
 
-        dialog.setOnDismissListener { scopeJob.cancel() }
+        // 追蹤 widgetMode 是否成功確認，否則 dismiss 時呼叫 onWidgetCancelled
+        var widgetConfirmed = false
+
+        dialog.setOnDismissListener {
+            scopeJob.cancel()
+            if (widgetMode && !widgetConfirmed) {
+                onWidgetCancelled?.invoke()
+            }
+        }
 
         dialog.setOnShowListener {
             dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val matchers = buildMatchersFromDialog() ?: return@setOnClickListener
+
+                // Widget 模式：回傳 matchers，不建立 Rule
+                if (widgetMode) {
+                    widgetConfirmed = true
+                    onMatchersReady?.invoke(matchers)
+                    dialog.dismiss()
+                    return@setOnClickListener
+                }
 
                 // 決定 actionType
                 val resolvedActionType = actionType ?: categoryValues[selectedCategoryIndex]

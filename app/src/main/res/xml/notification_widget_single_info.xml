@@ -9,4 +9,5 @@
     android:previewLayout="@layout/widget_notification_single"
     android:label="@string/widget_single_name"
     android:description="@string/widget_single_description"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable" />

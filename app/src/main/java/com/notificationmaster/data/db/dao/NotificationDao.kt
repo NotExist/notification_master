@@ -82,6 +82,10 @@ interface NotificationDao {
     @Query("SELECT id FROM notifications WHERE notification_key = :key ORDER BY post_time ASC")
     suspend fun getEntityIdsByKey(key: String): List<Long>
 
+    /** 標記同 key 所有未移除快照為已移除（保留各自原始移除時間） */
+    @Query("UPDATE notifications SET removed_at = :removedAt WHERE notification_key = :key AND removed_at IS NULL")
+    suspend fun markRemovedByKey(key: String, removedAt: Long)
+
     // === 查詢 - 時間範圍 ===
 
     @Query("""
@@ -328,6 +332,20 @@ interface NotificationDao {
         LIMIT :limit
     """)
     fun getRecentDismissedNotificationsSync(limit: Int = 30): List<NotificationEntity>
+
+    /**
+     * 取得每個 notification_key 的最新 entity（Widget 通用查詢，搭配記憶體內 matcher 篩選）
+     */
+    @Query("""
+        SELECT * FROM notifications
+        WHERE id IN (
+            SELECT MAX(id) FROM notifications
+            GROUP BY notification_key
+        )
+        ORDER BY post_time DESC
+        LIMIT :limit
+    """)
+    fun getRecentNotificationsSync(limit: Int = 200): List<NotificationEntity>
 
     // === 查詢 - 按來源 ===
 

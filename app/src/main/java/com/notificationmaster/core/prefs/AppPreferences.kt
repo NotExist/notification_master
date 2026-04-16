@@ -162,31 +162,36 @@ object AppPreferences {
 
     // === Widget ===
 
-    private const val KEY_WIDGET_TYPE_PREFIX = "widget_type_"
+    private const val KEY_WIDGET_MATCHERS_PREFIX = "widget_matchers_"
+    private const val KEY_WIDGET_LABEL_PREFIX = "widget_label_"
 
-    fun getWidgetType(context: Context, widgetId: Int): String? =
-        prefs(context).getString("$KEY_WIDGET_TYPE_PREFIX$widgetId", null)
-
-    fun setWidgetType(context: Context, widgetId: Int, type: String) {
-        prefs(context).edit()
-            .putString("$KEY_WIDGET_TYPE_PREFIX$widgetId", type)
-            .apply()
-    }
+    fun getWidgetMatchers(context: Context, widgetId: Int): String? =
+        prefs(context).getString("$KEY_WIDGET_MATCHERS_PREFIX$widgetId", null)
 
     /**
      * Widget 配置專用：同步寫盤版本，避免 config activity finish 後 process 立刻被殺
      * 造成設定遺失。僅在 WidgetConfigActivity 呼叫；commit() 會阻塞 UI thread 但
      * 單一 key 寫入 <10ms 可接受。
      */
-    fun setWidgetTypeSync(context: Context, widgetId: Int, type: String) {
+    fun setWidgetMatchersSync(context: Context, widgetId: Int, matchersJson: String) {
         prefs(context).edit()
-            .putString("$KEY_WIDGET_TYPE_PREFIX$widgetId", type)
+            .putString("$KEY_WIDGET_MATCHERS_PREFIX$widgetId", matchersJson)
             .commit()
     }
 
-    fun removeWidgetType(context: Context, widgetId: Int) {
+    fun getWidgetLabel(context: Context, widgetId: Int): String? =
+        prefs(context).getString("$KEY_WIDGET_LABEL_PREFIX$widgetId", null)
+
+    fun setWidgetLabelSync(context: Context, widgetId: Int, label: String) {
         prefs(context).edit()
-            .remove("$KEY_WIDGET_TYPE_PREFIX$widgetId")
+            .putString("$KEY_WIDGET_LABEL_PREFIX$widgetId", label)
+            .commit()
+    }
+
+    fun removeWidgetConfig(context: Context, widgetId: Int) {
+        prefs(context).edit()
+            .remove("$KEY_WIDGET_MATCHERS_PREFIX$widgetId")
+            .remove("$KEY_WIDGET_LABEL_PREFIX$widgetId")
             .apply()
     }
 

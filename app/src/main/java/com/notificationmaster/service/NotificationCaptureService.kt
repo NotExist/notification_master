@@ -403,7 +403,8 @@ class NotificationCaptureService : NotificationListenerService() {
         // 0. 過濾檢查（在 extraction 之前，避免不必要的 IO）
         val filterChannelId = if (ApiVersionHelper.supportsNotificationChannel()) sbn.notification.channelId else null
         val extras = sbn.notification.extras
-        val (rankImportance, rankGroupId) = getRankingInfo(ApiVersionHelper.getNotificationKey(sbn), rankingMap)
+        val rankInfo = getRankingInfo(ApiVersionHelper.getNotificationKey(sbn), rankingMap)
+        val notifFlags = sbn.notification.flags
         val matchCtx = MatchContext(
             packageName = sbn.packageName,
             channelId = filterChannelId,
@@ -412,8 +413,16 @@ class NotificationCaptureService : NotificationListenerService() {
             text = extras?.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString(),
             bigText = extras?.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString(),
             subText = extras?.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)?.toString(),
-            channelImportance = rankImportance,
-            channelGroupId = rankGroupId
+            channelImportance = rankInfo.importance,
+            channelGroupId = rankInfo.groupId,
+            flags = notifFlags,
+            likelyHeadsup = ApiVersionHelper.isLikelyHeadsUp(sbn.notification, rankInfo.importance),
+            isAudible = ApiVersionHelper.isLikelyAudible(
+                rankInfo.lastAudiblyAlertedMillis, captureTime,
+                rankInfo.importance ?: -1, notifFlags,
+                sbn.notification.sound?.toString(),
+                eventType == EventType.UPDATED
+            )
         )
         if (RuleEngine.matches(ActionType.SKIP_RECORD, matchCtx)) {
             Log.d(TAG, "Filtered: ${sbn.packageName}/$filterChannelId event=$eventType")
@@ -543,7 +552,8 @@ class NotificationCaptureService : NotificationListenerService() {
             bigText = removalExtras?.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString(),
             subText = removalExtras?.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)?.toString(),
             channelImportance = channelEntity?.importance,
-            channelGroupId = channelEntity?.groupId
+            channelGroupId = channelEntity?.groupId,
+            flags = sbn.notification.flags
         )
         if (RuleEngine.matches(ActionType.SKIP_RECORD, removalMatchCtx)) {
             PendingIntentCache.remove(key)
@@ -573,6 +583,9 @@ class NotificationCaptureService : NotificationListenerService() {
             contentDiff = null
         )
         database.notificationEventDao().insert(event)
+
+        // 標記同 key 所有未移除快照為已移除
+        database.notificationDao().markRemovedByKey(key, captureTime)
 
         Log.d(TAG, "Recorded removal event for: $key, reason: $reason")
 
@@ -620,7 +633,11 @@ class NotificationCaptureService : NotificationListenerService() {
                                 bigText = latestNotification.bigText,
                                 subText = latestNotification.subText,
                                 channelImportance = channelEntity?.importance,
-                                channelGroupId = channelEntity?.groupId
+                                channelGroupId = channelEntity?.groupId,
+                                flags = latestNotification.flags,
+                                isAudible = latestNotification.isAudible,
+                                likelyHeadsup = latestNotification.likelyHeadsup,
+                                isRemoved = latestNotification.removedAt != null
                             )
                         )) continue
 
@@ -982,14 +999,21 @@ class NotificationCaptureService : NotificationListenerService() {
     /**
      * 從 RankingMap 取得指定通知的 importance 和 channel groupId
      */
-    private fun getRankingInfo(key: String, rankingMap: RankingMap?): Pair<Int?, String?> {
-        if (rankingMap == null) return null to null
+    private data class RankingInfo(
+        val importance: Int? = null,
+        val groupId: String? = null,
+        val lastAudiblyAlertedMillis: Long = -1L
+    )
+
+    private fun getRankingInfo(key: String, rankingMap: RankingMap?): RankingInfo {
+        if (rankingMap == null) return RankingInfo()
         val ranking = Ranking()
-        if (!rankingMap.getRanking(key, ranking)) return null to null
+        if (!rankingMap.getRanking(key, ranking)) return RankingInfo()
         // Ranking.importance requires API 24+, Ranking.channel requires API 26+
         val importance = if (ApiVersionHelper.supportsDirectReply()) ranking.importance else null
         val groupId = if (ApiVersionHelper.supportsNotificationChannel()) ranking.channel?.group else null
-        return importance to groupId
+        val lastAudibly = if (ApiVersionHelper.supportsLastAudiblyAlerted()) ranking.lastAudiblyAlertedMillis else -1L
+        return RankingInfo(importance, groupId, lastAudibly)
     }
 
     /**
@@ -1154,7 +1178,7 @@ class NotificationCaptureService : NotificationListenerService() {
 
         // 建構含 content + channel 屬性的 MatchContext
         val dismissExtras = sbn.notification.extras
-        val (dismissImportance, dismissGroupId) = getRankingInfo(key, rankingMap)
+        val dismissRankInfo = getRankingInfo(key, rankingMap)
         val dismissMatchCtx = MatchContext(
             packageName = sbn.packageName,
             channelId = channelId,
@@ -1163,8 +1187,9 @@ class NotificationCaptureService : NotificationListenerService() {
             text = dismissExtras?.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString(),
             bigText = dismissExtras?.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT)?.toString(),
             subText = dismissExtras?.getCharSequence(android.app.Notification.EXTRA_SUB_TEXT)?.toString(),
-            channelImportance = dismissImportance,
-            channelGroupId = dismissGroupId
+            channelImportance = dismissRankInfo.importance,
+            channelGroupId = dismissRankInfo.groupId,
+            flags = sbn.notification.flags
         )
 
         val rule = RuleEngine.findMatchingRule(

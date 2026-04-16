@@ -8,8 +8,11 @@ import android.content.Intent
 import android.widget.RemoteViews
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.notificationmaster.core.filter.MatchContext
+import com.notificationmaster.core.filter.Matcher
 import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.ui.main.MainActivity
+import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -18,7 +21,7 @@ import java.util.concurrent.Executors
 
 /**
  * 單項式通知 Widget
- * 顯示指定類型（有聲/彈出/移除）的最新一筆通知，點擊進入 Detail 頁
+ * 顯示篩選條件匹配的最新一筆通知，點擊進入 Detail 頁
  */
 class NotificationSingleWidgetProvider : AppWidgetProvider() {
 
@@ -30,7 +33,7 @@ class NotificationSingleWidgetProvider : AppWidgetProvider() {
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
         for (appWidgetId in appWidgetIds) {
-            AppPreferences.removeWidgetType(context, appWidgetId)
+            AppPreferences.removeWidgetConfig(context, appWidgetId)
         }
     }
 
@@ -41,20 +44,10 @@ class NotificationSingleWidgetProvider : AppWidgetProvider() {
         private val executor: ExecutorService = Executors.newSingleThreadExecutor()
 
         fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
-            val type = AppPreferences.getWidgetType(context, appWidgetId)
-
-            val typeLabel = when (type) {
-                WidgetConfigActivity.TYPE_AUDIBLE -> context.getString(R.string.widget_type_audible)
-                WidgetConfigActivity.TYPE_HEADSUP -> context.getString(R.string.widget_type_headsup)
-                WidgetConfigActivity.TYPE_DISMISSED -> context.getString(R.string.widget_type_dismissed)
-                else -> context.getString(R.string.widget_single_name)
-            }
+            val label = AppPreferences.getWidgetLabel(context, appWidgetId)
+            val typeLabel = label ?: context.getString(R.string.widget_single_name)
 
             // 第一階段（任何 thread 都安全）：立即 push 基本 RemoteViews
-            // 含 type label + 空狀態文字，讓 widget 即時呈現靜態識別。
-            // 不在這裡查 DAO：呼叫 updateWidget 的入口（WidgetConfigActivity dialog
-            // click、onReceive、notifyUpdate）多半在 main thread，Room 預設禁止
-            // main thread query 會 crash。
             val baseViews = RemoteViews(context.packageName, R.layout.widget_notification_single)
             baseViews.setTextViewText(R.id.widget_single_type, typeLabel)
             baseViews.setTextViewText(R.id.widget_single_title, context.getString(R.string.widget_empty))
@@ -62,19 +55,43 @@ class NotificationSingleWidgetProvider : AppWidgetProvider() {
             baseViews.setTextViewText(R.id.widget_single_content, "")
             appWidgetManager.updateAppWidget(appWidgetId, baseViews)
 
-            if (type == null) return
+            val matchersJson = AppPreferences.getWidgetMatchers(context, appWidgetId) ?: return
 
-            // 第二階段（background thread）：查 DAO 後 push 完整 RemoteViews
-            // 用 applicationContext 避免持有 Activity context 導致 leak
+            // 第二階段（background thread）：查 DAO + matcher 篩選後 push 完整 RemoteViews
             val appContext = context.applicationContext
             executor.execute {
+                val matchers = try {
+                    val arr = JSONArray(matchersJson)
+                    (0 until arr.length()).map { Matcher.fromJson(arr.getJSONObject(it)) }
+                } catch (_: Exception) { return@execute }
+
                 val dao = NotificationMasterApp.getInstance().database.notificationDao()
-                val notification = when (type) {
-                    WidgetConfigActivity.TYPE_AUDIBLE -> dao.getRecentAudibleNotificationsSync(1)
-                    WidgetConfigActivity.TYPE_HEADSUP -> dao.getRecentHeadsupNotificationsSync(1)
-                    WidgetConfigActivity.TYPE_DISMISSED -> dao.getRecentDismissedNotificationsSync(1)
-                    else -> emptyList()
-                }.firstOrNull()
+                val candidates = dao.getRecentNotificationsSync(200)
+
+                val filtered = candidates.filter { entity ->
+                    val mc = MatchContext(
+                        packageName = entity.packageName,
+                        channelId = entity.channelId,
+                        title = entity.title,
+                        text = entity.text,
+                        bigText = entity.bigText,
+                        subText = entity.subText,
+                        channelImportance = entity.importance.takeIf { it >= 0 },
+                        flags = entity.flags,
+                        isAudible = entity.isAudible,
+                        likelyHeadsup = entity.likelyHeadsup,
+                        isRemoved = entity.removedAt != null
+                    )
+                    matchers.all { it.matches(mc) }
+                }
+
+                // dismissed 排序
+                val hasDismissedFilter = matchers.any { it is Matcher.DerivedProperty && (it as Matcher.DerivedProperty).isRemoved == true }
+                val notification = if (hasDismissedFilter) {
+                    filtered.maxByOrNull { it.removedAt ?: 0L }
+                } else {
+                    filtered.firstOrNull()
+                }
 
                 val views = RemoteViews(appContext.packageName, R.layout.widget_notification_single)
                 views.setTextViewText(R.id.widget_single_type, typeLabel)
@@ -84,7 +101,6 @@ class NotificationSingleWidgetProvider : AppWidgetProvider() {
                     views.setTextViewText(R.id.widget_single_time, timeFormat.format(Date(notification.postTime)))
                     views.setTextViewText(R.id.widget_single_content, notification.bigText ?: notification.text ?: "")
 
-                    // 點擊 → Detail 頁
                     val detailIntent = Intent(appContext, MainActivity::class.java).apply {
                         action = MainActivity.ACTION_SHOW_DETAIL
                         putExtra(MainActivity.EXTRA_NOTIFICATION_ID, notification.id)

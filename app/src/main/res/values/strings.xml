@@ -402,6 +402,25 @@
     <string name="filter_section_action">動作設定</string>
     <string name="filter_keyword_fields_label">搜尋欄位：</string>
 
+    <!-- Notification Flags -->
+    <string name="filter_flags_expand">通知旗標…</string>
+    <string name="filter_flags_collapse">收合旗標</string>
+    <string name="filter_flags_title">通知旗標</string>
+    <string name="filter_derived_title">推斷屬性</string>
+    <string name="flag_ongoing">持續通知 (ONGOING)</string>
+    <string name="flag_auto_cancel">自動取消 (AUTO_CANCEL)</string>
+    <string name="flag_no_clear">不可清除 (NO_CLEAR)</string>
+    <string name="flag_foreground_service">前景服務 (FOREGROUND_SERVICE)</string>
+    <string name="flag_high_priority">高優先 (HIGH_PRIORITY)</string>
+    <string name="flag_local_only">僅限本機 (LOCAL_ONLY)</string>
+    <string name="flag_group_summary">群組摘要 (GROUP_SUMMARY)</string>
+    <string name="derived_audible">有聲通知</string>
+    <string name="derived_headsup">彈出通知</string>
+    <string name="derived_removed">已移除</string>
+    <string name="flag_state_require">✓ 必須</string>
+    <string name="flag_state_exclude">✗ 排除</string>
+    <string name="flag_state_ignore">— 不限</string>
+
     <!-- Channel -->
     <string name="channel_name_unset">Channel Name 未設定</string>
     <string name="channel_name_pending">（待更新）</string>
@@ -467,8 +486,13 @@
     <string name="widget_list_description">顯示指定類型的通知清單，可捲動查看多筆</string>
     <string name="widget_single_description">顯示指定類型的單筆通知摘要</string>
     <string name="widget_config_title">選擇通知類型</string>
+    <string name="widget_config_title_edit">Widget 篩選條件</string>
     <string name="widget_empty">尚無通知記錄</string>
-    <string name="widget_type_audible">最近有聲</string>
-    <string name="widget_type_headsup">最近彈出</string>
-    <string name="widget_type_dismissed">最近移除</string>
+    <string name="widget_type_audible">有聲通知</string>
+    <string name="widget_type_headsup">彈出通知</string>
+    <string name="widget_type_dismissed">已移除通知</string>
+    <string name="widget_type_custom">自訂篩選…</string>
+    <string name="widget_label_dialog_title">Widget 顯示名稱</string>
+    <string name="widget_label_default_flags">旗標篩選</string>
+    <string name="widget_label_default_custom">自訂篩選</string>
 </resources>
