@@ -1043,10 +1043,16 @@ class NotificationCaptureService : NotificationListenerService() {
         entity: NotificationEntity,
         matchCtx: MatchContext
     ) {
-        if (!AppPreferences.isRealtimeCalendarEnabled(this)) return
+        if (!AppPreferences.isRealtimeCalendarEnabled(this)) {
+            Log.d(TAG, "[RealtimeCalendar] skipped: realtime export disabled")
+            return
+        }
 
         val calendarId = AppPreferences.getRealtimeCalendarId(this)
-        if (calendarId < 0) return
+        if (calendarId < 0) {
+            Log.w(TAG, "[RealtimeCalendar] skipped: invalid calendarId=$calendarId")
+            return
+        }
 
         // 每次重新讀取帳號資訊（使用者可能在 Service 運行中變更設定）
         val accName = AppPreferences.getRealtimeCalendarAccountName(this)
@@ -1057,9 +1063,15 @@ class NotificationCaptureService : NotificationListenerService() {
 
         // 只匯出白名單匹配的通知
         val whitelistRules = RuleEngine.getRules(ActionType.CALENDAR_EXPORT)
-        if (whitelistRules.isEmpty()) return  // 無白名單 → 不匯出（避免大量灌入）
+        if (whitelistRules.isEmpty()) {
+            Log.d(TAG, "[RealtimeCalendar] skipped: no whitelist rules")
+            return
+        }
 
-        if (!RuleEngine.matches(ActionType.CALENDAR_EXPORT, matchCtx)) return
+        if (!RuleEngine.matches(ActionType.CALENDAR_EXPORT, matchCtx)) {
+            Log.d(TAG, "[RealtimeCalendar] skipped: no match for ${matchCtx.packageName}/${matchCtx.channelId} event=${matchCtx.eventType}")
+            return
+        }
 
         val key = entity.notificationKey
         val existingEventId = resolveCalendarEventId(key, remove = false)
@@ -1067,12 +1079,15 @@ class NotificationCaptureService : NotificationListenerService() {
         if (existingEventId > 0) {
             // UPDATED: 更新既有事件內容
             calendarExporter.updateCalendarEventContent(existingEventId, entity, ExportDetailLevel.FULL)
+            Log.d(TAG, "[RealtimeCalendar] updated: ${entity.packageName} eventId=$existingEventId")
         } else {
             // 首次 POSTED: 插入新事件並記錄映射
             val eventId = calendarExporter.exportSingleNotification(entity, calendarId, ExportDetailLevel.FULL)
             if (eventId > 0) {
                 calendarExportMap[key] = eventId
-                Log.d(TAG, "Realtime calendar export: ${entity.packageName}")
+                Log.d(TAG, "[RealtimeCalendar] exported: ${entity.packageName} eventId=$eventId")
+            } else {
+                Log.w(TAG, "[RealtimeCalendar] failed: exportSingleNotification returned $eventId for ${entity.packageName}")
             }
         }
     }
@@ -1101,7 +1116,7 @@ class NotificationCaptureService : NotificationListenerService() {
         if (!shouldUpdate) return
 
         calendarExporter.updateCalendarEventEndTime(eventId, removalTime)
-        Log.d(TAG, "Updated calendar event end time for: $notificationKey")
+        Log.d(TAG, "[RealtimeCalendar] end time updated: $notificationKey eventId=$eventId")
     }
 
     /**
