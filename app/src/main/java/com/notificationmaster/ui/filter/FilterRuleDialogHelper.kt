@@ -255,6 +255,44 @@ object FilterRuleDialogHelper {
             }
         }
 
+        // 回填 Flags / DerivedProperty matcher 到 toggle groups；若有值則展開 flags 區塊
+        // Widget 編輯模式和 Rule 編輯模式共用此邏輯
+        fun prefillFlagsAndDerived(matchers: List<Matcher>) {
+            var hasFlags = false
+            matchers.filterIsInstance<Matcher.Flags>().firstOrNull()?.let { fm ->
+                for ((flag, group) in flagToggleGroups) {
+                    @Suppress("UNCHECKED_CAST")
+                    val tag = group.tag as Triple<Int, Int, Int>
+                    val (reqId, exclId, ignId) = tag
+                    when {
+                        fm.requiredFlags and flag.bit != 0 -> { group.check(reqId); hasFlags = true }
+                        fm.excludedFlags and flag.bit != 0 -> { group.check(exclId); hasFlags = true }
+                        else -> group.check(ignId)
+                    }
+                }
+            }
+            matchers.filterIsInstance<Matcher.DerivedProperty>().firstOrNull()?.let { dp ->
+                fun fillDerived(key: String, value: Boolean?) {
+                    val group = derivedToggleGroups[key] ?: return
+                    @Suppress("UNCHECKED_CAST")
+                    val tag = group.tag as Triple<Int, Int, Int>
+                    val (reqId, exclId, ignId) = tag
+                    when (value) {
+                        true -> { group.check(reqId); hasFlags = true }
+                        false -> { group.check(exclId); hasFlags = true }
+                        null -> group.check(ignId)
+                    }
+                }
+                fillDerived("isAudible", dp.isAudible)
+                fillDerived("likelyHeadsup", dp.likelyHeadsup)
+                fillDerived("isRemoved", dp.isRemoved)
+            }
+            if (hasFlags) {
+                layoutFlagsSection.visibility = View.VISIBLE
+                btnToggleFlags.text = context.getString(R.string.filter_flags_collapse)
+            }
+        }
+
         // 動作設定容器
         val layoutActionSettings = dialogView.findViewById<LinearLayout>(R.id.layout_action_settings)
 
@@ -432,35 +470,7 @@ object FilterRuleDialogHelper {
                     cp.groupId?.let { editGroupId.setText(it) }
                 }
                 // Flags + DerivedProperty 回填
-                var hasFlags = false
-                existingWidgetMatchers.filterIsInstance<Matcher.Flags>().firstOrNull()?.let { fm ->
-                    for ((flag, group) in flagToggleGroups) {
-                        val (reqId, exclId, ignId) = group.tag as Triple<Int, Int, Int>
-                        when {
-                            fm.requiredFlags and flag.bit != 0 -> { group.check(reqId); hasFlags = true }
-                            fm.excludedFlags and flag.bit != 0 -> { group.check(exclId); hasFlags = true }
-                            else -> group.check(ignId)
-                        }
-                    }
-                }
-                existingWidgetMatchers.filterIsInstance<Matcher.DerivedProperty>().firstOrNull()?.let { dp ->
-                    fun fillDerived(key: String, value: Boolean?) {
-                        val group = derivedToggleGroups[key] ?: return
-                        val (reqId, exclId, ignId) = group.tag as Triple<Int, Int, Int>
-                        when (value) {
-                            true -> { group.check(reqId); hasFlags = true }
-                            false -> { group.check(exclId); hasFlags = true }
-                            null -> group.check(ignId)
-                        }
-                    }
-                    fillDerived("isAudible", dp.isAudible)
-                    fillDerived("likelyHeadsup", dp.likelyHeadsup)
-                    fillDerived("isRemoved", dp.isRemoved)
-                }
-                if (hasFlags) {
-                    layoutFlagsSection.visibility = View.VISIBLE
-                    btnToggleFlags.text = context.getString(R.string.filter_flags_collapse)
-                }
+                prefillFlagsAndDerived(existingWidgetMatchers)
             }
         }
 
@@ -541,38 +551,8 @@ object FilterRuleDialogHelper {
                 cp.groupId?.let { editGroupId.setText(it) }
             }
 
-            // 回填 Flags
-            var hasFlags = false
-            existingRule.matchers.filterIsInstance<Matcher.Flags>().firstOrNull()?.let { fm ->
-                for ((flag, group) in flagToggleGroups) {
-                    val (reqId, exclId, ignId) = group.tag as Triple<Int, Int, Int>
-                    when {
-                        fm.requiredFlags and flag.bit != 0 -> { group.check(reqId); hasFlags = true }
-                        fm.excludedFlags and flag.bit != 0 -> { group.check(exclId); hasFlags = true }
-                        else -> group.check(ignId)
-                    }
-                }
-            }
-            // 回填 DerivedProperty
-            existingRule.matchers.filterIsInstance<Matcher.DerivedProperty>().firstOrNull()?.let { dp ->
-                fun fillDerived(key: String, value: Boolean?) {
-                    val group = derivedToggleGroups[key] ?: return
-                    val (reqId, exclId, ignId) = group.tag as Triple<Int, Int, Int>
-                    when (value) {
-                        true -> { group.check(reqId); hasFlags = true }
-                        false -> { group.check(exclId); hasFlags = true }
-                        null -> group.check(ignId)
-                    }
-                }
-                fillDerived("isAudible", dp.isAudible)
-                fillDerived("likelyHeadsup", dp.likelyHeadsup)
-                fillDerived("isRemoved", dp.isRemoved)
-            }
-            // 有值時自動展開
-            if (hasFlags) {
-                layoutFlagsSection.visibility = View.VISIBLE
-                btnToggleFlags.text = context.getString(R.string.filter_flags_collapse)
-            }
+            // 回填 Flags + DerivedProperty
+            prefillFlagsAndDerived(existingRule.matchers)
         }
 
         // === 預填值 ===
