@@ -10,6 +10,7 @@ import com.google.android.material.textfield.TextInputLayout
 import com.notificationmaster.R
 import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.core.filter.Matcher
+import com.notificationmaster.core.filter.NotificationFlag
 import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import org.json.JSONArray
@@ -59,11 +60,15 @@ class WidgetConfigActivity : AppCompatActivity() {
             getString(R.string.widget_type_custom)
         )
 
-        // 模板對應的 matchers
+        // 模板對應的 matchers（預設排除 GROUP_SUMMARY，此類通知在 Widget 上不實用）
+        val excludeGroupSummary = Matcher.Flags(
+            requiredFlags = 0,
+            excludedFlags = NotificationFlag.GROUP_SUMMARY.bit
+        )
         val templates: Array<List<Matcher>?> = arrayOf(
-            listOf(Matcher.DerivedProperty(isAudible = true)),
-            listOf(Matcher.DerivedProperty(likelyHeadsup = true)),
-            listOf(Matcher.DerivedProperty(isRemoved = true)),
+            listOf(Matcher.DerivedProperty(isAudible = true), excludeGroupSummary),
+            listOf(Matcher.DerivedProperty(likelyHeadsup = true), excludeGroupSummary),
+            listOf(Matcher.DerivedProperty(isRemoved = true), excludeGroupSummary),
             null // 自訂：開 matcher 編輯器
         )
 
