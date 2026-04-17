@@ -246,7 +246,8 @@ object FilterRuleDialogHelper {
         fun readTriState(group: com.google.android.material.button.MaterialButtonToggleGroup): Int {
             // 回傳 1=require, -1=exclude, 0=ignore
             @Suppress("UNCHECKED_CAST")
-            val (reqId, exclId, _) = group.tag as Triple<Int, Int, Int>
+            val tag = group.tag as Triple<Int, Int, Int>
+            val (reqId, exclId, _) = tag
             return when (group.checkedButtonId) {
                 reqId -> 1
                 exclId -> -1
