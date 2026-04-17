@@ -160,57 +160,62 @@ object FilterRuleDialogHelper {
         // === Flags 三態列動態生成 ===
         data class FlagToggle(val id: Int, val group: com.google.android.material.button.MaterialButtonToggleGroup)
 
-        fun createTriStateRow(parent: LinearLayout, label: String): com.google.android.material.button.MaterialButtonToggleGroup {
+        fun createTriStateRow(parent: LinearLayout, label: String, subtitle: String? = null): com.google.android.material.button.MaterialButtonToggleGroup {
+            val density = context.resources.displayMetrics.density
+            val buttonHeight = (36 * density).toInt()
+            val hPadding = (16 * density).toInt()
+            val rowBottomMargin = (4 * density).toInt()
+
             val row = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { bottomMargin = 4 }
+                ).apply { bottomMargin = rowBottomMargin }
             }
-            val tv = TextView(context).apply {
-                text = label
+            // 標籤區塊：主標籤 + 可選副標籤（垂直堆疊）
+            val labelContainer = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            val tvLabel = TextView(context).apply {
+                text = label
                 textSize = 13f
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            }
+            labelContainer.addView(tvLabel)
+            if (subtitle != null) {
+                val tvSubtitle = TextView(context).apply {
+                    text = subtitle
+                    textSize = 11f
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    setTextColor(com.google.android.material.color.MaterialColors.getColor(
+                        context, android.R.attr.textColorSecondary, 0
+                    ))
+                }
+                labelContainer.addView(tvSubtitle)
             }
             val toggleGroup = com.google.android.material.button.MaterialButtonToggleGroup(context).apply {
                 isSingleSelection = true
                 isSelectionRequired = true
             }
-            val btnRequire = com.google.android.material.button.MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            fun createToggleButton(textResId: Int) = com.google.android.material.button.MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
                 id = View.generateViewId()
-                text = context.getString(R.string.flag_state_require)
+                text = context.getString(textResId)
                 textSize = 11f
                 minWidth = 0
                 minimumWidth = 0
-                setPadding(12, 0, 12, 0)
+                setPadding(hPadding, 0, hPadding, 0)
                 minHeight = 0
                 minimumHeight = 0
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 72)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, buttonHeight)
             }
-            val btnExclude = com.google.android.material.button.MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                id = View.generateViewId()
-                text = context.getString(R.string.flag_state_exclude)
-                textSize = 11f
-                minWidth = 0
-                minimumWidth = 0
-                setPadding(12, 0, 12, 0)
-                minHeight = 0
-                minimumHeight = 0
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 72)
-            }
-            val btnIgnore = com.google.android.material.button.MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                id = View.generateViewId()
-                text = context.getString(R.string.flag_state_ignore)
-                textSize = 11f
-                minWidth = 0
-                minimumWidth = 0
-                setPadding(12, 0, 12, 0)
-                minHeight = 0
-                minimumHeight = 0
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 72)
-            }
+            val btnRequire = createToggleButton(R.string.flag_state_require)
+            val btnExclude = createToggleButton(R.string.flag_state_exclude)
+            val btnIgnore = createToggleButton(R.string.flag_state_ignore)
             toggleGroup.addView(btnRequire)
             toggleGroup.addView(btnExclude)
             toggleGroup.addView(btnIgnore)
@@ -218,7 +223,7 @@ object FilterRuleDialogHelper {
             // tag 存放 3 個 button id 供讀取用
             toggleGroup.tag = Triple(btnRequire.id, btnExclude.id, btnIgnore.id)
 
-            row.addView(tv)
+            row.addView(labelContainer)
             row.addView(toggleGroup)
             parent.addView(row)
             return toggleGroup
@@ -227,7 +232,11 @@ object FilterRuleDialogHelper {
         // 建立 7 個 bit flag 列
         val flagToggleGroups = mutableMapOf<com.notificationmaster.core.filter.NotificationFlag, com.google.android.material.button.MaterialButtonToggleGroup>()
         for (flag in com.notificationmaster.core.filter.NotificationFlag.entries) {
-            flagToggleGroups[flag] = createTriStateRow(containerFlags, context.getString(flag.labelResId))
+            flagToggleGroups[flag] = createTriStateRow(
+                containerFlags,
+                flag.name,
+                context.getString(flag.labelResId)
+            )
         }
 
         // 建立 3 個 derived property 列

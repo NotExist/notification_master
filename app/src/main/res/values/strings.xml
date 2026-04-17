@@ -403,17 +403,17 @@
     <string name="filter_keyword_fields_label">搜尋欄位：</string>
 
     <!-- Notification Flags -->
-    <string name="filter_flags_expand">通知旗標…</string>
-    <string name="filter_flags_collapse">收合旗標</string>
+    <string name="filter_flags_expand">▶ 通知旗標…</string>
+    <string name="filter_flags_collapse">▼ 通知旗標</string>
     <string name="filter_flags_title">通知旗標</string>
     <string name="filter_derived_title">推斷屬性</string>
-    <string name="flag_ongoing">持續通知 (ONGOING)</string>
-    <string name="flag_auto_cancel">自動取消 (AUTO_CANCEL)</string>
-    <string name="flag_no_clear">不可清除 (NO_CLEAR)</string>
-    <string name="flag_foreground_service">前景服務 (FOREGROUND_SERVICE)</string>
-    <string name="flag_high_priority">高優先 (HIGH_PRIORITY)</string>
-    <string name="flag_local_only">僅限本機 (LOCAL_ONLY)</string>
-    <string name="flag_group_summary">群組摘要 (GROUP_SUMMARY)</string>
+    <string name="flag_ongoing">持續通知</string>
+    <string name="flag_auto_cancel">自動取消</string>
+    <string name="flag_no_clear">不可清除</string>
+    <string name="flag_foreground_service">前景服務</string>
+    <string name="flag_high_priority">高優先</string>
+    <string name="flag_local_only">僅限本機</string>
+    <string name="flag_group_summary">群組摘要</string>
     <string name="derived_audible">有聲通知</string>
     <string name="derived_headsup">彈出通知</string>
     <string name="derived_removed">已移除</string>
