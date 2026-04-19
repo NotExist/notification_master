@@ -523,6 +523,11 @@ class SettingsFragment : Fragment() {
             requestCalendarPermissionThen { showTargetCalendarPicker() }
         }
 
+        // 匯出歷程
+        binding.btnCalendarExportHistory.setOnClickListener {
+            CalendarExportHistoryDialogFragment().show(childFragmentManager, "calendar_export_history")
+        }
+
         // 白名單
         binding.btnCalendarWhitelist.setOnClickListener {
             findNavController().navigate(

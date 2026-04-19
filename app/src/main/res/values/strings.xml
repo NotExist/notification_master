@@ -268,6 +268,14 @@
     <string name="calendar_picker_own_label">%s（本 App）</string>
     <string name="calendar_picker_detail">%1$s · %2$s</string>
 
+    <!-- 日曆匯出歷程 -->
+    <string name="calendar_export_history">檢視匯出歷程</string>
+    <string name="calendar_export_history_title">日曆即時匯出歷程</string>
+    <string name="calendar_export_history_empty">尚無匯出記錄</string>
+    <string name="calendar_export_history_started">記錄自 %s</string>
+    <string name="calendar_export_history_clear">清除</string>
+    <string name="calendar_export_history_share">匯出</string>
+
     <!-- .ics 匯出 -->
     <string name="settings_export_ics">匯出 .ics 日曆檔</string>
 
