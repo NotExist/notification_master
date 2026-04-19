@@ -256,6 +256,7 @@
     <string name="filter_delete_confirm">確定要刪除此過濾規則嗎？</string>
     <string name="filter_rule_added">已新增過濾規則</string>
     <string name="filter_rule_deleted">已刪除過濾規則</string>
+    <string name="filter_last_triggered">最後觸發：%s</string>
     <string name="filter_rule_updated">已更新過濾規則</string>
 
     <!-- 即時日曆匯出 -->

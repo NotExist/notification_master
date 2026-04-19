@@ -21,6 +21,9 @@ import com.notificationmaster.core.filter.RuleAction
 import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.filter.RuleRepository
 import android.content.Context
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.databinding.FragmentFilterSettingsBinding
 import com.notificationmaster.databinding.ItemFilterRuleBinding
@@ -112,6 +115,14 @@ class FilterSettingsFragment : Fragment() {
         }
 
         refreshList()
+
+        // 即時更新：規則觸發時刷新觸發時間顯示
+        // 觸發時間不在 Rule data class 內，DiffUtil 無法偵測變化，需 notifyDataSetChanged
+        viewLifecycleOwner.lifecycleScope.launch {
+            RuleEngine.triggerFlow
+                .drop(1)
+                .collect { adapter.notifyDataSetChanged() }
+        }
     }
 
     override fun onDestroyView() {
@@ -284,6 +295,22 @@ class FilterSettingsFragment : Fragment() {
                     binding.textChannelPropertyInfo.text = parts.joinToString(", ")
                 } else {
                     binding.textChannelPropertyInfo.visibility = View.GONE
+                }
+
+                // 最後觸發時間
+                val triggered = RuleEngine.getLastTriggered(rule.id)
+                if (triggered > 0) {
+                    binding.textLastTriggered.visibility = View.VISIBLE
+                    binding.textLastTriggered.text = ctx.getString(
+                        R.string.filter_last_triggered,
+                        android.text.format.DateUtils.getRelativeTimeSpanString(
+                            triggered,
+                            System.currentTimeMillis(),
+                            android.text.format.DateUtils.SECOND_IN_MILLIS
+                        )
+                    )
+                } else {
+                    binding.textLastTriggered.visibility = View.GONE
                 }
 
                 binding.btnDelete.setOnClickListener {
