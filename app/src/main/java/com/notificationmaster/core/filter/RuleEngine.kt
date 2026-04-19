@@ -1,5 +1,6 @@
 package com.notificationmaster.core.filter
 
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -14,6 +15,21 @@ object RuleEngine {
     private const val EXPORT_VERSION = 2
 
     private var rules = listOf<Rule>()
+
+    // ========== 觸發時間（獨立於 Rule 物件，不影響 contentKey/序列化/備份合併） ==========
+
+    private val lastTriggered = mutableMapOf<String, Long>()
+
+    /** 每次觸發遞增，供 UI collect 即時刷新規則清單 */
+    val triggerFlow = MutableStateFlow(0L)
+
+    fun getLastTriggered(ruleId: String): Long = lastTriggered[ruleId] ?: 0L
+
+    fun setLastTriggeredTimes(times: Map<String, Long>) {
+        lastTriggered.putAll(times)
+    }
+
+    fun getLastTriggeredTimes(): Map<String, Long> = lastTriggered.toMap()
 
     // ========== 記憶體規則管理 ==========
 
@@ -34,6 +50,7 @@ object RuleEngine {
 
     fun removeRule(ruleId: String) {
         rules = rules.filter { it.id != ruleId }
+        lastTriggered.remove(ruleId)
     }
 
     // ========== 查詢 ==========
@@ -65,6 +82,7 @@ object RuleEngine {
         if (candidates.isEmpty()) return null
 
         // 1. Channel 級優先
+        val result: Rule?
         if (context.channelId != null) {
             val channelCandidates = candidates.filter { rule ->
                 rule.isChannelLevel
@@ -74,17 +92,32 @@ object RuleEngine {
                         .any { it.channelId == context.channelId }
             }
             if (channelCandidates.isNotEmpty()) {
-                return channelCandidates.firstOrNull { it.matches(context) }
+                result = channelCandidates.firstOrNull { it.matches(context) }
+            } else {
+                // 2. 包級匹配
+                val packageCandidates = candidates.filter { rule ->
+                    !rule.isChannelLevel
+                        && rule.matchers.filterIsInstance<Matcher.Package>()
+                            .any { it.packageName == context.packageName }
+                }
+                result = packageCandidates.firstOrNull { it.matches(context) }
             }
+        } else {
+            // 2. 包級匹配
+            val packageCandidates = candidates.filter { rule ->
+                !rule.isChannelLevel
+                    && rule.matchers.filterIsInstance<Matcher.Package>()
+                        .any { it.packageName == context.packageName }
+            }
+            result = packageCandidates.firstOrNull { it.matches(context) }
         }
 
-        // 2. 包級匹配
-        val packageCandidates = candidates.filter { rule ->
-            !rule.isChannelLevel
-                && rule.matchers.filterIsInstance<Matcher.Package>()
-                    .any { it.packageName == context.packageName }
+        // 記錄觸發時間
+        result?.let {
+            lastTriggered[it.id] = System.currentTimeMillis()
+            triggerFlow.value++
         }
-        return packageCandidates.firstOrNull { it.matches(context) }
+        return result
     }
 
     /**

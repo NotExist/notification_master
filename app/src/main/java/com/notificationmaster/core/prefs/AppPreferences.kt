@@ -16,6 +16,7 @@ object AppPreferences {
     private const val KEY_BACKUP_DIR_DISPLAY = "backup_dir_display"
     private const val KEY_BACKUP_SETUP_DECLINED = "backup_setup_declined"
     private const val KEY_RULES_V2 = "filter_rules_v2"
+    private const val KEY_RULE_LAST_TRIGGERED = "rule_last_triggered"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -203,6 +204,26 @@ object AppPreferences {
     fun setRulesV2Json(context: Context, json: String) {
         prefs(context).edit()
             .putString(KEY_RULES_V2, json)
+            .apply()
+    }
+
+    // ========== 規則觸發時間 ==========
+
+    fun getRuleLastTriggered(context: Context): Map<String, Long> {
+        val json = prefs(context).getString(KEY_RULE_LAST_TRIGGERED, null) ?: return emptyMap()
+        return try {
+            val obj = org.json.JSONObject(json)
+            obj.keys().asSequence().associateWith { obj.getLong(it) }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    fun setRuleLastTriggered(context: Context, times: Map<String, Long>) {
+        val obj = org.json.JSONObject()
+        for ((id, ts) in times) obj.put(id, ts)
+        prefs(context).edit()
+            .putString(KEY_RULE_LAST_TRIGGERED, obj.toString())
             .apply()
     }
 }

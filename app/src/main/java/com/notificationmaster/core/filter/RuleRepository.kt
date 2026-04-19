@@ -44,6 +44,7 @@ object RuleRepository {
         }
 
         RuleEngine.setRules(rules)
+        RuleEngine.setLastTriggeredTimes(AppPreferences.getRuleLastTriggered(context))
 
         // 首次啟動時持久化預設規則
         if (v2Json == null && rules.isNotEmpty()) {
@@ -68,6 +69,7 @@ object RuleRepository {
     fun save(context: Context) {
         val arr = JSONArray(RuleEngine.getRules().map { it.toJson() })
         AppPreferences.setRulesV2Json(context, arr.toString())
+        AppPreferences.setRuleLastTriggered(context, RuleEngine.getLastTriggeredTimes())
         autoBackup(context)
     }
 
