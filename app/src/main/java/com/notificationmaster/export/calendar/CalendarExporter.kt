@@ -252,14 +252,11 @@ class CalendarExporter(private val context: Context) {
         calendarId: Long,
         detailLevel: ExportDetailLevel = ExportDetailLevel.WITH_CONTENT
     ): Long {
-        if (!hasCalendarPermission()) {
-            Log.w(TAG, "[RealtimeCalendar] permission not granted (READ_CALENDAR / WRITE_CALENDAR)")
-            return -1L
-        }
+        if (!hasCalendarPermission()) return -1L
         return try {
             insertCalendarEvent(notification, calendarId, detailLevel)
         } catch (e: Exception) {
-            Log.w(TAG, "[RealtimeCalendar] insertCalendarEvent failed", e)
+            Log.w(TAG, "Failed to export notification to calendar", e)
             -1L
         }
     }
