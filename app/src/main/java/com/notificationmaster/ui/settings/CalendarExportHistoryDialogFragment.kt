@@ -44,7 +44,7 @@ class CalendarExportHistoryDialogFragment : androidx.fragment.app.DialogFragment
         textStarted = TextView(context).apply {
             text = getString(R.string.calendar_export_history_started,
                 CalendarExportLog.formatRfc3339(CalendarExportLog.startedAt))
-            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall)
+            androidx.core.widget.TextViewCompat.setTextAppearance(this, com.google.android.material.R.style.TextAppearance_Material3_LabelSmall)
             setTextColor(com.google.android.material.color.MaterialColors.getColor(
                 context, android.R.attr.textColorSecondary, 0))
             val bm = (8 * resources.displayMetrics.density).toInt()
@@ -54,7 +54,7 @@ class CalendarExportHistoryDialogFragment : androidx.fragment.app.DialogFragment
 
         textEmpty = TextView(context).apply {
             text = getString(R.string.calendar_export_history_empty)
-            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
+            androidx.core.widget.TextViewCompat.setTextAppearance(this, com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
             gravity = android.view.Gravity.CENTER
             val vPad = (24 * resources.displayMetrics.density).toInt()
             setPadding(0, vPad, 0, vPad)
@@ -135,12 +135,12 @@ class CalendarExportHistoryDialogFragment : androidx.fragment.app.DialogFragment
                 ).apply { bottomMargin = bm }
             }
             val textTime = TextView(parent.context).apply {
-                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelSmall)
+                androidx.core.widget.TextViewCompat.setTextAppearance(this, com.google.android.material.R.style.TextAppearance_Material3_LabelSmall)
                 setTextColor(com.google.android.material.color.MaterialColors.getColor(
                     parent.context, android.R.attr.textColorSecondary, 0))
             }
             val textContent = TextView(parent.context).apply {
-                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+                androidx.core.widget.TextViewCompat.setTextAppearance(this, com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
             }
             layout.addView(textTime)
             layout.addView(textContent)
