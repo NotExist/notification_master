@@ -1021,18 +1021,17 @@ class NotificationCaptureService : NotificationListenerService() {
      * 回找已匯出的日曆事件 ID（記憶體映射 → CalendarContract 查詢）
      * @param remove 是否從映射中移除（REMOVED 時為 true）
      */
-    private fun resolveCalendarEventId(notificationKey: String, remove: Boolean): Long {
-        val eventId = if (remove) calendarExportMap.remove(notificationKey) else calendarExportMap[notificationKey]
+    /**
+     * REMOVED 溯源：找到最近一筆同 key 的日曆事件 ID 並從 map 移除
+     */
+    private fun resolveCalendarEventIdForRemoval(notificationKey: String): Long {
+        val eventId = calendarExportMap.remove(notificationKey)
         if (eventId != null) return eventId
 
+        // Process 重啟後 map 為空，fallback 到日曆查詢（取最新一筆）
         val calendarId = AppPreferences.getRealtimeCalendarId(this)
         if (calendarId < 0) return -1L
-
-        val recovered = calendarExporter.findEventByNotificationKey(calendarId, notificationKey)
-        if (recovered > 0 && !remove) {
-            calendarExportMap[notificationKey] = recovered
-        }
-        return recovered
+        return calendarExporter.findEventByNotificationKey(calendarId, notificationKey)
     }
 
     /**
@@ -1074,22 +1073,13 @@ class NotificationCaptureService : NotificationListenerService() {
             return
         }
 
-        val key = entity.notificationKey
-        val existingEventId = resolveCalendarEventId(key, remove = false)
-
-        if (existingEventId > 0) {
-            // UPDATED: 更新既有事件內容
-            calendarExporter.updateCalendarEventContent(existingEventId, entity, ExportDetailLevel.FULL)
-            CalendarExportLog.log(entity.packageName, "updated", "eventId=$existingEventId")
+        // 一律建立新日曆事件（電話類 App 重用通知 key，不能以 key 判斷是否為「同一事件」）
+        val eventId = calendarExporter.exportSingleNotification(entity, calendarId, ExportDetailLevel.FULL)
+        if (eventId > 0) {
+            calendarExportMap[entity.notificationKey] = eventId  // REMOVED 溯源用（覆寫為最新）
+            CalendarExportLog.log(entity.packageName, "exported", "eventId=$eventId")
         } else {
-            // 首次 POSTED: 插入新事件並記錄映射
-            val eventId = calendarExporter.exportSingleNotification(entity, calendarId, ExportDetailLevel.FULL)
-            if (eventId > 0) {
-                calendarExportMap[key] = eventId
-                CalendarExportLog.log(entity.packageName, "exported", "eventId=$eventId")
-            } else {
-                CalendarExportLog.log(entity.packageName, "failed", "returnValue=$eventId")
-            }
+            CalendarExportLog.log(entity.packageName, "failed", "returnValue=$eventId")
         }
     }
 
@@ -1103,10 +1093,16 @@ class NotificationCaptureService : NotificationListenerService() {
         packageName: String,
         channelId: String?
     ) {
-        if (!AppPreferences.isRealtimeCalendarEnabled(this)) return
+        if (!AppPreferences.isRealtimeCalendarEnabled(this)) {
+            CalendarExportLog.log(packageName, "removal_skipped", "disabled")
+            return
+        }
 
-        val eventId = resolveCalendarEventId(notificationKey, remove = true)
-        if (eventId < 0) return
+        val eventId = resolveCalendarEventIdForRemoval(notificationKey)
+        if (eventId < 0) {
+            CalendarExportLog.log(packageName, "removal_skipped", "no calendar event found")
+            return
+        }
 
         // 輕量級規則檢查：只比對 package/channel + EventTypes
         val shouldUpdate = RuleEngine.getRules(ActionType.CALENDAR_EXPORT).any { rule ->
@@ -1114,9 +1110,17 @@ class NotificationCaptureService : NotificationListenerService() {
             (rule.channelId == null || rule.channelId == channelId) &&
             EventType.REMOVED.name in rule.eventTypes
         }
-        if (!shouldUpdate) return
+        if (!shouldUpdate) {
+            CalendarExportLog.log(packageName, "removal_skipped", "no REMOVED in rule")
+            return
+        }
 
-        calendarExporter.updateCalendarEventEndTime(eventId, removalTime)
+        val success = calendarExporter.updateCalendarEventEndTime(eventId, removalTime)
+        if (success) {
+            CalendarExportLog.log(packageName, "end_time_updated", "eventId=$eventId")
+        } else {
+            CalendarExportLog.log(packageName, "end_time_failed", "eventId=$eventId")
+        }
     }
 
     /**

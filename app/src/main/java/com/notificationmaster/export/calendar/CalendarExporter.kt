@@ -348,29 +348,7 @@ class CalendarExporter(private val context: Context) {
     }
 
     /**
-     * 更新日曆事件的標題和描述（UPDATED 通知用）
-     * @return 是否成功
-     */
-    fun updateCalendarEventContent(eventId: Long, notification: NotificationEntity, detailLevel: ExportDetailLevel): Boolean {
-        if (!hasCalendarPermission()) return false
-        return try {
-            val title = buildEventTitle(notification, detailLevel)
-            val description = buildEventDescription(notification, detailLevel)
-            val values = ContentValues().apply {
-                put(CalendarContract.Events.TITLE, title)
-                put(CalendarContract.Events.DESCRIPTION, description)
-                put(CalendarContract.Events.EVENT_LOCATION, buildEventLocation(notification))
-            }
-            val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
-            context.contentResolver.update(uri, values, null, null) > 0
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to update calendar event content", e)
-            false
-        }
-    }
-
-    /**
-     * 透過 CUSTOM_APP_URI（notification_key）回找日曆事件
+     * 透過 CUSTOM_APP_URI（notification_key）回找日曆事件（取最新一筆）
      * @return 事件 ID（>0 表示找到），-1L 表示未找到
      */
     fun findEventByNotificationKey(calendarId: Long, notificationKey: String): Long {
@@ -386,7 +364,7 @@ class CalendarExporter(private val context: Context) {
                 projection,
                 selection,
                 selectionArgs,
-                null
+                "${CalendarContract.Events.DTSTART} DESC"
             )?.use { cursor ->
                 if (cursor.moveToFirst()) {
                     cursor.getLong(0)
