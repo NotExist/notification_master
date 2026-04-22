@@ -191,6 +191,31 @@ class SettingsFragment : Fragment() {
         }
         setupFilterButton(binding.btnClipboardCopy, ActionType.CLIPBOARD_COPY)
         updateAllRuleSummaries()
+        setupFilterRuleManagement()
+    }
+
+    private fun setupFilterRuleManagement() {
+        binding.btnExportFilterRules.setOnClickListener {
+            val totalRules = RuleEngine.getRules().size
+            if (totalRules == 0) {
+                Toast.makeText(requireContext(), R.string.filter_export_empty, Toast.LENGTH_SHORT).show()
+            } else {
+                exportFilterLauncher.launch("notification_master_filter_rules.json")
+            }
+        }
+
+        binding.btnImportFilterRules.setOnClickListener {
+            importFilterLauncher.launch(arrayOf("application/json"))
+        }
+
+        // 備份目錄
+        binding.btnChooseBackupDir.setOnClickListener {
+            backupDirPickerLauncher.launch(null)
+        }
+        binding.btnResetBackupDir.setOnClickListener {
+            resetBackupDir()
+        }
+        updateBackupDirDisplay()
     }
 
     private fun setupFilterButton(button: View, actionType: ActionType) {
@@ -679,28 +704,6 @@ class SettingsFragment : Fragment() {
         binding.btnImportJson.setOnClickListener {
             importJsonLauncher.launch(arrayOf("application/json"))
         }
-
-        binding.btnExportFilterRules.setOnClickListener {
-            val totalRules = RuleEngine.getRules().size
-            if (totalRules == 0) {
-                Toast.makeText(requireContext(), R.string.filter_export_empty, Toast.LENGTH_SHORT).show()
-            } else {
-                exportFilterLauncher.launch("notification_master_filter_rules.json")
-            }
-        }
-
-        binding.btnImportFilterRules.setOnClickListener {
-            importFilterLauncher.launch(arrayOf("application/json"))
-        }
-
-        // 備份目錄
-        binding.btnChooseBackupDir.setOnClickListener {
-            backupDirPickerLauncher.launch(null)
-        }
-        binding.btnResetBackupDir.setOnClickListener {
-            resetBackupDir()
-        }
-        updateBackupDirDisplay()
 
         binding.btnClearData.setOnClickListener {
             AlertDialog.Builder(requireContext())
