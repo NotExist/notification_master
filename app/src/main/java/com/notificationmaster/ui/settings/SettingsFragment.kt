@@ -381,11 +381,10 @@ class SettingsFragment : Fragment() {
 
         // 即時匯出歷程
         binding.switchCalendarExportLog.isChecked = CalendarExportLog.enabled
+        binding.btnCalendarExportHistory.isEnabled = CalendarExportLog.enabled
         binding.switchCalendarExportLog.setOnCheckedChangeListener { _, isChecked ->
-            CalendarExportLog.enabled = isChecked
-            if (isChecked) {
-                CalendarExportLog.clear()  // 開啟時重設起點
-            }
+            CalendarExportLog.enabled = isChecked  // setter 會清 buffer + 重設 startedAt
+            binding.btnCalendarExportHistory.isEnabled = isChecked
         }
         binding.btnCalendarExportHistory.setOnClickListener {
             CalendarExportHistoryDialogFragment().show(childFragmentManager, "calendar_export_history")

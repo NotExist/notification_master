@@ -26,11 +26,18 @@ object CalendarExportLog {
     private const val MAX_SIZE = 100
     private val buffer = ArrayDeque<Entry>(MAX_SIZE)
 
-    /** 是否啟用記錄 */
-    var enabled = false
+    /** 是否啟用記錄。切換時會重設 buffer 與 startedAt */
+    var enabled: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            synchronized(buffer) { buffer.clear() }
+            startedAt = if (value) System.currentTimeMillis() else 0L
+            logFlow.value++
+        }
 
-    /** 記錄起點（開啟或清除時重設） */
-    var startedAt: Long = System.currentTimeMillis()
+    /** 記錄起點；0 代表尚未啟用過 */
+    var startedAt: Long = 0L
         private set
 
     /** 每次 log() 遞增，供 UI collect 即時刷新 */
@@ -47,7 +54,9 @@ object CalendarExportLog {
 
     fun getEntries(): List<Entry> = synchronized(buffer) { buffer.toList() }
 
+    /** 清除記錄（僅在啟用狀態下有意義；重設起點為現在） */
     fun clear() {
+        if (!enabled) return
         synchronized(buffer) { buffer.clear() }
         startedAt = System.currentTimeMillis()
         logFlow.value++
