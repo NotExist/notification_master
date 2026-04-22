@@ -320,14 +320,6 @@
                         android:textColor="?android:attr/textColorSecondary"
                         tools:text="目標：Notification Master" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_calendar_export_history"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="@string/calendar_export_history" />
-
                 </LinearLayout>
 
                 <View
@@ -670,6 +662,36 @@
                     android:textAppearance="?attr/textAppearanceBodySmall"
                     android:textColor="?android:attr/textColorSecondary"
                     tools:text="路徑: /storage/emulated/0/Documents/NotificationMaster/debug\n檔案數: 42, 大小: 1.2 MB" />
+
+                <!-- 即時匯出歷程 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/calendar_export_history_log"
+                        android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switch_calendar_export_log"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_calendar_export_history"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/calendar_export_history" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_clear_debug"

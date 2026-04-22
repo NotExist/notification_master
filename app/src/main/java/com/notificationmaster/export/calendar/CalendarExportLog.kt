@@ -11,6 +11,8 @@ import java.util.Locale
  *
  * 記錄每次 checkRealtimeCalendarExport() 的結果（成功/跳過/失敗），
  * 供設定頁的歷程檢視器即時顯示。Process 終止後自動清除。
+ *
+ * 預設關閉，需由使用者在 Debug 區段手動開啟。
  */
 object CalendarExportLog {
 
@@ -24,13 +26,18 @@ object CalendarExportLog {
     private const val MAX_SIZE = 100
     private val buffer = ArrayDeque<Entry>(MAX_SIZE)
 
-    /** Process（singleton 初始化）時間，讓使用者知道歷程涵蓋範圍 */
-    val startedAt: Long = System.currentTimeMillis()
+    /** 是否啟用記錄 */
+    var enabled = false
+
+    /** 記錄起點（開啟或清除時重設） */
+    var startedAt: Long = System.currentTimeMillis()
+        private set
 
     /** 每次 log() 遞增，供 UI collect 即時刷新 */
     val logFlow = MutableStateFlow(0L)
 
     fun log(packageName: String, outcome: String, detail: String? = null) {
+        if (!enabled) return
         synchronized(buffer) {
             if (buffer.size >= MAX_SIZE) buffer.removeFirst()
             buffer.addLast(Entry(System.currentTimeMillis(), packageName, outcome, detail))
@@ -42,6 +49,7 @@ object CalendarExportLog {
 
     fun clear() {
         synchronized(buffer) { buffer.clear() }
+        startedAt = System.currentTimeMillis()
         logFlow.value++
     }
 

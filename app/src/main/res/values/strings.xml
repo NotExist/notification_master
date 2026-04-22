@@ -270,6 +270,7 @@
     <string name="calendar_picker_detail">%1$s · %2$s</string>
 
     <!-- 日曆匯出歷程 -->
+    <string name="calendar_export_history_log">即時匯出歷程記錄</string>
     <string name="calendar_export_history">檢視匯出歷程</string>
     <string name="calendar_export_history_title">日曆即時匯出歷程</string>
     <string name="calendar_export_history_empty">尚無匯出記錄</string>

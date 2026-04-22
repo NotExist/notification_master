@@ -26,6 +26,7 @@ import androidx.navigation.fragment.findNavController
 import com.notificationmaster.BuildConfig
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.notificationmaster.export.calendar.CalendarExportLog
 import com.notificationmaster.core.filter.ActionType
 import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.filter.RuleRepository
@@ -353,6 +354,18 @@ class SettingsFragment : Fragment() {
             updateDebugInfo()
         }
 
+        // 即時匯出歷程
+        binding.switchCalendarExportLog.isChecked = CalendarExportLog.enabled
+        binding.switchCalendarExportLog.setOnCheckedChangeListener { _, isChecked ->
+            CalendarExportLog.enabled = isChecked
+            if (isChecked) {
+                CalendarExportLog.clear()  // 開啟時重設起點
+            }
+        }
+        binding.btnCalendarExportHistory.setOnClickListener {
+            CalendarExportHistoryDialogFragment().show(childFragmentManager, "calendar_export_history")
+        }
+
         binding.btnClearDebug.setOnClickListener {
             AlertDialog.Builder(requireContext())
                 .setTitle("清除 Debug 資料")
@@ -521,11 +534,6 @@ class SettingsFragment : Fragment() {
         // 目標日曆選擇
         binding.btnChooseTargetCalendar.setOnClickListener {
             requestCalendarPermissionThen { showTargetCalendarPicker() }
-        }
-
-        // 匯出歷程
-        binding.btnCalendarExportHistory.setOnClickListener {
-            CalendarExportHistoryDialogFragment().show(childFragmentManager, "calendar_export_history")
         }
 
         // 白名單
