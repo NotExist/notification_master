@@ -175,6 +175,7 @@
     <string name="label_title">標題</string>
     <string name="label_subtitle">副標</string>
     <string name="label_content">內文</string>
+    <string name="label_with_field">%1$s (%2$s)</string>
     <string name="label_time">發佈時間</string>
     <string name="label_when_time">事件時間</string>
     <string name="label_capture_time">擷取時間</string>

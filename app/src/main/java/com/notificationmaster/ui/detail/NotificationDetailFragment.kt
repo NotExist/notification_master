@@ -225,6 +225,8 @@ class NotificationDetailFragment : Fragment() {
 
         // 標題：bigTitle 優先 → fallback title
         val displayTitle = notification.bigTitle ?: notification.title
+        val titleField = if (notification.bigTitle != null) "bigTitle" else "title"
+        binding.labelTitle.text = getString(R.string.label_with_field, getString(R.string.label_title), titleField)
         binding.textTitle.text = displayTitle ?: context.getString(R.string.no_title)
         if (notification.bigTitle != null && notification.title != null && notification.bigTitle != notification.title) {
             binding.iconTitleInfo.visibility = View.VISIBLE
@@ -243,6 +245,8 @@ class NotificationDetailFragment : Fragment() {
         val displaySubtitle = notification.subText ?: notification.infoText
         if (displaySubtitle != null) {
             binding.layoutSubtitle.visibility = View.VISIBLE
+            val subtitleField = if (notification.subText != null) "subText" else "infoText"
+            binding.labelSubtitle.text = getString(R.string.label_with_field, getString(R.string.label_subtitle), subtitleField)
             binding.textSubtitle.text = displaySubtitle
             if (notification.subText == null && notification.infoText != null) {
                 binding.iconSubtitleInfo.visibility = View.VISIBLE
@@ -262,6 +266,8 @@ class NotificationDetailFragment : Fragment() {
 
         // 內容：bigText 優先 → fallback text
         val displayContent = notification.bigText ?: notification.text
+        val contentField = if (notification.bigText != null) "bigText" else "text"
+        binding.labelContent.text = getString(R.string.label_with_field, getString(R.string.label_content), contentField)
         binding.textContent.text = displayContent ?: context.getString(R.string.no_content)
         if (notification.bigText != null && notification.text != null && notification.bigText != notification.text) {
             binding.iconContentInfo.visibility = View.VISIBLE
