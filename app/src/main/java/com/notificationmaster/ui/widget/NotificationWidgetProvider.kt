@@ -58,9 +58,7 @@ class NotificationWidgetProvider : AppWidgetProvider() {
             // 標題：label null 時退回 widget 名稱作為靜態識別
             views.setTextViewText(R.id.widget_title, label ?: context.getString(R.string.widget_list_name))
 
-            // 無論 matchers 是否存在，都要綁 adapter + empty view。
-            // Factory.onDataSetChanged() 在 matchers==null 時會回 emptyList，
-            // empty view 機制就會把「尚無通知記錄」自動顯示出來。
+            // 綁 adapter + empty view。Factory 讀不到 spec 時回 emptyList，empty view 會自動顯示。
             val serviceIntent = Intent(context, NotificationRemoteViewsService::class.java).apply {
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
                 data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
@@ -68,10 +66,20 @@ class NotificationWidgetProvider : AppWidgetProvider() {
             views.setRemoteAdapter(R.id.widget_list_view, serviceIntent)
             views.setEmptyView(R.id.widget_list_view, R.id.widget_empty)
 
-            // 標題點擊 → 主頁
+            // 標題點擊 → Timeline 套用此 widget 的 spec / preset（找不到時退回主頁）
+            val presetName = AppPreferences.getWidgetPresetName(context, appWidgetId)
+            val specJson = AppPreferences.getWidgetSpec(context, appWidgetId)
+            val titleIntent = Intent(context, MainActivity::class.java).apply {
+                if (presetName != null || specJson != null) {
+                    action = MainActivity.ACTION_SHOW_FILTERED_TIMELINE
+                    if (presetName != null) putExtra(MainActivity.EXTRA_FILTER_PRESET_NAME, presetName)
+                    if (specJson != null) putExtra(MainActivity.EXTRA_FILTER_SPEC_JSON, specJson)
+                }
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
             val mainIntent = PendingIntent.getActivity(
                 context, appWidgetId,
-                Intent(context, MainActivity::class.java),
+                titleIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_title, mainIntent)

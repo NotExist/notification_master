@@ -8,19 +8,19 @@ import android.widget.RemoteViewsService
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.cache.AppLabelCache
-import com.notificationmaster.core.filter.MatchContext
-import com.notificationmaster.core.filter.Matcher
 import com.notificationmaster.core.prefs.AppPreferences
+import com.notificationmaster.data.db.dao.querySync
 import com.notificationmaster.data.db.entity.NotificationEntity
+import com.notificationmaster.data.filter.EventFilterSpec
+import com.notificationmaster.data.filter.FilterPresetRepository
 import com.notificationmaster.ui.main.MainActivity
-import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * 清單式 Widget 的資料填充
- * 在 binder thread 執行，使用同步 DAO 查詢 + 記憶體內 matcher 篩選
+ * 清單式 Widget 的資料填充（Plan 1 FilterSpec 架構）
+ * 在 binder thread 執行，使用同步 DAO 查詢
  */
 class NotificationRemoteViewsFactory(
     private val context: Context,
@@ -38,48 +38,29 @@ class NotificationRemoteViewsFactory(
 
     override fun onDataSetChanged() {
         val dao = NotificationMasterApp.getInstance().database.notificationDao()
-        val matchersJson = AppPreferences.getWidgetMatchers(context, appWidgetId)
-        if (matchersJson == null) {
+        val spec = resolveSpec() ?: run {
             notifications = emptyList()
             return
         }
-
-        val matchers = try {
-            val arr = JSONArray(matchersJson)
-            (0 until arr.length()).map { Matcher.fromJson(arr.getJSONObject(it)) }
+        // Widget 列表限制 20 筆
+        val effectiveSpec = if (spec.limit == null) spec.copy(limit = 20) else spec
+        notifications = try {
+            dao.querySync(effectiveSpec)
         } catch (_: Exception) {
-            notifications = emptyList()
-            return
+            emptyList()
         }
+    }
 
-        // 統一查詢：每個 key 的最新 entity
-        val candidates = dao.getRecentNotificationsSync(200)
-
-        // 記憶體內 matcher 篩選
-        val filtered = candidates.filter { entity ->
-            val mc = MatchContext(
-                packageName = entity.packageName,
-                channelId = entity.channelId,
-                title = entity.title,
-                text = entity.text,
-                bigText = entity.bigText,
-                subText = entity.subText,
-                channelImportance = entity.importance.takeIf { it >= 0 },
-                flags = entity.flags,
-                isAudible = entity.isAudible,
-                likelyHeadsup = entity.likelyHeadsup,
-                isRemoved = entity.removedAt != null
-            )
-            matchers.all { it.matches(mc) }
+    private fun resolveSpec(): EventFilterSpec? {
+        // 1. 優先 preset name
+        val presetName = AppPreferences.getWidgetPresetName(context, appWidgetId)
+        if (presetName != null) {
+            val preset = FilterPresetRepository.getInstance(context).getPreset(presetName)
+            if (preset != null) return preset.spec
         }
-
-        // dismissed 排序：若 matchers 含 DerivedProperty(isRemoved=true)，按 removedAt DESC
-        val hasDismissedFilter = matchers.any { it is Matcher.DerivedProperty && (it as Matcher.DerivedProperty).isRemoved == true }
-        notifications = if (hasDismissedFilter) {
-            filtered.sortedByDescending { it.removedAt ?: 0L }.take(20)
-        } else {
-            filtered.take(20) // 已按 post_time DESC
-        }
+        // 2. 次選 spec JSON
+        val specJson = AppPreferences.getWidgetSpec(context, appWidgetId) ?: return null
+        return runCatching { EventFilterSpec.fromJsonString(specJson) }.getOrNull()
     }
 
     override fun onDestroy() {
@@ -96,7 +77,6 @@ class NotificationRemoteViewsFactory(
             setTextViewText(R.id.widget_item_app, AppLabelCache.getLabel(context, notification.packageName))
             setTextViewText(R.id.widget_item_content, notification.bigText ?: notification.text ?: "")
 
-            // 點擊項目 → Detail 頁
             val fillInIntent = Intent().apply {
                 putExtra(MainActivity.EXTRA_NOTIFICATION_ID, notification.id)
             }
