@@ -33,6 +33,7 @@ class MainActivity : AppCompatActivity() {
         setupNavigation()
         handleShortcutIntent(intent)
         handleExternalTextIntent(intent)
+        handleFilteredTimelineIntent(intent)
 
         // 首次啟動且未設定備份目錄 → 靜默導航到設定頁
         if (savedInstanceState == null && !hasRedirectedToSettings
@@ -72,6 +73,16 @@ class MainActivity : AppCompatActivity() {
         setIntent(intent)
         handleShortcutIntent(intent)
         handleExternalTextIntent(intent)
+        handleFilteredTimelineIntent(intent)
+    }
+
+    /**
+     * Widget / Shortcut 帶 spec 或 preset name 進入 Timeline。
+     * 切到 Timeline tab 後 intent.action 會由 TimelineFragment 讀取並消費。
+     */
+    private fun handleFilteredTimelineIntent(intent: Intent?) {
+        if (intent?.action != ACTION_SHOW_FILTERED_TIMELINE) return
+        binding.bottomNav.selectedItemId = R.id.nav_timeline
     }
 
     private fun handleShortcutIntent(intent: Intent?) {
@@ -111,6 +122,13 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val ACTION_SHOW_DETAIL = "com.notificationmaster.action.SHOW_DETAIL"
         const val EXTRA_NOTIFICATION_ID = "notification_id"
+
+        /** 由 Widget / Shortcut 帶入已命名 preset 或 ad-hoc spec，切到 Timeline 並套用 */
+        const val ACTION_SHOW_FILTERED_TIMELINE = "com.notificationmaster.action.SHOW_FILTERED_TIMELINE"
+        /** 命名 preset（系統內建或使用者命名） */
+        const val EXTRA_FILTER_PRESET_NAME = "filter_preset_name"
+        /** Ad-hoc spec JSON（與 PRESET_NAME 二擇一；SPEC 優先） */
+        const val EXTRA_FILTER_SPEC_JSON = "filter_spec_json"
 
         /** Process 級 flag，App 被殺重啟才重置 */
         private var hasRedirectedToSettings = false

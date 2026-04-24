@@ -40,14 +40,14 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- 篩選/去重選項列（計數已移到 MainActivity toolbar 右側） -->
+        <!-- 核心篩選 chip（多選 AND，未選 = 全部） -->
         <com.google.android.material.chip.ChipGroup
             android:id="@+id/chip_group_filter"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:paddingHorizontal="16dp"
             android:paddingVertical="4dp"
-            app:singleSelection="true"
+            app:singleSelection="false"
             app:selectionRequired="false">
 
             <com.google.android.material.chip.Chip
@@ -66,6 +66,13 @@
                 style="@style/Widget.Material3.Chip.Filter" />
 
             <com.google.android.material.chip.Chip
+                android:id="@+id/chip_headsup"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/timeline_headsup_only"
+                style="@style/Widget.Material3.Chip.Filter" />
+
+            <com.google.android.material.chip.Chip
                 android:id="@+id/chip_dismissed"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -73,6 +80,33 @@
                 style="@style/Widget.Material3.Chip.Filter" />
 
         </com.google.android.material.chip.ChipGroup>
+
+        <!-- 命名 Preset chip（單選，點擊套用整套 spec；+ chip 開啟自訂 sheet） -->
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:paddingHorizontal="16dp">
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/chip_group_presets"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleLine="true"
+                app:singleSelection="true"
+                app:selectionRequired="false">
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_add_preset"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/timeline_preset_add"
+                    app:chipIcon="@drawable/ic_timeline"
+                    style="@style/Widget.Material3.Chip.Assist" />
+
+            </com.google.android.material.chip.ChipGroup>
+
+        </HorizontalScrollView>
 
         <View
             android:layout_width="match_parent"

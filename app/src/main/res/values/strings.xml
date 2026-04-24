@@ -334,6 +334,89 @@
     <string name="shortcut_empty_audible">尚無有聲通知記錄</string>
     <string name="shortcut_empty_headsup">尚無 Heads-up 通知記錄</string>
     <string name="timeline_dismissed_only">已移除</string>
+    <string name="timeline_headsup_only">彈出</string>
+
+    <!-- 命名篩選 Preset -->
+    <string name="timeline_preset_add">自訂篩選</string>
+    <string name="preset_recent_audible">最近有聲</string>
+    <string name="preset_recent_headsup">最近彈出</string>
+    <string name="preset_recent_dismissed">最近已移除</string>
+    <string name="preset_save_title">儲存為 Preset</string>
+    <string name="preset_save_name_hint">Preset 名稱</string>
+    <string name="preset_save_name_empty">請輸入名稱</string>
+    <string name="preset_save_name_reserved">此名稱為系統保留字，請使用其他名稱</string>
+    <string name="preset_save_name_duplicate">此名稱已存在</string>
+    <string name="preset_saved">已儲存 Preset「%s」</string>
+    <string name="preset_delete_confirm_title">刪除 Preset</string>
+    <string name="preset_delete_confirm_message">確定刪除「%s」？</string>
+    <string name="preset_deleted">已刪除 Preset「%s」</string>
+    <string name="preset_rename_title">重新命名 Preset</string>
+    <string name="preset_rename_widget_notice">提醒：若有 Widget 使用此 Preset，需要重新設定 Widget</string>
+    <string name="preset_action_edit">編輯</string>
+    <string name="preset_action_rename">重新命名</string>
+    <string name="preset_action_delete">刪除</string>
+    <string name="preset_action_create_widget">建立 Widget</string>
+
+    <!-- 自訂篩選 sheet -->
+    <string name="filter_editor_title">自訂篩選</string>
+    <string name="filter_editor_section_content">內容搜尋</string>
+    <string name="filter_editor_keyword_hint">關鍵字（標題／內容／附件檔名）</string>
+    <string name="filter_editor_section_behavior">行為</string>
+    <string name="filter_editor_section_time">時間範圍</string>
+    <string name="filter_editor_section_conditions">條件</string>
+    <string name="filter_editor_section_display">顯示</string>
+    <string name="filter_editor_add_condition">加入條件</string>
+    <string name="filter_editor_condition_field">欄位</string>
+    <string name="filter_editor_condition_op">運算子</string>
+    <string name="filter_editor_condition_value">值</string>
+    <string name="filter_editor_order">排序</string>
+    <string name="filter_editor_limit">筆數上限</string>
+    <string name="filter_editor_limit_none">不限</string>
+    <string name="filter_editor_preview">預覽匹配 %d 筆</string>
+    <string name="filter_editor_preview_loading">預覽匹配…</string>
+    <string name="filter_editor_apply">套用</string>
+    <string name="filter_editor_save_as_preset">儲存為 Preset</string>
+    <string name="filter_editor_package_hint">Package（可留空）</string>
+    <string name="filter_editor_channel_hint">Channel（可留空）</string>
+    <string name="filter_editor_time_from">起</string>
+    <string name="filter_editor_time_to">迄</string>
+    <string name="filter_editor_time_clear">清除</string>
+    <string name="filter_editor_deduplicate">去重</string>
+    <string name="filter_editor_order_post_desc">發佈時間倒序</string>
+    <string name="filter_editor_order_post_asc">發佈時間正序</string>
+    <string name="filter_editor_order_capture_desc">擷取時間倒序</string>
+
+    <!-- 欄位名稱（供 extraPredicates 下拉顯示） -->
+    <string name="field_priority">priority（優先級）</string>
+    <string name="field_importance">importance（重要性）</string>
+    <string name="field_visibility">visibility（可見性）</string>
+    <string name="field_category">category（分類）</string>
+    <string name="field_has_bubble_metadata">有 BubbleMetadata</string>
+    <string name="field_has_full_screen_intent">有 FullScreenIntent</string>
+    <string name="field_has_content_intent">有 ContentIntent</string>
+    <string name="field_is_ongoing">is_ongoing（持續）</string>
+    <string name="field_is_foreground_service">is_foreground_service（前景服務）</string>
+    <string name="field_is_high_priority">is_high_priority（高優先 flag）</string>
+    <string name="field_is_local_only">is_local_only（僅本機）</string>
+    <string name="field_is_group_summary">is_group_summary（群組摘要）</string>
+    <string name="field_flags">flags（旗標整數）</string>
+    <string name="field_post_time">post_time（發佈時間戳）</string>
+    <string name="field_capture_time">capture_time（擷取時間戳）</string>
+    <string name="field_when_time">when_time（when）</string>
+
+    <!-- Widget configure -->
+    <string name="widget_config_show_what">顯示哪一類通知？</string>
+    <string name="widget_config_section_system">系統 Preset</string>
+    <string name="widget_config_section_user">我的 Preset</string>
+    <string name="widget_config_section_custom">進階</string>
+    <string name="widget_config_custom">自訂篩選</string>
+    <string name="widget_config_click_behavior">Widget 標題點擊行為</string>
+    <string name="widget_config_click_filtered">開啟 Timeline 並套用此篩選</string>
+    <string name="widget_config_click_main">僅開啟 App</string>
+    <string name="widget_config_no_presets">尚未建立自訂 Preset</string>
+    <string name="widget_create_done">已將 Preset 套用至 Widget 設定</string>
+    <string name="widget_pin_not_supported">此 Launcher 不支援自動建立 Widget，請從桌面長按新增。</string>
+    <string name="widget_pin_below_api26">Android 7.1 以下不支援自動建立 Widget，請從桌面長按新增。</string>
     <string name="shortcut_dismissed_short">最近移除</string>
     <string name="shortcut_dismissed_long">最近被移除的通知</string>
     <string name="shortcut_dismissed_title">最近移除的通知</string>
