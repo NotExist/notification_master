@@ -6,9 +6,12 @@ import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Transaction
+import androidx.room.RawQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.NotificationEntity
+import com.notificationmaster.data.filter.EventFilterSpec
+import com.notificationmaster.data.filter.EventFilterSqlBuilder
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -24,6 +27,27 @@ data class NotificationWithEventType(
  */
 @Dao
 interface NotificationDao {
+
+    // === 通用 FilterSpec 查詢（Plan 1） ===
+
+    /**
+     * 以 SupportSQLiteQuery 回傳實體 Flow，底層 SQL 由 [EventFilterSqlBuilder] 產生。
+     * 使用 extension 函式 [query] 從 [EventFilterSpec] 發動查詢。
+     */
+    @RawQuery(observedEntities = [NotificationEntity::class])
+    fun queryEvents(query: SupportSQLiteQuery): Flow<List<NotificationEntity>>
+
+    /** 同步版本（Widget / binder thread 用） */
+    @RawQuery
+    fun queryEventsSync(query: SupportSQLiteQuery): List<NotificationEntity>
+
+    /** 以 SupportSQLiteQuery 回傳 COUNT Flow（預覽/計數器用） */
+    @RawQuery(observedEntities = [NotificationEntity::class])
+    fun countEvents(query: SupportSQLiteQuery): Flow<Int>
+
+    /** 同步 COUNT（Widget 備援） */
+    @RawQuery
+    fun countEventsSync(query: SupportSQLiteQuery): Int
 
     // === 插入 ===
 
@@ -222,6 +246,7 @@ interface NotificationDao {
     /**
      * 取得最近有聲通知（每個 notification_key 取最新一筆）
      */
+    @Deprecated("用 query(EventFilterSpec.RecentAudible) 取代", ReplaceWith("query(com.notificationmaster.data.filter.EventFilterSpec.RecentAudible)"))
     @Query("""
         SELECT * FROM notifications
         WHERE id IN (
@@ -241,6 +266,7 @@ interface NotificationDao {
     /**
      * 取得最近 Heads-up 通知（每個 notification_key 取最新一筆）
      */
+    @Deprecated("用 query(EventFilterSpec.RecentHeadsup) 取代", ReplaceWith("query(com.notificationmaster.data.filter.EventFilterSpec.RecentHeadsup)"))
     @Query("""
         SELECT * FROM notifications
         WHERE id IN (
@@ -261,6 +287,7 @@ interface NotificationDao {
      * 取得最近被移除的通知（每個 notification_key 取最新一筆）
      * 按移除事件時間倒序排列
      */
+    @Deprecated("用 query(EventFilterSpec.RecentDismissed) 取代", ReplaceWith("query(com.notificationmaster.data.filter.EventFilterSpec.RecentDismissed)"))
     @Query("""
         SELECT n.* FROM notifications n
         INNER JOIN (
@@ -484,3 +511,22 @@ interface NotificationDao {
     @Query("DELETE FROM notifications")
     suspend fun deleteAll()
 }
+
+// === FilterSpec 快捷 extension（Plan 1） ===
+
+/** 以 [EventFilterSpec] 查詢通知列表（Flow） */
+fun NotificationDao.query(spec: EventFilterSpec): Flow<List<NotificationEntity>> =
+    queryEvents(EventFilterSqlBuilder.build(spec))
+
+/** 以 [EventFilterSpec] 查詢通知列表（同步，供 Widget binder thread 使用） */
+fun NotificationDao.querySync(spec: EventFilterSpec): List<NotificationEntity> =
+    queryEventsSync(EventFilterSqlBuilder.build(spec))
+
+/** 以 [EventFilterSpec] 計算符合筆數（Flow） */
+fun NotificationDao.count(spec: EventFilterSpec): Flow<Int> =
+    countEvents(EventFilterSqlBuilder.buildCount(spec))
+
+/** 以 [EventFilterSpec] 計算符合筆數（同步） */
+fun NotificationDao.countSync(spec: EventFilterSpec): Int =
+    countEventsSync(EventFilterSqlBuilder.buildCount(spec))
+
