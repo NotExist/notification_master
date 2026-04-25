@@ -220,9 +220,10 @@ class TimelineFragment : Fragment() {
 
     private fun setupPresetChips() {
         viewLifecycleOwner.lifecycleScope.launch {
+            // Layer 2 只顯示使用者命名 preset；系統 preset 留給 Widget configure / Shortcut
             presetRepo.observePresets().collectLatest { presets ->
                 if (_binding == null) return@collectLatest
-                renderPresetChips(presets)
+                renderPresetChips(presets.filter { it.source == PresetSource.USER })
             }
         }
         binding.chipAddPreset.setOnClickListener {
@@ -232,50 +233,46 @@ class TimelineFragment : Fragment() {
 
     private fun renderPresetChips(presets: List<FilterPreset>) {
         val group = binding.chipGroupPresets
-        // 清除除 chipAddPreset 外的既有 preset chip
         val addChip = binding.chipAddPreset
+        // 清除除 chipAddPreset 外的既有 preset chip
         val toRemove = (0 until group.childCount).mapNotNull { i ->
             val c = group.getChildAt(i)
             if (c.id != R.id.chip_add_preset) c else null
         }
         toRemove.forEach { group.removeView(it) }
 
-        // Preset chip 插在 chipAddPreset 之前
-        val insertPos = 0
-        for (preset in presets) {
-            val chip = Chip(requireContext()).apply {
-                text = presetDisplayName(preset)
-                isCheckable = true
-                isChecked = (activePresetName == preset.name)
-                tag = preset.name
-                setOnClickListener {
-                    if (suppressChipListener) return@setOnClickListener
+        val inflater = LayoutInflater.from(requireContext())
+        for ((i, preset) in presets.withIndex()) {
+            val chip = inflater.inflate(R.layout.chip_preset, group, false) as Chip
+            chip.text = presetDisplayName(preset)
+            chip.tag = preset.name
+            // 同步勾選狀態（在 listener 設置前完成，避免 re-entrancy）
+            chip.isChecked = (activePresetName == preset.name)
+            chip.setOnClickListener {
+                if (suppressChipListener) return@setOnClickListener
+                if (chip.isChecked) {
+                    // 從未選 → 已選：套用 preset
                     applyPreset(preset)
+                } else {
+                    // 從已選 → 未選：取消，回退到核心 chip 組合的 spec
+                    activePresetName = null
+                    rebuildSpecFromChips()
+                    binding.swipeRefresh.isRefreshing = true
+                    loadNotifications()
                 }
-                setOnLongClickListener {
-                    showPresetMenu(preset)
-                    true
-                }
-                setChipStyle(this)
             }
-            group.addView(chip, insertPos + presets.indexOf(preset))
+            chip.setOnLongClickListener {
+                showPresetMenu(preset)
+                true
+            }
+            group.addView(chip, i)
         }
         // 重排：chipAddPreset 永遠在最後
         group.removeView(addChip)
         group.addView(addChip)
     }
 
-    private fun setChipStyle(chip: Chip) {
-        // Material3 filter chip 樣式（runtime 建立）
-        chip.setEnsureMinTouchTargetSize(false)
-    }
-
-    private fun presetDisplayName(preset: FilterPreset): String = when (preset.name) {
-        FilterPresetRepository.SYSTEM_RECENT_AUDIBLE -> getString(R.string.preset_recent_audible)
-        FilterPresetRepository.SYSTEM_RECENT_HEADSUP -> getString(R.string.preset_recent_headsup)
-        FilterPresetRepository.SYSTEM_RECENT_DISMISSED -> getString(R.string.preset_recent_dismissed)
-        else -> preset.name
-    }
+    private fun presetDisplayName(preset: FilterPreset): String = preset.name
 
     private fun clearPresetSelection() {
         val group = binding.chipGroupPresets

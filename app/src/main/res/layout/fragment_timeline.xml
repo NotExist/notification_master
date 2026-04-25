@@ -101,8 +101,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/timeline_preset_add"
-                    app:chipIcon="@drawable/ic_timeline"
-                    style="@style/Widget.Material3.Chip.Assist" />
+                    android:checkable="false"
+                    app:ensureMinTouchTargetSize="false"
+                    style="@style/Widget.Material3.Chip.Filter" />
 
             </com.google.android.material.chip.ChipGroup>
 
