@@ -41,45 +41,57 @@
         </com.google.android.material.textfield.TextInputLayout>
 
         <!-- 核心篩選 chip（多選 AND，未選 = 全部） -->
-        <com.google.android.material.chip.ChipGroup
-            android:id="@+id/chip_group_filter"
+        <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:scrollbars="none"
             android:paddingHorizontal="16dp"
-            android:paddingVertical="4dp"
-            app:singleSelection="false"
-            app:selectionRequired="false">
+            android:paddingVertical="4dp">
 
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chip_deduplicated"
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/chip_group_filter"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/timeline_show_deduplicated"
-                android:checked="true"
-                style="@style/Widget.Material3.Chip.Filter" />
+                app:singleLine="true"
+                app:singleSelection="false"
+                app:selectionRequired="false">
 
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chip_audible"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/timeline_audible_only"
-                style="@style/Widget.Material3.Chip.Filter" />
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_deduplicated"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/timeline_show_deduplicated"
+                    android:checked="true"
+                    app:ensureMinTouchTargetSize="false"
+                    style="@style/Widget.Material3.Chip.Filter" />
 
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chip_headsup"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/timeline_headsup_only"
-                style="@style/Widget.Material3.Chip.Filter" />
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_audible"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/timeline_audible_only"
+                    app:ensureMinTouchTargetSize="false"
+                    style="@style/Widget.Material3.Chip.Filter" />
 
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chip_dismissed"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/timeline_dismissed_only"
-                style="@style/Widget.Material3.Chip.Filter" />
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_headsup"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/timeline_headsup_only"
+                    app:ensureMinTouchTargetSize="false"
+                    style="@style/Widget.Material3.Chip.Filter" />
 
-        </com.google.android.material.chip.ChipGroup>
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_dismissed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/timeline_dismissed_only"
+                    app:ensureMinTouchTargetSize="false"
+                    style="@style/Widget.Material3.Chip.Filter" />
+
+            </com.google.android.material.chip.ChipGroup>
+
+        </HorizontalScrollView>
 
         <!-- 命名 Preset chip（單選，點擊套用整套 spec；+ chip 開啟自訂 sheet） -->
         <HorizontalScrollView

@@ -1,72 +1,100 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<com.google.android.material.card.MaterialCardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:layout_marginTop="4dp"
-    android:gravity="center_vertical">
+    android:layout_marginTop="8dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="?attr/colorOutlineVariant"
+    app:contentPadding="12dp">
 
-    <com.google.android.material.textfield.TextInputLayout
-        android:id="@+id/layout_field"
-        android:layout_width="0dp"
-        android:layout_weight="1.3"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="@string/filter_editor_condition_field"
-        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+        android:orientation="vertical">
 
-        <com.google.android.material.textfield.MaterialAutoCompleteTextView
-            android:id="@+id/dropdown_field"
+        <!-- 第一列：欄位（佔滿）+ 移除按鈕 -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="none"
-            android:focusable="false"/>
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-    </com.google.android.material.textfield.TextInputLayout>
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/layout_field"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:hint="@string/filter_editor_condition_field"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
 
-    <com.google.android.material.textfield.TextInputLayout
-        android:id="@+id/layout_op"
-        android:layout_width="0dp"
-        android:layout_weight="1"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="4dp"
-        android:hint="@string/filter_editor_condition_op"
-        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/dropdown_field"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none"
+                    android:focusable="false"/>
 
-        <com.google.android.material.textfield.MaterialAutoCompleteTextView
-            android:id="@+id/dropdown_op"
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <ImageButton
+                android:id="@+id/btn_remove"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/preset_action_delete"/>
+
+        </LinearLayout>
+
+        <!-- 第二列：運算子 + 值 -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="none"
-            android:focusable="false"/>
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            android:baselineAligned="false">
 
-    </com.google.android.material.textfield.TextInputLayout>
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/layout_op"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:hint="@string/filter_editor_condition_op"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
 
-    <com.google.android.material.textfield.TextInputLayout
-        android:id="@+id/layout_value"
-        android:layout_width="0dp"
-        android:layout_weight="1.2"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="4dp"
-        android:hint="@string/filter_editor_condition_value"
-        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense">
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/dropdown_op"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none"
+                    android:focusable="false"/>
 
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/edit_value"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="text"
-            android:maxLines="1"/>
+            </com.google.android.material.textfield.TextInputLayout>
 
-    </com.google.android.material.textfield.TextInputLayout>
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/layout_value"
+                android:layout_width="0dp"
+                android:layout_weight="1.5"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:hint="@string/filter_editor_condition_value"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
 
-    <ImageButton
-        android:id="@+id/btn_remove"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:src="@android:drawable/ic_menu_close_clear_cancel"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="@string/preset_action_delete"/>
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/edit_value"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLines="1"/>
 
-</LinearLayout>
+            </com.google.android.material.textfield.TextInputLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>
