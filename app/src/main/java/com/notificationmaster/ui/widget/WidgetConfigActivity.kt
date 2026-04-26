@@ -3,39 +3,43 @@ package com.notificationmaster.ui.widget
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.os.Bundle
-import android.widget.LinearLayout
-import android.widget.RadioButton
-import android.widget.RadioGroup
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import com.notificationmaster.R
+import com.notificationmaster.core.cache.AppLabelCache
+import com.notificationmaster.core.filter.Matcher
+import com.notificationmaster.core.filter.Rule
+import com.notificationmaster.core.filter.RuleAction
+import com.notificationmaster.core.filter.RuleEngine
+import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.core.prefs.AppPreferences
-import com.notificationmaster.data.filter.EventFilterSpec
-import com.notificationmaster.data.filter.FilterPreset
-import com.notificationmaster.data.filter.FilterPresetRepository
-import com.notificationmaster.data.filter.PresetSource
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 
 /**
- * Widget 設定 Activity
+ * Widget 設定 Activity（Plan D — 直接進 RuleEngine widgetMode 編輯器）
  *
- * 新 widget：列出系統 + 使用者 preset + 自訂篩選選項
- * 重新設定（API 28+ reconfigurable）：預選目前設定
+ * 流程：
+ * 1. onCreate → 直接打開 FilterRuleDialogHelper.widgetMode 編輯 matchers
+ *    （重設模式：以既有 widget 綁定的 rule.matchers 為初值）
+ * 2. 確認後輸入 rule 顯示名稱 → 建立 LIST_FILTER Rule → 存入 RuleEngine
+ * 3. 將 rule.id 寫入 widget_rule_id_<appWidgetId> SharedPreferences
+ * 4. 觸發 widget 重繪
+ *
+ * 透明 theme，所有 UI 走 dialog；本 Activity 不顯示自身 contentView。
  */
 class WidgetConfigActivity : AppCompatActivity() {
 
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
-    private lateinit var presetRepo: FilterPresetRepository
 
     companion object {
-        /** Pin 流程帶入的預選 preset name（WidgetPinner 使用） */
-        const val EXTRA_PRESELECTED_PRESET = "preselected_preset"
+        /** WidgetPinner.requestPin 帶入的 preselect rule id */
+        const val EXTRA_PRESELECTED_RULE_ID = "preselected_rule_id"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setResult(RESULT_CANCELED)
 
         appWidgetId = intent?.extras?.getInt(
@@ -48,157 +52,113 @@ class WidgetConfigActivity : AppCompatActivity() {
             return
         }
 
-        presetRepo = FilterPresetRepository.getInstance(this)
+        RuleRepository.load(this)
 
-        // 預選：優先 requestPin 帶入的 preset；其次重設時的現有設定
-        val preselected = intent?.getStringExtra(EXTRA_PRESELECTED_PRESET)
-            ?: AppPreferences.getWidgetPresetName(this, appWidgetId)
+        // 預選：requestPin 帶入 → 重新設定既有綁定 → 預設 RecentAudible 內建
+        val preselectedRuleId = intent?.getStringExtra(EXTRA_PRESELECTED_RULE_ID)
+            ?: AppPreferences.getWidgetRuleId(this, appWidgetId)
+            ?: RuleRepository.builtInRuleIdAudible()
+        val preselected = RuleEngine.getRule(preselectedRuleId)
+        // 若 rule 已被刪除（user 手動清過），fallback 內建
+        val initialRule = preselected
+            ?: RuleEngine.getRule(RuleRepository.builtInRuleIdAudible())
 
-        showPresetChooser(preselected)
+        openEditor(initialRule)
     }
 
-    private fun showPresetChooser(preselectedName: String?) {
-        val presets = presetRepo.getAllPresets()
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            val pad = (resources.displayMetrics.density * 16).toInt()
-            setPadding(pad, pad, pad, pad)
+    private fun openEditor(initialRule: Rule?) {
+        FilterRuleDialogHelper.showAddRuleDialog(
+            context = this,
+            widgetMode = true,
+            existingWidgetMatchers = initialRule?.matchers ?: emptyList(),
+            onMatchersReady = { matchers ->
+                handleMatchersReady(matchers, initialRule)
+            },
+            onWidgetCancelled = { finish() }
+        )
+    }
+
+    /**
+     * 編輯器確認後：
+     * - 若 initialRule 是內建 rule → 建立新 user-defined rule（不能改內建）
+     * - 若 initialRule 是 user rule 且 matchers 有變 → 詢問新名稱建立新 rule
+     *   （避免改動既存 rule 影響其他 widget；Timeline rule chip 可另行管理）
+     * - 若 initialRule 是 user rule 且 matchers 不變 → 直接綁此 rule
+     */
+    private fun handleMatchersReady(matchers: List<Matcher>, initialRule: Rule?) {
+        val unchanged = initialRule != null && matchers == initialRule.matchers
+        if (unchanged && initialRule != null) {
+            bindAndFinish(initialRule)
+            return
         }
+        promptName(initialRule, matchers)
+    }
 
-        val rg = RadioGroup(this)
-        container.addView(rg)
-
-        val presetIds = mutableListOf<Pair<Int, String>>() // viewId → presetName
-
-        // 系統區段
-        addSectionHeader(container, getString(R.string.widget_config_section_system))
-        var idCounter = 1
-        presets.filter { it.source == PresetSource.SYSTEM }.forEach { p ->
-            val rb = buildRadioButton(idCounter++, presetDisplayName(p))
-            rg.addView(rb)
-            presetIds.add(rb.id to p.name)
+    private fun promptName(initialRule: Rule?, matchers: List<Matcher>) {
+        val defaultName = initialRule?.name ?: deriveLabel(matchers)
+        val editText = TextInputEditText(this).apply {
+            setText(defaultName)
+            setSelection(text?.length ?: 0)
         }
-
-        // 使用者區段
-        val userPresets = presets.filter { it.source == PresetSource.USER }
-        if (userPresets.isNotEmpty()) {
-            addSectionHeader(container, getString(R.string.widget_config_section_user))
-            userPresets.forEach { p ->
-                val rb = buildRadioButton(idCounter++, p.name)
-                rg.addView(rb)
-                presetIds.add(rb.id to p.name)
-            }
+        val layout = TextInputLayout(
+            this, null, com.google.android.material.R.attr.textInputOutlinedStyle
+        ).apply {
+            hint = getString(R.string.preset_save_name_hint)
+            setPadding(48, 16, 48, 0)
+            addView(editText)
         }
-
-        // 進階：自訂篩選
-        addSectionHeader(container, getString(R.string.widget_config_section_custom))
-        val customRb = buildRadioButton(idCounter++, getString(R.string.widget_config_custom))
-        rg.addView(customRb)
-        val customId = customRb.id
-
-        // 預選
-        val preselectedId = presetIds.firstOrNull { it.second == preselectedName }?.first
-            ?: presetIds.firstOrNull()?.first
-            ?: customId
-        rg.check(preselectedId)
-
         MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.widget_config_show_what)
-            .setView(container)
+            .setTitle(R.string.preset_save_title)
+            .setView(layout)
             .setPositiveButton(android.R.string.ok) { _, _ ->
-                val checked = rg.checkedRadioButtonId
-                if (checked == customId) {
-                    openCustomEditor()
-                } else {
-                    val name = presetIds.firstOrNull { it.first == checked }?.second
-                    val preset = name?.let { presetRepo.getPreset(it) }
-                    if (preset != null) {
-                        saveAndFinish(preset.spec, preset.name, presetDisplayName(preset))
-                    } else {
-                        finish()
-                    }
-                }
+                val name = editText.text?.toString()?.trim()?.ifEmpty { defaultName } ?: defaultName
+                val baseAction = (initialRule?.action as? RuleAction.ListFilter)
+                    ?: RuleAction.ListFilter()
+                val rule = Rule(
+                    name = name,
+                    matchers = matchers,
+                    action = baseAction
+                )
+                RuleRepository.addRule(this, rule)
+                bindAndFinish(rule)
             }
             .setNegativeButton(android.R.string.cancel) { _, _ -> finish() }
             .setOnCancelListener { finish() }
             .show()
     }
 
-    private fun addSectionHeader(parent: LinearLayout, text: String) {
-        val tv = TextView(this).apply {
-            this.text = text
-            textSize = 12f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            val m = (resources.displayMetrics.density * 8).toInt()
-            setPadding(0, m, 0, m / 2)
-        }
-        parent.addView(tv)
-    }
+    private fun bindAndFinish(rule: Rule) {
+        AppPreferences.setWidgetRuleIdSync(this, appWidgetId, rule.id)
+        AppPreferences.setWidgetLabelSync(this, appWidgetId, rule.name ?: deriveLabel(rule.matchers))
+        // 清除舊架構 keys
+        AppPreferences.removeWidgetLegacyKeys(this, appWidgetId)
 
-    private fun buildRadioButton(id: Int, label: String): RadioButton = RadioButton(this).apply {
-        this.id = id
-        this.text = label
-        val lp = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-        layoutParams = lp
-    }
-
-    private fun openCustomEditor() {
-        val existingSpec = AppPreferences.getWidgetSpec(this, appWidgetId)
-            ?.let { runCatching { EventFilterSpec.fromJsonString(it) }.getOrNull() }
-            ?: EventFilterSpec.RecentAudible
-
-        FilterRuleDialogHelper.showAddRuleDialog(
-            context = this,
-            widgetMode = true,
-            existingWidgetMatchers = existingSpec.matchers,
-            onMatchersReady = { matchers ->
-                val spec = existingSpec.copy(matchers = matchers)
-                saveAndFinish(spec, presetName = null, label = deriveLabel(spec))
-            },
-            onWidgetCancelled = { showPresetChooser(preselectedName = null) }
-        )
-    }
-
-    private fun presetDisplayName(p: FilterPreset): String = when (p.name) {
-        FilterPresetRepository.SYSTEM_RECENT_AUDIBLE -> getString(R.string.preset_recent_audible)
-        FilterPresetRepository.SYSTEM_RECENT_HEADSUP -> getString(R.string.preset_recent_headsup)
-        FilterPresetRepository.SYSTEM_RECENT_DISMISSED -> getString(R.string.preset_recent_dismissed)
-        else -> p.name
-    }
-
-    private fun deriveLabel(spec: EventFilterSpec): String = when {
-        spec.isAudible == true -> getString(R.string.preset_recent_audible)
-        spec.likelyHeadsup == true -> getString(R.string.preset_recent_headsup)
-        spec.isRemoved == true -> getString(R.string.preset_recent_dismissed)
-        spec.packageName != null -> spec.packageName!!
-        else -> getString(R.string.widget_label_default_custom)
-    }
-
-    private fun saveAndFinish(spec: EventFilterSpec, presetName: String?, label: String) {
-        AppPreferences.setWidgetSpecSync(this, appWidgetId, spec.toJsonString())
-        AppPreferences.setWidgetPresetNameSync(this, appWidgetId, presetName)
-        AppPreferences.setWidgetLabelSync(this, appWidgetId, label)
-
-        val appWidgetManager = AppWidgetManager.getInstance(this)
-        val providerClassName = appWidgetManager.getAppWidgetInfo(appWidgetId)?.provider?.className
+        val awm = AppWidgetManager.getInstance(this)
+        val providerClassName = awm.getAppWidgetInfo(appWidgetId)?.provider?.className
         when (providerClassName) {
             NotificationWidgetProvider::class.java.name ->
-                NotificationWidgetProvider.updateWidget(this, appWidgetManager, appWidgetId)
+                NotificationWidgetProvider.updateWidget(this, awm, appWidgetId)
             NotificationSingleWidgetProvider::class.java.name ->
-                NotificationSingleWidgetProvider.updateWidget(this, appWidgetManager, appWidgetId)
+                NotificationSingleWidgetProvider.updateWidget(this, awm, appWidgetId)
             else -> {
-                NotificationWidgetProvider.updateWidget(this, appWidgetManager, appWidgetId)
-                NotificationSingleWidgetProvider.updateWidget(this, appWidgetManager, appWidgetId)
+                NotificationWidgetProvider.updateWidget(this, awm, appWidgetId)
+                NotificationSingleWidgetProvider.updateWidget(this, awm, appWidgetId)
             }
         }
 
-        // 清除舊 matchers 架構 key（若有），避免混淆
-        AppPreferences.prefsBridgeRemoveMatchers(this, appWidgetId)
-
         setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
         finish()
+    }
+
+    private fun deriveLabel(matchers: List<Matcher>): String {
+        val derived = matchers.filterIsInstance<Matcher.DerivedProperty>().firstOrNull()
+        if (derived != null) {
+            if (derived.isAudible == true) return getString(R.string.preset_recent_audible)
+            if (derived.likelyHeadsup == true) return getString(R.string.preset_recent_headsup)
+            if (derived.isRemoved == true) return getString(R.string.preset_recent_dismissed)
+        }
+        val pkg = matchers.filterIsInstance<Matcher.Package>().firstOrNull()
+        if (pkg != null) return AppLabelCache.getLabel(this, pkg.packageName)
+        return getString(R.string.widget_label_default_custom)
     }
 }

@@ -49,7 +49,7 @@ object RuleEngine {
     }
 
     fun removeRule(ruleId: String) {
-        rules = rules.filter { it.id != ruleId }
+        rules = rules.filter { it.id != ruleId || it.isBuiltIn /* 內建 rule 不可刪除 */ }
         lastTriggered.remove(ruleId)
     }
 
@@ -60,10 +60,15 @@ object RuleEngine {
     fun getRules(actionType: ActionType): List<Rule> =
         rules.filter { it.action.actionType == actionType }
 
+    fun getRule(ruleId: String): Rule? = rules.firstOrNull { it.id == ruleId }
+
     fun hasRules(actionType: ActionType): Boolean =
         rules.any { it.action.actionType == actionType }
 
     fun isAllEmpty(): Boolean = rules.isEmpty()
+
+    /** 列表篩選用 rules（LIST_FILTER），含內建與使用者命名 */
+    fun getListFilterRules(): List<Rule> = getRules(ActionType.LIST_FILTER)
 
     // ========== 匹配 ==========
 
@@ -193,7 +198,7 @@ object RuleEngine {
      * Rule 是 data class，Matcher/RuleAction 子類也都是 data class，
      * copy 後的 equals/hashCode 可正確進行內容比對。
      */
-    private fun Rule.contentKey(): Rule = copy(id = "", createdAt = 0)
+    private fun Rule.contentKey(): Rule = copy(id = "", createdAt = 0, name = null, isBuiltIn = false)
 
     /**
      * 計算備份 JSON 中有多少規則不在目前規則集內（以內容比對）

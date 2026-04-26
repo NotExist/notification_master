@@ -14,7 +14,9 @@ enum class ActionType {
     CALENDAR_EXPORT,
     AUTO_DISMISS,
     PERSISTENT_ALERT,
-    CLIPBOARD_COPY;
+    CLIPBOARD_COPY,
+    /** 列表篩選用（Timeline / Widget / Shortcut 顯示），不參與 Service 觸發流程 */
+    LIST_FILTER;
 
     /** 此 ActionType 允許的事件類型（UI checkbox 與預覽匹配共用） */
     val allowedEventTypes: Set<EventType>
@@ -24,7 +26,17 @@ enum class ActionType {
             AUTO_DISMISS -> EventType.entries.toSet()
             PERSISTENT_ALERT -> setOf(EventType.POSTED, EventType.UPDATED)
             CLIPBOARD_COPY -> setOf(EventType.POSTED, EventType.UPDATED)
+            LIST_FILTER -> EventType.entries.toSet()
         }
+}
+
+/**
+ * 列表排序方式（給 [RuleAction.ListFilter] 使用）
+ */
+enum class OrderBy { PostTimeDesc, PostTimeAsc, CaptureTimeDesc;
+    companion object {
+        fun fromName(name: String): OrderBy = entries.firstOrNull { it.name == name } ?: PostTimeDesc
+    }
 }
 
 /**
@@ -325,6 +337,30 @@ sealed interface RuleAction {
         override fun toJson() = JSONObject().apply { put("type", "ClipboardCopy") }
     }
 
+    /**
+     * 列表篩選顯示控制（LIST_FILTER）— 不參與 Service 觸發。
+     *
+     * Timeline / Widget / Shortcut 取此 rule 的 matchers 做 SQL 篩選，
+     * 並用此 action 的 orderBy/limit/deduplicate/timeRange 控制呈現。
+     */
+    data class ListFilter(
+        val orderBy: OrderBy = OrderBy.PostTimeDesc,
+        val limit: Int? = null,
+        val deduplicate: Boolean = false,
+        val timeFrom: Long? = null,
+        val timeTo: Long? = null
+    ) : RuleAction {
+        override val actionType = ActionType.LIST_FILTER
+        override fun toJson() = JSONObject().apply {
+            put("type", "ListFilter")
+            put("orderBy", orderBy.name)
+            put("limit", limit ?: JSONObject.NULL)
+            put("deduplicate", deduplicate)
+            put("timeFrom", timeFrom ?: JSONObject.NULL)
+            put("timeTo", timeTo ?: JSONObject.NULL)
+        }
+    }
+
     companion object {
         fun fromJson(json: JSONObject): RuleAction = when (val type = json.getString("type")) {
             "SkipRecord" -> SkipRecord
@@ -336,6 +372,13 @@ sealed interface RuleAction {
                 audioStream = json.optString("audioStream", PersistentAlert.STREAM_ALARM)
             )
             "ClipboardCopy" -> ClipboardCopy
+            "ListFilter" -> ListFilter(
+                orderBy = OrderBy.fromName(json.optString("orderBy", OrderBy.PostTimeDesc.name)),
+                limit = if (json.isNull("limit")) null else json.getInt("limit"),
+                deduplicate = json.optBoolean("deduplicate", false),
+                timeFrom = if (json.isNull("timeFrom")) null else json.getLong("timeFrom"),
+                timeTo = if (json.isNull("timeTo")) null else json.getLong("timeTo")
+            )
             else -> throw IllegalArgumentException("Unknown action type: $type")
         }
     }
@@ -350,7 +393,11 @@ data class Rule(
     val id: String = UUID.randomUUID().toString(),
     val matchers: List<Matcher>,
     val action: RuleAction,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    /** 顯示名稱（LIST_FILTER 用於 chip 顯示；其他 ActionType 可選） */
+    val name: String? = null,
+    /** 內建 rule 不可刪除（系統預先安排的列表篩選用） */
+    val isBuiltIn: Boolean = false
 ) {
     /** 所有 matcher 都通過才算匹配 */
     fun matches(context: MatchContext): Boolean =
@@ -360,9 +407,14 @@ data class Rule(
     val isChannelLevel: Boolean
         get() = matchers.any { it is Matcher.Channel }
 
-    /** 取得 Package matcher 的 packageName */
-    val packageName: String
-        get() = matchers.filterIsInstance<Matcher.Package>().first().packageName
+    /**
+     * 取得 Package matcher 的 packageName。
+     *
+     * 既有 ActionType（SkipRecord 等）一定有 Package matcher → 呼叫端可期待非 null；
+     * LIST_FILTER 規則可能無 Package matcher → 對該類別請改用 firstOrNull pattern。
+     */
+    val packageName: String?
+        get() = matchers.filterIsInstance<Matcher.Package>().firstOrNull()?.packageName
 
     /** 取得 Channel matcher 的 channelId（package 級規則回傳 null） */
     val channelId: String?
@@ -377,6 +429,8 @@ data class Rule(
         put("matchers", JSONArray(matchers.map { it.toJson() }))
         put("action", action.toJson())
         put("createdAt", createdAt)
+        if (name != null) put("name", name)
+        if (isBuiltIn) put("isBuiltIn", true)
     }
 
     companion object {
@@ -389,7 +443,9 @@ data class Rule(
                 id = json.getString("id"),
                 matchers = matchers,
                 action = RuleAction.fromJson(json.getJSONObject("action")),
-                createdAt = json.optLong("createdAt", 0L)
+                createdAt = json.optLong("createdAt", 0L),
+                name = if (json.has("name") && !json.isNull("name")) json.getString("name") else null,
+                isBuiltIn = json.optBoolean("isBuiltIn", false)
             )
         }
     }

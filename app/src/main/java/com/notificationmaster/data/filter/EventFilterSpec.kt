@@ -1,9 +1,11 @@
 package com.notificationmaster.data.filter
 
+import com.notificationmaster.core.filter.ActionType
 import com.notificationmaster.core.filter.KeywordField
 import com.notificationmaster.core.filter.Matcher
-import org.json.JSONArray
-import org.json.JSONObject
+import com.notificationmaster.core.filter.OrderBy
+import com.notificationmaster.core.filter.Rule
+import com.notificationmaster.core.filter.RuleAction
 
 /**
  * 通用事件篩選條件（Plan 1 — prowling-quiet-lynx）
@@ -28,17 +30,6 @@ data class EventFilterSpec(
     val limit: Int? = null
 ) {
 
-    fun toJson(): JSONObject = JSONObject().apply {
-        put("matchers", JSONArray(matchers.map { it.toJson() }))
-        if (timeFrom != null) put("timeFrom", timeFrom)
-        if (timeTo != null) put("timeTo", timeTo)
-        if (deduplicate) put("deduplicate", true)
-        put("orderBy", orderBy.name)
-        if (limit != null) put("limit", limit)
-    }
-
-    fun toJsonString(): String = toJson().toString()
-
     /** 是否為「全部」 */
     fun isAll(): Boolean =
         matchers.isEmpty() && timeFrom == null && timeTo == null &&
@@ -46,42 +37,10 @@ data class EventFilterSpec(
 
     companion object {
 
-        // === 系統 built-in preset（與 Shortcut 對齊） ===
-        val RecentAudible = EventFilterSpec(
-            matchers = listOf(Matcher.DerivedProperty(isAudible = true)),
-            deduplicate = true,
-            limit = 20
-        )
-        val RecentHeadsup = EventFilterSpec(
-            matchers = listOf(Matcher.DerivedProperty(likelyHeadsup = true)),
-            deduplicate = true,
-            limit = 20
-        )
-        val RecentDismissed = EventFilterSpec(
-            matchers = listOf(Matcher.DerivedProperty(isRemoved = true)),
-            deduplicate = true,
-            limit = 30
-        )
+        /** Timeline 初始 spec（去重模式，無其他 matcher） */
         val Deduplicated = EventFilterSpec(deduplicate = true)
+        /** 全部通知（無篩選） */
         val All = EventFilterSpec()
-
-        fun fromJson(json: JSONObject): EventFilterSpec {
-            val matchers = if (json.has("matchers") && !json.isNull("matchers")) {
-                val arr = json.getJSONArray("matchers")
-                (0 until arr.length()).map { Matcher.fromJson(arr.getJSONObject(it)) }
-            } else emptyList()
-
-            return EventFilterSpec(
-                matchers = matchers,
-                timeFrom = if (json.has("timeFrom") && !json.isNull("timeFrom")) json.getLong("timeFrom") else null,
-                timeTo = if (json.has("timeTo") && !json.isNull("timeTo")) json.getLong("timeTo") else null,
-                deduplicate = json.optBoolean("deduplicate", false),
-                orderBy = OrderBy.fromName(json.optString("orderBy", OrderBy.PostTimeDesc.name)),
-                limit = if (json.has("limit") && !json.isNull("limit")) json.getInt("limit") else null
-            )
-        }
-
-        fun fromJsonString(json: String): EventFilterSpec = fromJson(JSONObject(json))
     }
 
     // === 與舊扁平欄位的相容讀取 helper（UI 層讀取常用欄位用） ===
@@ -127,3 +86,21 @@ fun coreFilterSpecOf(
 private val keywordFieldsAllText = setOf(
     KeywordField.TITLE, KeywordField.TEXT, KeywordField.BIG_TEXT, KeywordField.SUB_TEXT
 )
+
+/**
+ * 將 LIST_FILTER Rule 轉為 [EventFilterSpec]（合併 matchers 與 ListFilter action 中的顯示控制）。
+ */
+fun Rule.toFilterSpec(): EventFilterSpec {
+    val listFilter = action as? RuleAction.ListFilter
+        ?: throw IllegalArgumentException("Rule is not LIST_FILTER: ${action.actionType}")
+    return EventFilterSpec(
+        matchers = matchers,
+        orderBy = listFilter.orderBy,
+        limit = listFilter.limit,
+        deduplicate = listFilter.deduplicate,
+        timeFrom = listFilter.timeFrom,
+        timeTo = listFilter.timeTo
+    )
+}
+
+fun Rule.isListFilter(): Boolean = action.actionType == ActionType.LIST_FILTER

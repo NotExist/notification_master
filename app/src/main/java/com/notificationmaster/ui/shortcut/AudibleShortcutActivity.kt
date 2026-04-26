@@ -8,8 +8,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.notificationmaster.core.filter.RuleEngine
+import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.data.db.dao.query
-import com.notificationmaster.data.filter.EventFilterSpec
 import com.notificationmaster.databinding.ActivityShortcutListBinding
 import com.notificationmaster.ui.main.MainActivity
 import com.notificationmaster.ui.search.NotificationAdapter
@@ -44,9 +45,13 @@ class AudibleShortcutActivity : AppCompatActivity() {
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
 
+        RuleRepository.load(this)
+        val rule = RuleEngine.getRule(RuleRepository.builtInRuleIdAudible()) ?: run {
+            finish(); return
+        }
         val dao = NotificationMasterApp.getInstance().database.notificationDao()
         lifecycleScope.launch {
-            dao.query(EventFilterSpec.RecentAudible).collectLatest { notifications ->
+            dao.query(rule).collectLatest { notifications ->
                 adapter.submitList(notifications)
                 if (notifications.isEmpty()) {
                     binding.recyclerView.visibility = View.GONE

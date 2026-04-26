@@ -163,36 +163,22 @@ object AppPreferences {
 
     // === Widget ===
 
-    // 舊版：以 core/filter/Matcher JSON 陣列儲存；保留 getter 以便既有 widget 可被識別並提示重設
-    private const val KEY_WIDGET_MATCHERS_PREFIX = "widget_matchers_"
+    // 現用（Plan D）：widget 綁定一個 LIST_FILTER Rule id
+    private const val KEY_WIDGET_RULE_ID_PREFIX = "widget_rule_id_"
     private const val KEY_WIDGET_LABEL_PREFIX = "widget_label_"
 
-    // 新版（Plan 1）：FilterSpec JSON + 可選 preset name
+    // Legacy（Plan 1 / 更早），讀取時 fallback；新寫入不再使用
+    private const val KEY_WIDGET_MATCHERS_PREFIX = "widget_matchers_"
     private const val KEY_WIDGET_SPEC_PREFIX = "widget_spec_"
     private const val KEY_WIDGET_PRESET_NAME_PREFIX = "widget_preset_name_"
 
-    fun getWidgetMatchers(context: Context, widgetId: Int): String? =
-        prefs(context).getString("$KEY_WIDGET_MATCHERS_PREFIX$widgetId", null)
+    fun getWidgetRuleId(context: Context, widgetId: Int): String? =
+        prefs(context).getString("$KEY_WIDGET_RULE_ID_PREFIX$widgetId", null)
 
-    /** 取得此 widget 綁定的 spec JSON（Plan 1 架構） */
-    fun getWidgetSpec(context: Context, widgetId: Int): String? =
-        prefs(context).getString("$KEY_WIDGET_SPEC_PREFIX$widgetId", null)
-
-    fun setWidgetSpecSync(context: Context, widgetId: Int, specJson: String) {
+    fun setWidgetRuleIdSync(context: Context, widgetId: Int, ruleId: String) {
         prefs(context).edit()
-            .putString("$KEY_WIDGET_SPEC_PREFIX$widgetId", specJson)
+            .putString("$KEY_WIDGET_RULE_ID_PREFIX$widgetId", ruleId)
             .commit()
-    }
-
-    /** 取得此 widget 綁定的命名 preset（若為系統或使用者命名 preset） */
-    fun getWidgetPresetName(context: Context, widgetId: Int): String? =
-        prefs(context).getString("$KEY_WIDGET_PRESET_NAME_PREFIX$widgetId", null)
-
-    fun setWidgetPresetNameSync(context: Context, widgetId: Int, presetName: String?) {
-        val edit = prefs(context).edit()
-        if (presetName == null) edit.remove("$KEY_WIDGET_PRESET_NAME_PREFIX$widgetId")
-        else edit.putString("$KEY_WIDGET_PRESET_NAME_PREFIX$widgetId", presetName)
-        edit.commit()
     }
 
     fun getWidgetLabel(context: Context, widgetId: Int): String? =
@@ -206,17 +192,20 @@ object AppPreferences {
 
     fun removeWidgetConfig(context: Context, widgetId: Int) {
         prefs(context).edit()
+            .remove("$KEY_WIDGET_RULE_ID_PREFIX$widgetId")
+            .remove("$KEY_WIDGET_LABEL_PREFIX$widgetId")
             .remove("$KEY_WIDGET_MATCHERS_PREFIX$widgetId")
             .remove("$KEY_WIDGET_SPEC_PREFIX$widgetId")
             .remove("$KEY_WIDGET_PRESET_NAME_PREFIX$widgetId")
-            .remove("$KEY_WIDGET_LABEL_PREFIX$widgetId")
             .apply()
     }
 
-    /** 清理舊 Matcher 架構的 widget key（升級到 Plan 1 FilterSpec 後呼叫） */
-    fun prefsBridgeRemoveMatchers(context: Context, widgetId: Int) {
+    /** 移除所有舊架構 keys（Plan 1 / Matcher JSON / Spec JSON），保留 widget_rule_id_ 與 widget_label_ */
+    fun removeWidgetLegacyKeys(context: Context, widgetId: Int) {
         prefs(context).edit()
             .remove("$KEY_WIDGET_MATCHERS_PREFIX$widgetId")
+            .remove("$KEY_WIDGET_SPEC_PREFIX$widgetId")
+            .remove("$KEY_WIDGET_PRESET_NAME_PREFIX$widgetId")
             .apply()
     }
 

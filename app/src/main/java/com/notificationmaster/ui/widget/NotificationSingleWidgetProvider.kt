@@ -8,10 +8,12 @@ import android.content.Intent
 import android.widget.RemoteViews
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.notificationmaster.core.filter.ActionType
+import com.notificationmaster.core.filter.RuleEngine
+import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.data.db.dao.querySync
-import com.notificationmaster.data.filter.EventFilterSpec
-import com.notificationmaster.data.filter.FilterPresetRepository
+import com.notificationmaster.data.filter.toFilterSpec
 import com.notificationmaster.ui.main.MainActivity
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -20,8 +22,8 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
- * 單項式通知 Widget（Plan 1 FilterSpec 架構）
- * 顯示符合 spec 的最新一筆通知，點擊進入 Detail 頁
+ * 單項式通知 Widget（Plan D — RuleEngine LIST_FILTER 路線）
+ * 顯示符合 rule 的最新一筆通知，點擊進入 Detail 頁
  */
 class NotificationSingleWidgetProvider : AppWidgetProvider() {
 
@@ -42,24 +44,24 @@ class NotificationSingleWidgetProvider : AppWidgetProvider() {
         private val executor: ExecutorService = Executors.newSingleThreadExecutor()
 
         fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
+            RuleRepository.load(context)
+
             val label = AppPreferences.getWidgetLabel(context, appWidgetId)
             val typeLabel = label ?: context.getString(R.string.widget_single_name)
 
-            // 第一階段：立即 push 基本 RemoteViews（避免空白閃爍）
+            // 第一階段：立即 push 基本 RemoteViews
             val baseViews = RemoteViews(context.packageName, R.layout.widget_notification_single)
             baseViews.setTextViewText(R.id.widget_single_type, typeLabel)
             baseViews.setTextViewText(R.id.widget_single_title, context.getString(R.string.widget_empty))
             baseViews.setTextViewText(R.id.widget_single_time, "")
             baseViews.setTextViewText(R.id.widget_single_content, "")
 
-            // 標題點擊 → Timeline 套用此 widget 的 spec / preset
-            val presetName = AppPreferences.getWidgetPresetName(context, appWidgetId)
-            val specJson = AppPreferences.getWidgetSpec(context, appWidgetId)
+            // 標題點擊 → Timeline 套用此 widget 綁定的 LIST_FILTER rule
+            val ruleId = AppPreferences.getWidgetRuleId(context, appWidgetId)
             val titleIntent = Intent(context, MainActivity::class.java).apply {
-                if (presetName != null || specJson != null) {
+                if (ruleId != null) {
                     action = MainActivity.ACTION_SHOW_FILTERED_TIMELINE
-                    if (presetName != null) putExtra(MainActivity.EXTRA_FILTER_PRESET_NAME, presetName)
-                    if (specJson != null) putExtra(MainActivity.EXTRA_FILTER_SPEC_JSON, specJson)
+                    putExtra(MainActivity.EXTRA_RULE_ID, ruleId)
                 }
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }
@@ -71,16 +73,19 @@ class NotificationSingleWidgetProvider : AppWidgetProvider() {
             baseViews.setOnClickPendingIntent(R.id.widget_single_type, typePendingIntent)
             appWidgetManager.updateAppWidget(appWidgetId, baseViews)
 
-            // Spec 解析
-            val spec = resolveSpec(context, appWidgetId, presetName, specJson) ?: return
+            if (ruleId == null) return
+
+            val rule = RuleEngine.getRule(ruleId) ?: return
+            if (rule.action.actionType != ActionType.LIST_FILTER) return
+
+            val spec = rule.toFilterSpec().copy(limit = 1)
             val appContext = context.applicationContext
 
             // 第二階段（background thread）：查最新一筆 push 完整 RemoteViews
             executor.execute {
                 val dao = NotificationMasterApp.getInstance().database.notificationDao()
-                val effectiveSpec = spec.copy(limit = 1)
                 val notification = try {
-                    dao.querySync(effectiveSpec).firstOrNull()
+                    dao.querySync(spec).firstOrNull()
                 } catch (_: Exception) { null }
 
                 val views = RemoteViews(appContext.packageName, R.layout.widget_notification_single)
@@ -113,22 +118,6 @@ class NotificationSingleWidgetProvider : AppWidgetProvider() {
 
                 appWidgetManager.updateAppWidget(appWidgetId, views)
             }
-        }
-
-        private fun resolveSpec(
-            context: Context,
-            widgetId: Int,
-            presetName: String?,
-            specJson: String?
-        ): EventFilterSpec? {
-            if (presetName != null) {
-                val preset = FilterPresetRepository.getInstance(context).getPreset(presetName)
-                if (preset != null) return preset.spec
-            }
-            if (specJson != null) {
-                return runCatching { EventFilterSpec.fromJsonString(specJson) }.getOrNull()
-            }
-            return null
         }
     }
 }

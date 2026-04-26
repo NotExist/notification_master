@@ -22,11 +22,14 @@ import com.notificationmaster.R
 import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.core.permission.NlsConnectionManager
 import com.notificationmaster.data.db.entity.NotificationEntity
+import com.notificationmaster.core.filter.ActionType
+import com.notificationmaster.core.filter.Rule
+import com.notificationmaster.core.filter.RuleAction
+import com.notificationmaster.core.filter.RuleEngine
+import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.data.filter.EventFilterSpec
-import com.notificationmaster.data.filter.FilterPreset
-import com.notificationmaster.data.filter.FilterPresetRepository
-import com.notificationmaster.data.filter.PresetSource
 import com.notificationmaster.data.filter.coreFilterSpecOf
+import com.notificationmaster.data.filter.toFilterSpec
 import com.notificationmaster.data.db.dao.count
 import com.notificationmaster.data.db.dao.query
 import com.notificationmaster.databinding.FragmentTimelineBinding
@@ -65,10 +68,10 @@ class TimelineFragment : Fragment() {
     private var adapter: TimelineAdapter? = null
 
     // === 篩選狀態 ===
-    /** 當前核心 spec（由 chip 狀態組合而成；若 preset 啟用則為 preset.spec） */
+    /** 當前核心 spec（由 chip 狀態組合而成；若 LIST_FILTER rule 啟用則為 rule.toFilterSpec()） */
     private var coreSpec: EventFilterSpec = EventFilterSpec.Deduplicated
-    /** 當前選中的 preset name，null 表示未套用任何 preset */
-    private var activePresetName: String? = null
+    /** 當前選中的 LIST_FILTER rule id，null 表示未套用任何 rule（走核心 chip） */
+    private var activeRuleId: String? = null
     /** 是否正由程式調整 chip 狀態（避免 listener re-entrancy） */
     private var suppressChipListener = false
 
@@ -90,8 +93,6 @@ class TimelineFragment : Fragment() {
     private var earliestPostTime: Long? = null
     private var removedIds: Set<Long> = emptySet()
 
-    private lateinit var presetRepo: FilterPresetRepository
-
     private companion object {
         private const val TAG = "TimelineFragment"
         private const val ONE_DAY_MS = 24 * 60 * 60 * 1000L
@@ -108,12 +109,13 @@ class TimelineFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        presetRepo = FilterPresetRepository.getInstance(requireContext())
+        // 確保 RuleEngine 已載入（含內建 LIST_FILTER rules）
+        RuleRepository.load(requireContext())
 
         setupRecyclerView()
         setupFilterInput()
         setupFilterChips()
-        setupPresetChips()
+        setupRuleChips()
         setupSwipeRefresh()
         setupPermissionButton()
         wasPermissionGranted = NlsConnectionManager.isNlsEnabled(requireContext())
@@ -207,11 +209,11 @@ class TimelineFragment : Fragment() {
     }
 
     private fun setupFilterChips() {
-        // 核心 chip 容器改為 LinearLayout（強制單行）— 改對每個 chip 個別監聽
+        // 核心 chip 容器為 LinearLayout（強制單行）— 對每個 chip 個別監聽
         val onChipChange = { _: View ->
             if (!suppressChipListener) {
-                activePresetName = null
-                clearPresetSelection()
+                activeRuleId = null
+                clearRuleSelection()
                 rebuildSpecFromChips()
                 binding.swipeRefresh.isRefreshing = true
                 loadNotifications()
@@ -223,63 +225,59 @@ class TimelineFragment : Fragment() {
         binding.chipDismissed.setOnClickListener(onChipChange)
     }
 
-    private fun setupPresetChips() {
+    private fun setupRuleChips() {
         viewLifecycleOwner.lifecycleScope.launch {
-            // Layer 2 只顯示使用者命名 preset；系統 preset 留給 Widget configure / Shortcut
-            presetRepo.observePresets().collectLatest { presets ->
+            // RuleEngine 內容變動時 triggerFlow tick；沒收到也在 onResume 重 render
+            RuleEngine.triggerFlow.collectLatest {
                 if (_binding == null) return@collectLatest
-                renderPresetChips(presets.filter { it.source == PresetSource.USER })
+                renderRuleChips()
             }
         }
+        renderRuleChips()
         binding.chipAddPreset.setOnClickListener {
-            openFilterEditor(initial = coreSpec, editingPresetName = null)
+            openListFilterEditor(initial = coreSpec, editingRuleId = null)
         }
     }
 
-    private fun renderPresetChips(presets: List<FilterPreset>) {
+    /** 只顯示使用者命名（非內建）的 LIST_FILTER rule；內建留給 Shortcut / 4 chip 對應 */
+    private fun renderRuleChips() {
         val group = binding.chipGroupPresets
         val addChip = binding.chipAddPreset
-        // 清除除 chipAddPreset 外的既有 preset chip
         val toRemove = (0 until group.childCount).mapNotNull { i ->
             val c = group.getChildAt(i)
             if (c.id != R.id.chip_add_preset) c else null
         }
         toRemove.forEach { group.removeView(it) }
 
+        val rules = RuleEngine.getListFilterRules().filter { !it.isBuiltIn }
         val inflater = LayoutInflater.from(requireContext())
-        for ((i, preset) in presets.withIndex()) {
+        for ((i, rule) in rules.withIndex()) {
             val chip = inflater.inflate(R.layout.chip_preset, group, false) as Chip
-            chip.text = presetDisplayName(preset)
-            chip.tag = preset.name
-            // 同步勾選狀態（在 listener 設置前完成，避免 re-entrancy）
-            chip.isChecked = (activePresetName == preset.name)
+            chip.text = rule.name ?: rule.id.take(8)
+            chip.tag = rule.id
+            chip.isChecked = (activeRuleId == rule.id)
             chip.setOnClickListener {
                 if (suppressChipListener) return@setOnClickListener
                 if (chip.isChecked) {
-                    // 從未選 → 已選：套用 preset
-                    applyPreset(preset)
+                    applyRule(rule)
                 } else {
-                    // 從已選 → 未選：取消，回退到核心 chip 組合的 spec
-                    activePresetName = null
+                    activeRuleId = null
                     rebuildSpecFromChips()
                     binding.swipeRefresh.isRefreshing = true
                     loadNotifications()
                 }
             }
             chip.setOnLongClickListener {
-                showPresetMenu(preset)
+                showRuleMenu(rule)
                 true
             }
             group.addView(chip, i)
         }
-        // 重排：chipAddPreset 永遠在最後
         group.removeView(addChip)
         group.addView(addChip)
     }
 
-    private fun presetDisplayName(preset: FilterPreset): String = preset.name
-
-    private fun clearPresetSelection() {
+    private fun clearRuleSelection() {
         val group = binding.chipGroupPresets
         for (i in 0 until group.childCount) {
             val c = group.getChildAt(i) as? Chip ?: continue
@@ -287,21 +285,17 @@ class TimelineFragment : Fragment() {
         }
     }
 
-    private fun applyPreset(preset: FilterPreset) {
-        activePresetName = preset.name
-        coreSpec = preset.spec
-        syncChipsFromSpec(preset.spec)
+    private fun applyRule(rule: Rule) {
+        activeRuleId = rule.id
+        coreSpec = rule.toFilterSpec()
+        syncChipsFromSpec(coreSpec)
         binding.swipeRefresh.isRefreshing = true
         loadNotifications()
     }
 
-    private fun showPresetMenu(preset: FilterPreset) {
-        val isSystem = preset.source == PresetSource.SYSTEM
-        val items = if (isSystem) {
-            arrayOf(
-                getString(R.string.preset_action_edit),
-                getString(R.string.preset_action_create_widget)
-            )
+    private fun showRuleMenu(rule: Rule) {
+        val items = if (rule.isBuiltIn) {
+            arrayOf(getString(R.string.preset_action_create_widget))
         } else {
             arrayOf(
                 getString(R.string.preset_action_edit),
@@ -311,19 +305,16 @@ class TimelineFragment : Fragment() {
             )
         }
         MaterialAlertDialogBuilder(requireContext())
-            .setTitle(presetDisplayName(preset))
+            .setTitle(rule.name ?: rule.id.take(8))
             .setItems(items) { _, which ->
-                if (isSystem) {
-                    when (which) {
-                        0 -> openFilterEditor(initial = preset.spec, editingPresetName = null)
-                        1 -> requestCreateWidget(preset.name)
-                    }
+                if (rule.isBuiltIn) {
+                    if (which == 0) requestCreateWidget(rule.id)
                 } else {
                     when (which) {
-                        0 -> openFilterEditor(initial = preset.spec, editingPresetName = preset.name)
-                        1 -> showRenamePresetDialog(preset)
-                        2 -> showDeletePresetDialog(preset)
-                        3 -> requestCreateWidget(preset.name)
+                        0 -> openListFilterEditor(initial = rule.toFilterSpec(), editingRuleId = rule.id)
+                        1 -> showRenameRuleDialog(rule)
+                        2 -> showDeleteRuleDialog(rule)
+                        3 -> requestCreateWidget(rule.id)
                     }
                 }
             }
@@ -331,9 +322,9 @@ class TimelineFragment : Fragment() {
             .show()
     }
 
-    private fun showRenamePresetDialog(preset: FilterPreset) {
+    private fun showRenameRuleDialog(rule: Rule) {
         val editText = com.google.android.material.textfield.TextInputEditText(requireContext()).apply {
-            setText(preset.name)
+            setText(rule.name.orEmpty())
             setSelection(text?.length ?: 0)
         }
         val inputLayout = com.google.android.material.textfield.TextInputLayout(
@@ -350,35 +341,30 @@ class TimelineFragment : Fragment() {
             .setView(inputLayout)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val newName = editText.text?.toString()?.trim().orEmpty()
-                if (newName.isNotEmpty() && newName != preset.name) {
-                    try {
-                        presetRepo.renamePreset(preset.name, newName)
-                        if (activePresetName == preset.name) activePresetName = newName
-                    } catch (e: IllegalArgumentException) {
-                        com.google.android.material.snackbar.Snackbar.make(
-                            binding.root, e.message ?: "", com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
-                        ).show()
-                    }
+                if (newName.isNotEmpty() && newName != rule.name) {
+                    RuleRepository.updateRule(requireContext(), rule.copy(name = newName))
+                    renderRuleChips()
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
-    private fun showDeletePresetDialog(preset: FilterPreset) {
+    private fun showDeleteRuleDialog(rule: Rule) {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.preset_delete_confirm_title)
-            .setMessage(getString(R.string.preset_delete_confirm_message, preset.name))
+            .setMessage(getString(R.string.preset_delete_confirm_message, rule.name ?: rule.id))
             .setPositiveButton(android.R.string.ok) { _, _ ->
-                presetRepo.deletePreset(preset.name)
-                if (activePresetName == preset.name) {
-                    activePresetName = null
+                RuleRepository.removeRule(requireContext(), rule.id)
+                if (activeRuleId == rule.id) {
+                    activeRuleId = null
                     rebuildSpecFromChips()
                     loadNotifications()
                 }
+                renderRuleChips()
                 com.google.android.material.snackbar.Snackbar.make(
                     binding.root,
-                    getString(R.string.preset_deleted, preset.name),
+                    getString(R.string.preset_deleted, rule.name ?: rule.id),
                     com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
                 ).show()
             }
@@ -386,40 +372,72 @@ class TimelineFragment : Fragment() {
             .show()
     }
 
-    private fun requestCreateWidget(presetName: String) {
-        com.notificationmaster.ui.widget.WidgetPinner.requestPin(requireContext(), presetName)
+    private fun requestCreateWidget(ruleId: String) {
+        com.notificationmaster.ui.widget.WidgetPinner.requestPin(requireContext(), ruleId)
     }
 
-    private fun openFilterEditor(initial: EventFilterSpec, editingPresetName: String?) {
-        // 統一用 FilterRuleDialogHelper widgetMode 編輯 matchers，套用後加上目前
-        // 的顯示控制（deduplicate / orderBy / limit）組成 EventFilterSpec
+    /**
+     * 開啟 LIST_FILTER rule 編輯器（統一用 FilterRuleDialogHelper widgetMode）
+     *
+     * editingRuleId == null：新增 rule，完成後彈出命名輸入；
+     * editingRuleId != null：更新既有 rule 的 matchers
+     */
+    private fun openListFilterEditor(initial: EventFilterSpec, editingRuleId: String?) {
         FilterRuleDialogHelper.showAddRuleDialog(
             context = requireContext(),
             widgetMode = true,
             existingWidgetMatchers = initial.matchers,
             onMatchersReady = { matchers ->
-                val newSpec = initial.copy(matchers = matchers)
-                if (editingPresetName != null) {
-                    // 直接更新既有 preset
-                    val existing = presetRepo.getPreset(editingPresetName)
-                    val preset = FilterPreset(
-                        name = editingPresetName,
-                        spec = newSpec,
-                        createdAt = existing?.createdAt ?: System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis(),
-                        source = PresetSource.USER
-                    )
-                    presetRepo.savePreset(preset)
-                    activePresetName = editingPresetName
+                if (editingRuleId != null) {
+                    val existing = RuleEngine.getRule(editingRuleId) ?: return@showAddRuleDialog
+                    val updated = existing.copy(matchers = matchers)
+                    RuleRepository.updateRule(requireContext(), updated)
+                    if (activeRuleId == editingRuleId) {
+                        coreSpec = updated.toFilterSpec()
+                        syncChipsFromSpec(coreSpec)
+                        loadNotifications()
+                    }
+                    renderRuleChips()
                 } else {
-                    activePresetName = null
-                    clearPresetSelection()
+                    promptNewRuleName(matchers, initial)
                 }
-                coreSpec = newSpec
-                syncChipsFromSpec(newSpec)
-                loadNotifications()
             }
         )
+    }
+
+    private fun promptNewRuleName(matchers: List<com.notificationmaster.core.filter.Matcher>, base: EventFilterSpec) {
+        val editText = com.google.android.material.textfield.TextInputEditText(requireContext())
+        val inputLayout = com.google.android.material.textfield.TextInputLayout(
+            requireContext(), null, com.google.android.material.R.attr.textInputOutlinedStyle
+        ).apply {
+            hint = getString(R.string.preset_save_name_hint)
+            setPadding(48, 16, 48, 0)
+            addView(editText)
+        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.preset_save_title)
+            .setView(inputLayout)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val name = editText.text?.toString()?.trim().orEmpty()
+                if (name.isEmpty()) return@setPositiveButton
+                val rule = Rule(
+                    name = name,
+                    matchers = matchers,
+                    action = RuleAction.ListFilter(
+                        orderBy = base.orderBy,
+                        limit = base.limit,
+                        deduplicate = base.deduplicate
+                    )
+                )
+                RuleRepository.addRule(requireContext(), rule)
+                activeRuleId = rule.id
+                coreSpec = rule.toFilterSpec()
+                syncChipsFromSpec(coreSpec)
+                renderRuleChips()
+                loadNotifications()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun rebuildSpecFromChips() {
@@ -435,7 +453,7 @@ class TimelineFragment : Fragment() {
         )
     }
 
-    /** 將 spec 反映到核心 chip 勾選狀態（Intent / preset / editor 套用後） */
+    /** 將 spec 反映到核心 chip 勾選狀態（Intent / rule / editor 套用後） */
     private fun syncChipsFromSpec(spec: EventFilterSpec) {
         suppressChipListener = true
         try {
@@ -444,12 +462,12 @@ class TimelineFragment : Fragment() {
             binding.chipHeadsup.isChecked = (spec.likelyHeadsup == true)
             binding.chipDismissed.isChecked = (spec.isRemoved == true)
 
-            // Preset chip 勾選：activePresetName 有值時勾起對應 chip
+            // Rule chip 勾選：activeRuleId 有值時勾起對應 chip
             val group = binding.chipGroupPresets
             for (i in 0 until group.childCount) {
                 val c = group.getChildAt(i) as? Chip ?: continue
                 if (c.id == R.id.chip_add_preset) continue
-                c.isChecked = (c.tag == activePresetName)
+                c.isChecked = (c.tag == activeRuleId)
             }
         } finally {
             suppressChipListener = false
@@ -467,24 +485,21 @@ class TimelineFragment : Fragment() {
         val intent = act.intent ?: return false
         if (intent.action != MainActivity.ACTION_SHOW_FILTERED_TIMELINE) return false
 
-        val specJson = intent.getStringExtra(MainActivity.EXTRA_FILTER_SPEC_JSON)
-        val presetName = intent.getStringExtra(MainActivity.EXTRA_FILTER_PRESET_NAME)
-        val spec: EventFilterSpec? = when {
-            specJson != null -> runCatching { EventFilterSpec.fromJsonString(specJson) }.getOrNull()
-            presetName != null -> presetRepo.getPreset(presetName)?.spec
-            else -> null
+        val ruleId = intent.getStringExtra(MainActivity.EXTRA_RULE_ID) ?: run {
+            intent.action = null
+            return false
         }
         intent.action = null
 
-        if (spec != null) {
-            activePresetName = presetName
-            coreSpec = spec
-            syncChipsFromSpec(spec)
-            binding.swipeRefresh.isRefreshing = true
-            loadNotifications()
-            return true
-        }
-        return false
+        val rule = RuleEngine.getRule(ruleId) ?: return false
+        if (rule.action.actionType != ActionType.LIST_FILTER) return false
+
+        activeRuleId = ruleId
+        coreSpec = rule.toFilterSpec()
+        syncChipsFromSpec(coreSpec)
+        binding.swipeRefresh.isRefreshing = true
+        loadNotifications()
+        return true
     }
 
     private fun setupSwipeRefresh() {

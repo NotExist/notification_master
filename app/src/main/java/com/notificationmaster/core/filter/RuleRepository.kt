@@ -30,7 +30,7 @@ object RuleRepository {
         if (loaded) return
 
         val v2Json = AppPreferences.getRulesV2Json(context)
-        val rules = if (v2Json != null) {
+        val parsed: List<Rule> = if (v2Json != null) {
             try {
                 val arr = JSONArray(v2Json)
                 (0 until arr.length()).map { Rule.fromJson(arr.getJSONObject(it)) }
@@ -39,21 +39,67 @@ object RuleRepository {
                 emptyList()
             }
         } else {
-            // 首次啟動：建立預設規則（過濾自身通知）
             listOf(createSelfFilterRule(context))
         }
+
+        // 確保內建 LIST_FILTER rules（RecentAudible/Headsup/Dismissed）存在
+        val rules = ensureBuiltInListFilterRules(parsed)
+        val seeded = rules.size != parsed.size
 
         RuleEngine.setRules(rules)
         RuleEngine.setLastTriggeredTimes(AppPreferences.getRuleLastTriggered(context))
 
-        // 首次啟動時持久化預設規則
-        if (v2Json == null && rules.isNotEmpty()) {
+        if ((v2Json == null && rules.isNotEmpty()) || seeded) {
             save(context)
         }
 
         loaded = true
-        Log.d(TAG, "Loaded ${rules.size} rules")
+        Log.d(TAG, "Loaded ${rules.size} rules (seeded built-in: $seeded)")
     }
+
+    /** 內建 LIST_FILTER rule 的固定 id（不可變） */
+    private const val BUILTIN_RECENT_AUDIBLE_ID = "builtin-list-recent-audible"
+    private const val BUILTIN_RECENT_HEADSUP_ID = "builtin-list-recent-headsup"
+    private const val BUILTIN_RECENT_DISMISSED_ID = "builtin-list-recent-dismissed"
+
+    /**
+     * 若記憶體中缺少內建 LIST_FILTER rule，補齊。回傳補齊後的 rule list。
+     */
+    private fun ensureBuiltInListFilterRules(existing: List<Rule>): List<Rule> {
+        val byId = existing.associateBy { it.id }
+        val builtIns = builtInListFilterRules()
+        val missing = builtIns.filter { it.id !in byId }
+        return if (missing.isEmpty()) existing else existing + missing
+    }
+
+    private fun builtInListFilterRules(): List<Rule> = listOf(
+        Rule(
+            id = BUILTIN_RECENT_AUDIBLE_ID,
+            name = "RecentAudible",
+            matchers = listOf(Matcher.DerivedProperty(isAudible = true)),
+            action = RuleAction.ListFilter(deduplicate = true, limit = 20),
+            isBuiltIn = true
+        ),
+        Rule(
+            id = BUILTIN_RECENT_HEADSUP_ID,
+            name = "RecentHeadsup",
+            matchers = listOf(Matcher.DerivedProperty(likelyHeadsup = true)),
+            action = RuleAction.ListFilter(deduplicate = true, limit = 20),
+            isBuiltIn = true
+        ),
+        Rule(
+            id = BUILTIN_RECENT_DISMISSED_ID,
+            name = "RecentDismissed",
+            matchers = listOf(Matcher.DerivedProperty(isRemoved = true)),
+            action = RuleAction.ListFilter(deduplicate = true, limit = 30),
+            isBuiltIn = true
+        )
+    )
+
+    /** 提供給 Shortcut / Widget 解析「最近有聲」等系統入口 */
+    fun builtInRuleIdAudible(): String = BUILTIN_RECENT_AUDIBLE_ID
+    fun builtInRuleIdHeadsup(): String = BUILTIN_RECENT_HEADSUP_ID
+    fun builtInRuleIdDismissed(): String = BUILTIN_RECENT_DISMISSED_ID
 
     /**
      * 強制重新載入（規則被外部修改時使用）

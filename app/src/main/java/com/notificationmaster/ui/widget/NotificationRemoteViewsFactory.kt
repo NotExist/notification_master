@@ -8,18 +8,20 @@ import android.widget.RemoteViewsService
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.cache.AppLabelCache
+import com.notificationmaster.core.filter.ActionType
+import com.notificationmaster.core.filter.RuleEngine
+import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.data.db.dao.querySync
 import com.notificationmaster.data.db.entity.NotificationEntity
-import com.notificationmaster.data.filter.EventFilterSpec
-import com.notificationmaster.data.filter.FilterPresetRepository
+import com.notificationmaster.data.filter.toFilterSpec
 import com.notificationmaster.ui.main.MainActivity
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * 清單式 Widget 的資料填充（Plan 1 FilterSpec 架構）
+ * 清單式 Widget 的資料填充（Plan D — RuleEngine LIST_FILTER 路線）
  * 在 binder thread 執行，使用同步 DAO 查詢
  */
 class NotificationRemoteViewsFactory(
@@ -34,33 +36,31 @@ class NotificationRemoteViewsFactory(
     private var notifications: List<NotificationEntity> = emptyList()
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
-    override fun onCreate() {}
+    override fun onCreate() {
+        // RuleEngine 可能還沒載入（widget service process 啟動時 App.onCreate 已跑過，但保險起見）
+        RuleRepository.load(context)
+    }
 
     override fun onDataSetChanged() {
-        val dao = NotificationMasterApp.getInstance().database.notificationDao()
-        val spec = resolveSpec() ?: run {
+        val ruleId = AppPreferences.getWidgetRuleId(context, appWidgetId) ?: run {
             notifications = emptyList()
             return
         }
-        // Widget 列表限制 20 筆
-        val effectiveSpec = if (spec.limit == null) spec.copy(limit = 20) else spec
+        val rule = RuleEngine.getRule(ruleId) ?: run {
+            notifications = emptyList()
+            return
+        }
+        if (rule.action.actionType != ActionType.LIST_FILTER) {
+            notifications = emptyList()
+            return
+        }
+        val spec = rule.toFilterSpec().let { if (it.limit == null) it.copy(limit = 20) else it }
+        val dao = NotificationMasterApp.getInstance().database.notificationDao()
         notifications = try {
-            dao.querySync(effectiveSpec)
+            dao.querySync(spec)
         } catch (_: Exception) {
             emptyList()
         }
-    }
-
-    private fun resolveSpec(): EventFilterSpec? {
-        // 1. 優先 preset name
-        val presetName = AppPreferences.getWidgetPresetName(context, appWidgetId)
-        if (presetName != null) {
-            val preset = FilterPresetRepository.getInstance(context).getPreset(presetName)
-            if (preset != null) return preset.spec
-        }
-        // 2. 次選 spec JSON
-        val specJson = AppPreferences.getWidgetSpec(context, appWidgetId) ?: return null
-        return runCatching { EventFilterSpec.fromJsonString(specJson) }.getOrNull()
     }
 
     override fun onDestroy() {

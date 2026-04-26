@@ -12,6 +12,7 @@ import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.filter.EventFilterSpec
 import com.notificationmaster.data.filter.EventFilterSqlBuilder
+import com.notificationmaster.data.filter.toFilterSpec
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -529,4 +530,15 @@ fun NotificationDao.count(spec: EventFilterSpec): Flow<Int> =
 /** 以 [EventFilterSpec] 計算符合筆數（同步） */
 fun NotificationDao.countSync(spec: EventFilterSpec): Int =
     countEventsSync(EventFilterSqlBuilder.buildCount(spec))
+
+// === LIST_FILTER Rule 快捷 overload ===
+
+fun NotificationDao.query(rule: com.notificationmaster.core.filter.Rule): Flow<List<NotificationEntity>> =
+    query(rule.toFilterSpec())
+
+fun NotificationDao.querySync(rule: com.notificationmaster.core.filter.Rule): List<NotificationEntity> =
+    querySync(rule.toFilterSpec())
+
+fun NotificationDao.count(rule: com.notificationmaster.core.filter.Rule): Flow<Int> =
+    count(rule.toFilterSpec())
 

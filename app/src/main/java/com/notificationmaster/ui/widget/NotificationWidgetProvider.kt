@@ -66,14 +66,12 @@ class NotificationWidgetProvider : AppWidgetProvider() {
             views.setRemoteAdapter(R.id.widget_list_view, serviceIntent)
             views.setEmptyView(R.id.widget_list_view, R.id.widget_empty)
 
-            // 標題點擊 → Timeline 套用此 widget 的 spec / preset（找不到時退回主頁）
-            val presetName = AppPreferences.getWidgetPresetName(context, appWidgetId)
-            val specJson = AppPreferences.getWidgetSpec(context, appWidgetId)
+            // 標題點擊 → Timeline 套用此 widget 綁定的 LIST_FILTER rule
+            val ruleId = AppPreferences.getWidgetRuleId(context, appWidgetId)
             val titleIntent = Intent(context, MainActivity::class.java).apply {
-                if (presetName != null || specJson != null) {
+                if (ruleId != null) {
                     action = MainActivity.ACTION_SHOW_FILTERED_TIMELINE
-                    if (presetName != null) putExtra(MainActivity.EXTRA_FILTER_PRESET_NAME, presetName)
-                    if (specJson != null) putExtra(MainActivity.EXTRA_FILTER_SPEC_JSON, specJson)
+                    putExtra(MainActivity.EXTRA_RULE_ID, ruleId)
                 }
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }

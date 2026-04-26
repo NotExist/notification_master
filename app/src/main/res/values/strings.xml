@@ -357,17 +357,7 @@
     <string name="preset_action_delete">刪除</string>
     <string name="preset_action_create_widget">建立 Widget</string>
 
-    <!-- Widget configure -->
-    <string name="widget_config_show_what">顯示哪一類通知？</string>
-    <string name="widget_config_section_system">系統 Preset</string>
-    <string name="widget_config_section_user">我的 Preset</string>
-    <string name="widget_config_section_custom">進階</string>
-    <string name="widget_config_custom">自訂篩選</string>
-    <string name="widget_config_click_behavior">Widget 標題點擊行為</string>
-    <string name="widget_config_click_filtered">開啟 Timeline 並套用此篩選</string>
-    <string name="widget_config_click_main">僅開啟 App</string>
-    <string name="widget_config_no_presets">尚未建立自訂 Preset</string>
-    <string name="widget_create_done">已將 Preset 套用至 Widget 設定</string>
+    <!-- Widget pin -->
     <string name="widget_pin_not_supported">此 Launcher 不支援自動建立 Widget，請從桌面長按新增。</string>
     <string name="widget_pin_below_api26">Android 7.1 以下不支援自動建立 Widget，請從桌面長按新增。</string>
     <string name="shortcut_dismissed_short">最近移除</string>

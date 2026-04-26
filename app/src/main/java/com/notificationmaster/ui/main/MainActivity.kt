@@ -123,12 +123,10 @@ class MainActivity : AppCompatActivity() {
         const val ACTION_SHOW_DETAIL = "com.notificationmaster.action.SHOW_DETAIL"
         const val EXTRA_NOTIFICATION_ID = "notification_id"
 
-        /** 由 Widget / Shortcut 帶入已命名 preset 或 ad-hoc spec，切到 Timeline 並套用 */
+        /** 由 Widget / Shortcut 帶入 LIST_FILTER rule id，切到 Timeline 並套用 */
         const val ACTION_SHOW_FILTERED_TIMELINE = "com.notificationmaster.action.SHOW_FILTERED_TIMELINE"
-        /** 命名 preset（系統內建或使用者命名） */
-        const val EXTRA_FILTER_PRESET_NAME = "filter_preset_name"
-        /** Ad-hoc spec JSON（與 PRESET_NAME 二擇一；SPEC 優先） */
-        const val EXTRA_FILTER_SPEC_JSON = "filter_spec_json"
+        /** LIST_FILTER Rule id（內建或使用者命名） */
+        const val EXTRA_RULE_ID = "rule_id"
 
         /** Process 級 flag，App 被殺重啟才重置 */
         private var hasRedirectedToSettings = false

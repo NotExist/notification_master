@@ -11,8 +11,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.notificationmaster.core.filter.RuleEngine
+import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.data.db.dao.query
-import com.notificationmaster.data.filter.EventFilterSpec
 import com.notificationmaster.databinding.FragmentShortcutHeadsupBinding
 import com.notificationmaster.ui.main.MainActivity
 import com.notificationmaster.ui.search.NotificationAdapter
@@ -52,9 +53,13 @@ class HeadsupBottomSheetFragment : BottomSheetDialogFragment() {
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
 
+        RuleRepository.load(requireContext())
+        val rule = RuleEngine.getRule(RuleRepository.builtInRuleIdHeadsup()) ?: run {
+            dismiss(); return
+        }
         val dao = NotificationMasterApp.getInstance().database.notificationDao()
         viewLifecycleOwner.lifecycleScope.launch {
-            dao.query(EventFilterSpec.RecentHeadsup).collectLatest { notifications ->
+            dao.query(rule).collectLatest { notifications ->
                 if (_binding == null) return@collectLatest
                 adapter.submitList(notifications)
                 if (notifications.isEmpty()) {

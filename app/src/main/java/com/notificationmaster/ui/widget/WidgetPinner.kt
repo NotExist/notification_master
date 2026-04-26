@@ -11,14 +11,13 @@ import android.widget.Toast
 import com.notificationmaster.R
 
 /**
- * 從 Timeline preset chip 長按選單請求建立 Widget（API 26+）。
- * API<26 顯示說明提示；未支援 launcher 也有 fallback 提示。
+ * 從 Timeline rule chip 長按選單請求建立 Widget（API 26+）。
+ * API<26 / launcher 不支援時顯示說明。
  */
 object WidgetPinner {
 
-    /** 嘗試 pin 一個 Widget 並預先帶入 preset name；呼叫 callback activity 從中取出存入 widget prefs */
     @SuppressLint("InlinedApi")
-    fun requestPin(context: Context, presetName: String, singleVariant: Boolean = false) {
+    fun requestPin(context: Context, ruleId: String, singleVariant: Boolean = false) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             Toast.makeText(context, R.string.widget_pin_below_api26, Toast.LENGTH_LONG).show()
             return
@@ -36,14 +35,13 @@ object WidgetPinner {
             ComponentName(context, NotificationWidgetProvider::class.java)
         }
 
-        // Pin 成功後系統會呼叫 PendingIntent，把 EXTRA_APPWIDGET_ID 塞進其 Intent。
-        // 再轉交給 WidgetConfigActivity，並附帶預選 preset name。
+        // Pin 完成後 launcher 呼叫此 PendingIntent；WidgetConfigActivity 會接收 ruleId
         val callbackIntent = Intent(context, WidgetConfigActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            putExtra(WidgetConfigActivity.EXTRA_PRESELECTED_PRESET, presetName)
+            putExtra(WidgetConfigActivity.EXTRA_PRESELECTED_RULE_ID, ruleId)
         }
         val callback = PendingIntent.getActivity(
-            context, presetName.hashCode(),
+            context, ruleId.hashCode(),
             callbackIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
