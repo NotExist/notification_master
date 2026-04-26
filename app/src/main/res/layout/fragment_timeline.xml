@@ -40,50 +40,54 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- 去重切換（獨立 boolean，與 rule 模式正交；rule 啟用時 disable） -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="4dp">
-
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chip_deduplicated"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/timeline_show_deduplicated"
-                android:checked="true"
-                app:ensureMinTouchTargetSize="false"
-                style="@style/Widget.Material3.Chip.Filter" />
-
-        </LinearLayout>
-
-        <!-- 命名 Preset chip（單選，點擊套用整套 spec；+ chip 開啟自訂 sheet） -->
+        <!-- 去重 + Layer 2 rule chip 同行水平捲動 -->
         <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:scrollbars="none"
-            android:paddingHorizontal="16dp">
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="4dp">
 
-            <com.google.android.material.chip.ChipGroup
-                android:id="@+id/chip_group_presets"
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                app:singleLine="true"
-                app:singleSelection="true"
-                app:selectionRequired="false">
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
 
                 <com.google.android.material.chip.Chip
-                    android:id="@+id/chip_add_preset"
+                    android:id="@+id/chip_deduplicated"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/timeline_preset_add"
-                    android:checkable="false"
+                    android:text="@string/timeline_show_deduplicated"
+                    android:checked="true"
                     app:ensureMinTouchTargetSize="false"
                     style="@style/Widget.Material3.Chip.Filter" />
 
-            </com.google.android.material.chip.ChipGroup>
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="20dp"
+                    android:layout_marginHorizontal="8dp"
+                    android:background="?attr/colorOutlineVariant"/>
+
+                <!-- Rule chip 動態加；single-select 邏輯由 TimelineFragment 模擬 -->
+                <LinearLayout
+                    android:id="@+id/chip_group_presets"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chip_add_preset"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/timeline_preset_add"
+                        android:checkable="false"
+                        app:ensureMinTouchTargetSize="false"
+                        style="@style/Widget.Material3.Chip.Filter" />
+
+                </LinearLayout>
+
+            </LinearLayout>
 
         </HorizontalScrollView>
 
