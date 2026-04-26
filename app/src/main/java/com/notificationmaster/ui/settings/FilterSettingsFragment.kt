@@ -83,6 +83,7 @@ class FilterSettingsFragment : Fragment() {
             ActionType.AUTO_DISMISS -> getString(R.string.settings_auto_dismiss_title)
             ActionType.PERSISTENT_ALERT -> getString(R.string.settings_persistent_alert_title)
             ActionType.CLIPBOARD_COPY -> getString(R.string.settings_clipboard_copy_title)
+            ActionType.LIST_FILTER -> "" // 不會被開啟此頁
         }
 
         when (actionType) {
@@ -106,6 +107,7 @@ class FilterSettingsFragment : Fragment() {
                 binding.textEmptyTitle.setText(R.string.clipboard_copy_empty)
                 binding.textEmptyHint.setText(R.string.clipboard_copy_empty_hint)
             }
+            ActionType.LIST_FILTER -> Unit // LIST_FILTER 由 Timeline chip 管理，不會出現在此設定頁
         }
 
         binding.recyclerRules.adapter = adapter
@@ -132,7 +134,7 @@ class FilterSettingsFragment : Fragment() {
 
     private fun refreshList() {
         val rules = RuleEngine.getRules(actionType)
-            .sortedWith(compareBy<Rule> { it.packageName }.thenBy { it.channelId ?: "" })
+            .sortedWith(compareBy<Rule> { it.packageName ?: "" }.thenBy { it.channelId ?: "" })
         adapter.submitList(rules)
 
         val b = _binding ?: return
@@ -210,15 +212,16 @@ class FilterSettingsFragment : Fragment() {
                 val ctx = binding.root.context
 
                 // App 圖示
-                binding.textAppName.text = AppLabelCache.getLabel(ctx, rule.packageName)
+                val pkgName = rule.packageName.orEmpty()
+                binding.textAppName.text = AppLabelCache.getLabel(ctx, pkgName)
                 try {
-                    val appInfo = ctx.packageManager.getApplicationInfo(rule.packageName, 0)
+                    val appInfo = ctx.packageManager.getApplicationInfo(pkgName, 0)
                     binding.imgAppIcon.setImageDrawable(ctx.packageManager.getApplicationIcon(appInfo))
                 } catch (e: Exception) {
                     binding.imgAppIcon.setImageResource(android.R.drawable.sym_def_app_icon)
                 }
 
-                binding.textPackageName.text = rule.packageName
+                binding.textPackageName.text = pkgName
 
                 // Channel 資訊
                 if (rule.channelId != null) {

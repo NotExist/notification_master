@@ -54,7 +54,7 @@ object RuleRepository {
         }
 
         loaded = true
-        Log.d(TAG, "Loaded ${rules.size} rules (seeded built-in: $seeded)")
+        Log.d(TAG, "Loaded ${rules.size} rules (built-ins changed: $builtInsChanged)")
     }
 
     /** 內建 LIST_FILTER rule 的固定 id（不可變） */

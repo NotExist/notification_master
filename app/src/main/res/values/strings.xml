@@ -360,6 +360,9 @@
     <!-- Widget pin -->
     <string name="widget_pin_not_supported">此 Launcher 不支援自動建立 Widget，請從桌面長按新增。</string>
     <string name="widget_pin_below_api26">Android 7.1 以下不支援自動建立 Widget，請從桌面長按新增。</string>
+
+    <!-- LIST_FILTER 不支援於 RuleAction 主流程 -->
+    <string name="error_list_filter_not_supported_here">列表篩選 rule 須由 Timeline 自訂篩選 chip 建立</string>
     <string name="shortcut_dismissed_short">最近移除</string>
     <string name="shortcut_dismissed_long">最近被移除的通知</string>
     <string name="shortcut_dismissed_title">最近移除的通知</string>

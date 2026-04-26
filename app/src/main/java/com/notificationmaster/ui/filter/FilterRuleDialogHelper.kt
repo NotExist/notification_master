@@ -857,6 +857,11 @@ object FilterRuleDialogHelper {
                             RuleAction.PersistentAlert.STREAM_NOTIFICATION
                     )
                     ActionType.CLIPBOARD_COPY -> RuleAction.ClipboardCopy
+                    ActionType.LIST_FILTER -> {
+                        // FilterRuleDialogHelper 主流程不處理 LIST_FILTER（呼叫端走 widgetMode 路徑）
+                        Toast.makeText(context, R.string.error_list_filter_not_supported_here, Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
                 }
 
                 if (isEditMode) {

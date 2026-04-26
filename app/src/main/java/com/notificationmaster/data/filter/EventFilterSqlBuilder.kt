@@ -2,6 +2,7 @@ package com.notificationmaster.data.filter
 
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
+import com.notificationmaster.core.filter.OrderBy
 
 /**
  * FilterSpec → SupportSQLiteQuery
