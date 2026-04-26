@@ -146,11 +146,11 @@
             android:turnScreenOn="true"
             android:theme="@style/Theme.NotificationMaster.FullScreenAlert" />
 
-        <!-- Widget 設定 Activity -->
+        <!-- Widget 設定 Activity（透明 host，所有 UI 走 MaterialAlertDialog/BottomSheet） -->
         <activity
             android:name=".ui.widget.WidgetConfigActivity"
             android:exported="true"
-            android:theme="@style/Theme.NotificationMaster.Dialog">
+            android:theme="@style/Theme.NotificationMaster.Transparent">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>
