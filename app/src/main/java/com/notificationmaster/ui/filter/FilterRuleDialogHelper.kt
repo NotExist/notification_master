@@ -33,8 +33,13 @@ import com.notificationmaster.core.filter.NotificationFlag
 import com.notificationmaster.core.filter.Rule
 import com.notificationmaster.core.filter.RuleAction
 import com.notificationmaster.core.filter.RuleRepository
+import com.notificationmaster.core.filter.FieldOp
+import com.notificationmaster.core.filter.FieldWhitelist
+import com.notificationmaster.core.filter.OrderBy
+import com.notificationmaster.data.db.dao.countSync
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.NotificationEntity
+import com.notificationmaster.data.filter.EventFilterSpec
 import com.notificationmaster.ui.search.NotificationAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -87,7 +92,9 @@ object FilterRuleDialogHelper {
         onRuleAdded: (() -> Unit)? = null,
         widgetMode: Boolean = false,
         existingWidgetMatchers: List<Matcher>? = null,
+        existingWidgetListFilter: RuleAction.ListFilter? = null,
         onMatchersReady: ((List<Matcher>) -> Unit)? = null,
+        onListFilterReady: ((List<Matcher>, RuleAction.ListFilter) -> Unit)? = null,
         onWidgetCancelled: (() -> Unit)? = null
     ) {
         val isEditMode = existingRule != null
@@ -444,14 +451,44 @@ object FilterRuleDialogHelper {
             updateEventTypeAvailability(effectiveActionType)
         }
 
+        // === ListFilter 顯示控制（widgetMode 用） ===
+        val layoutListFilterSettings = dialogView.findViewById<LinearLayout>(R.id.layout_list_filter_settings)
+        val dropdownListOrder = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.dropdown_list_order)
+        val switchListDedup = dialogView.findViewById<MaterialSwitch>(R.id.switch_list_dedup)
+        val editListLimit = dialogView.findViewById<TextInputEditText>(R.id.edit_list_limit)
+
+        // === Field predicates（任意欄位條件） ===
+        val containerFieldPredicates = dialogView.findViewById<LinearLayout>(R.id.container_field_predicates)
+        val btnAddFieldPredicate = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_add_field_predicate)
+        val fieldPredicateRows = mutableListOf<FieldPredicateRow>()
+        btnAddFieldPredicate.setOnClickListener {
+            addFieldPredicateRow(context, containerFieldPredicates, fieldPredicateRows, null)
+        }
+
+        // === 即時預覽計數 ===
+        val textPreviewCount = dialogView.findViewById<com.google.android.material.textview.MaterialTextView>(R.id.text_preview_count)
+
         // === Widget 模式：隱藏 ActionType/EventType/Action 區塊 ===
         if (widgetMode) {
             layoutCategory.visibility = View.GONE
-            // 隱藏事件類型區段（標題 + checkbox）
             dialogView.findViewById<View>(R.id.section_header_event_types)?.visibility = View.GONE
             containerEventTypes.visibility = View.GONE
-            // 隱藏動作設定
             layoutActionSettings.visibility = View.GONE
+            layoutListFilterSettings.visibility = View.VISIBLE
+
+            // OrderBy dropdown
+            val orderLabels = listOf(
+                context.getString(R.string.filter_list_order_post_desc),
+                context.getString(R.string.filter_list_order_post_asc),
+                context.getString(R.string.filter_list_order_capture_desc)
+            )
+            val orderValues = listOf(OrderBy.PostTimeDesc, OrderBy.PostTimeAsc, OrderBy.CaptureTimeDesc)
+            dropdownListOrder.setAdapter(ArrayAdapter(context, android.R.layout.simple_dropdown_item_1line, orderLabels))
+            val initOrderIdx = orderValues.indexOf(existingWidgetListFilter?.orderBy ?: OrderBy.PostTimeDesc).coerceAtLeast(0)
+            dropdownListOrder.setText(orderLabels[initOrderIdx], false)
+
+            switchListDedup.isChecked = existingWidgetListFilter?.deduplicate == true
+            existingWidgetListFilter?.limit?.let { editListLimit.setText(it.toString()) }
 
             // Widget 編輯模式：回填既有 matchers
             if (existingWidgetMatchers != null) {
@@ -480,6 +517,16 @@ object FilterRuleDialogHelper {
                 }
                 // Flags + DerivedProperty 回填
                 prefillFlagsAndDerived(existingWidgetMatchers)
+                // Field 條件回填
+                existingWidgetMatchers.filterIsInstance<Matcher.Field>().forEach { fm ->
+                    addFieldPredicateRow(context, containerFieldPredicates, fieldPredicateRows, fm)
+                }
+            }
+        }
+        // 編輯既有 rule（非 widgetMode）也回填 Field
+        if (existingRule != null) {
+            existingRule.matchers.filterIsInstance<Matcher.Field>().forEach { fm ->
+                addFieldPredicateRow(context, containerFieldPredicates, fieldPredicateRows, fm)
             }
         }
 
@@ -695,7 +742,33 @@ object FilterRuleDialogHelper {
                 matchers.add(Matcher.DerivedProperty(audible, headsup, removed))
             }
 
+            // Field 條件 matchers
+            for (row in fieldPredicateRows) {
+                row.toMatcher()?.let { matchers.add(it) }
+            }
+
             return matchers
+        }
+
+        // === 即時預覽計數（每 500ms 重算 SQL count，dialog scope cancel 時停止） ===
+        scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(500)
+                val matchers = try { buildMatchersFromDialog() } catch (_: Exception) { null }
+                if (matchers == null) {
+                    textPreviewCount.text = ""
+                    continue
+                }
+                val spec = EventFilterSpec(matchers = matchers)
+                val count = try {
+                    withContext(Dispatchers.IO) {
+                        database.notificationDao().countSync(spec)
+                    }
+                } catch (_: Exception) { -1 }
+                textPreviewCount.text = if (count >= 0)
+                    context.getString(R.string.filter_preview_count_format, count)
+                else ""
+            }
         }
 
         // === 預覽匹配結果 ===
@@ -818,10 +891,27 @@ object FilterRuleDialogHelper {
             dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val matchers = buildMatchersFromDialog() ?: return@setOnClickListener
 
-                // Widget 模式：回傳 matchers，不建立 Rule
+                // Widget 模式：回傳 matchers + ListFilter action（若呼叫端要）
                 if (widgetMode) {
                     widgetConfirmed = true
-                    onMatchersReady?.invoke(matchers)
+                    if (onListFilterReady != null) {
+                        val orderLabels = listOf(
+                            context.getString(R.string.filter_list_order_post_desc),
+                            context.getString(R.string.filter_list_order_post_asc),
+                            context.getString(R.string.filter_list_order_capture_desc)
+                        )
+                        val orderValues = listOf(OrderBy.PostTimeDesc, OrderBy.PostTimeAsc, OrderBy.CaptureTimeDesc)
+                        val orderIdx = orderLabels.indexOf(dropdownListOrder.text?.toString()).coerceAtLeast(0)
+                        val limit = editListLimit.text?.toString()?.trim()?.toIntOrNull()
+                        val listFilter = RuleAction.ListFilter(
+                            orderBy = orderValues[orderIdx],
+                            limit = limit,
+                            deduplicate = switchListDedup.isChecked
+                        )
+                        onListFilterReady.invoke(matchers, listFilter)
+                    } else {
+                        onMatchersReady?.invoke(matchers)
+                    }
                     dialog.dismiss()
                     return@setOnClickListener
                 }
@@ -1088,5 +1178,122 @@ object FilterRuleDialogHelper {
                 Toast.makeText(context, R.string.filter_preview_apply_unsupported, Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    // === Field 條件 row（任意 NotificationEntity column predicate） ===
+
+    private class FieldPredicateRow(
+        val rootView: LinearLayout,
+        private val fieldDropdown: MaterialAutoCompleteTextView,
+        private val opDropdown: MaterialAutoCompleteTextView,
+        private val valueEdit: TextInputEditText,
+        private val fieldKeys: List<String>,
+        private val fieldLabels: List<String>
+    ) {
+        fun toMatcher(): Matcher.Field? {
+            val fieldLabel = fieldDropdown.text?.toString().orEmpty()
+            val idx = fieldLabels.indexOf(fieldLabel)
+            if (idx < 0) return null
+            val key = fieldKeys[idx]
+            val opName = opDropdown.text?.toString().orEmpty()
+            val op = runCatching { FieldOp.fromName(opName) }.getOrNull() ?: return null
+            val value = valueEdit.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            return runCatching { Matcher.Field(key, op, value) }.getOrNull()
+        }
+    }
+
+    private fun addFieldPredicateRow(
+        context: Context,
+        container: LinearLayout,
+        rows: MutableList<FieldPredicateRow>,
+        prefill: Matcher.Field?
+    ) {
+        val density = context.resources.displayMetrics.density
+        val pad = (8 * density).toInt()
+
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = pad }
+        }
+
+        val fieldKeys = FieldWhitelist.fields.keys.toList()
+        val fieldLabels = fieldKeys.map { fieldDisplayName(context, it) }
+
+        val fieldLayout = TextInputLayout(
+            context, null, com.google.android.material.R.attr.textInputOutlinedExposedDropdownMenuStyle
+        ).apply {
+            hint = context.getString(R.string.filter_field_label)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.4f)
+        }
+        val fieldDropdown = MaterialAutoCompleteTextView(context).apply {
+            inputType = android.text.InputType.TYPE_NULL
+            isFocusable = false
+            setAdapter(ArrayAdapter(context, android.R.layout.simple_dropdown_item_1line, fieldLabels))
+            val initIdx = prefill?.field?.let { fieldKeys.indexOf(it) }?.coerceAtLeast(0) ?: 0
+            setText(fieldLabels[initIdx], false)
+        }
+        fieldLayout.addView(fieldDropdown)
+
+        val opLayout = TextInputLayout(
+            context, null, com.google.android.material.R.attr.textInputOutlinedExposedDropdownMenuStyle
+        ).apply {
+            hint = context.getString(R.string.filter_op_label)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f).apply {
+                marginStart = pad / 2
+            }
+        }
+        val opLabels = FieldOp.entries.map { it.name }
+        val opDropdown = MaterialAutoCompleteTextView(context).apply {
+            inputType = android.text.InputType.TYPE_NULL
+            isFocusable = false
+            setAdapter(ArrayAdapter(context, android.R.layout.simple_dropdown_item_1line, opLabels))
+            setText(prefill?.op?.name ?: FieldOp.EQ.name, false)
+        }
+        opLayout.addView(opDropdown)
+
+        val valueLayout = TextInputLayout(
+            context, null, com.google.android.material.R.attr.textInputOutlinedDenseStyle
+        ).apply {
+            hint = context.getString(R.string.filter_value_label)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.2f).apply {
+                marginStart = pad / 2
+            }
+        }
+        val valueEdit = TextInputEditText(context).apply {
+            setText(prefill?.value.orEmpty())
+            maxLines = 1
+        }
+        valueLayout.addView(valueEdit)
+
+        val removeBtn = android.widget.ImageButton(context).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            background = null
+            layoutParams = LinearLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt()).apply {
+                marginStart = pad / 2
+            }
+            contentDescription = context.getString(R.string.filter_add_field_predicate)
+        }
+
+        row.addView(fieldLayout)
+        row.addView(opLayout)
+        row.addView(valueLayout)
+        row.addView(removeBtn)
+
+        val rowObj = FieldPredicateRow(row, fieldDropdown, opDropdown, valueEdit, fieldKeys, fieldLabels)
+        rows.add(rowObj)
+        container.addView(row)
+
+        removeBtn.setOnClickListener {
+            container.removeView(row)
+            rows.remove(rowObj)
+        }
+    }
+
+    /** 顯示名來自 string `field_<key>`；fallback = key 本身 */
+    private fun fieldDisplayName(context: Context, key: String): String {
+        val resId = context.resources.getIdentifier("field_$key", "string", context.packageName)
+        return if (resId != 0) context.getString(resId) else key
     }
 }

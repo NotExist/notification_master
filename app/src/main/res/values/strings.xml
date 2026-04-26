@@ -363,6 +363,44 @@
 
     <!-- LIST_FILTER 不支援於 RuleAction 主流程 -->
     <string name="error_list_filter_not_supported_here">列表篩選 rule 須由 Timeline 自訂篩選 chip 建立</string>
+
+    <!-- 列表篩選顯示控制（widgetMode） -->
+    <string name="filter_section_list_filter">列表設定</string>
+    <string name="filter_list_order">排序</string>
+    <string name="filter_list_dedup">去除重複</string>
+    <string name="filter_list_limit">筆數上限（留空 = 不限）</string>
+    <string name="filter_list_order_post_desc">發佈時間倒序</string>
+    <string name="filter_list_order_post_asc">發佈時間正序</string>
+    <string name="filter_list_order_capture_desc">擷取時間倒序</string>
+
+    <!-- 加入條件（FieldMatcher） -->
+    <string name="filter_section_field_predicates">加入條件</string>
+    <string name="filter_add_field_predicate">+ 條件</string>
+    <string name="filter_field_label">欄位</string>
+    <string name="filter_op_label">運算子</string>
+    <string name="filter_value_label">值</string>
+
+    <!-- 即時預覽 -->
+    <string name="filter_preview_count_format">符合 %d 筆</string>
+    <string name="filter_preview_count_loading">…</string>
+
+    <!-- 欄位顯示名（FieldWhitelist key 對應） -->
+    <string name="field_priority">priority（優先級）</string>
+    <string name="field_importance">importance（重要性）</string>
+    <string name="field_visibility">visibility（可見性）</string>
+    <string name="field_category">category（分類）</string>
+    <string name="field_has_bubble_metadata">有 BubbleMetadata</string>
+    <string name="field_has_full_screen_intent">有 FullScreenIntent</string>
+    <string name="field_has_content_intent">有 ContentIntent</string>
+    <string name="field_is_ongoing">is_ongoing（持續）</string>
+    <string name="field_is_foreground_service">is_foreground_service</string>
+    <string name="field_is_high_priority">is_high_priority</string>
+    <string name="field_is_local_only">is_local_only</string>
+    <string name="field_is_group_summary">is_group_summary</string>
+    <string name="field_flags">flags</string>
+    <string name="field_post_time">post_time</string>
+    <string name="field_capture_time">capture_time</string>
+    <string name="field_when_time">when_time</string>
     <string name="shortcut_dismissed_short">最近移除</string>
     <string name="shortcut_dismissed_long">最近被移除的通知</string>
     <string name="shortcut_dismissed_title">最近移除的通知</string>

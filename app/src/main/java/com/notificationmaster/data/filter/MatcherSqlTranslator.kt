@@ -1,5 +1,7 @@
 package com.notificationmaster.data.filter
 
+import com.notificationmaster.core.filter.FieldOp
+import com.notificationmaster.core.filter.FieldWhitelist
 import com.notificationmaster.core.filter.KeywordField
 import com.notificationmaster.core.filter.Matcher
 
@@ -124,6 +126,35 @@ object MatcherSqlTranslator {
                 "EXISTS (SELECT 1 FROM notification_events e WHERE e.notification_id = n.id AND e.event_type IN ($placeholders))",
                 matcher.types.toList()
             )
+        }
+
+        is Matcher.Field -> {
+            val def = FieldWhitelist.require(matcher.field)
+            val col = "n.${def.column}"
+            when (matcher.op) {
+                FieldOp.IS_NULL -> Fragment("$col IS NULL", emptyList())
+                FieldOp.IS_NOT_NULL -> Fragment("$col IS NOT NULL", emptyList())
+                FieldOp.LIKE -> Fragment(
+                    "$col LIKE ? ESCAPE '\\'",
+                    listOf("%" + escapeLike(matcher.value.orEmpty()) + "%")
+                )
+                FieldOp.EQ -> Fragment("$col = ?", listOf(coerceValue(def.type, matcher.value)))
+                FieldOp.NEQ -> Fragment("$col != ?", listOf(coerceValue(def.type, matcher.value)))
+                FieldOp.LT -> Fragment("$col < ?", listOf(coerceValue(def.type, matcher.value)))
+                FieldOp.LTE -> Fragment("$col <= ?", listOf(coerceValue(def.type, matcher.value)))
+                FieldOp.GT -> Fragment("$col > ?", listOf(coerceValue(def.type, matcher.value)))
+                FieldOp.GTE -> Fragment("$col >= ?", listOf(coerceValue(def.type, matcher.value)))
+            }
+        }
+    }
+
+    private fun coerceValue(type: FieldWhitelist.Type, raw: String?): Any? {
+        if (raw == null) return null
+        return when (type) {
+            FieldWhitelist.Type.INT -> raw.toIntOrNull() ?: 0
+            FieldWhitelist.Type.LONG -> raw.toLongOrNull() ?: 0L
+            FieldWhitelist.Type.BOOL -> if (raw.equals("true", ignoreCase = true) || raw == "1") 1 else 0
+            FieldWhitelist.Type.TEXT -> raw
         }
     }
 

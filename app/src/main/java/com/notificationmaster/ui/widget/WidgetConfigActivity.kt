@@ -67,12 +67,14 @@ class WidgetConfigActivity : AppCompatActivity() {
     }
 
     private fun openEditor(initialRule: Rule?) {
+        val existingListFilter = initialRule?.action as? RuleAction.ListFilter
         FilterRuleDialogHelper.showAddRuleDialog(
             context = this,
             widgetMode = true,
             existingWidgetMatchers = initialRule?.matchers ?: emptyList(),
-            onMatchersReady = { matchers ->
-                handleMatchersReady(matchers, initialRule)
+            existingWidgetListFilter = existingListFilter,
+            onListFilterReady = { matchers, listFilter ->
+                handleListFilterReady(matchers, listFilter, initialRule)
             },
             onWidgetCancelled = { finish() }
         )
@@ -81,20 +83,25 @@ class WidgetConfigActivity : AppCompatActivity() {
     /**
      * 編輯器確認後：
      * - 若 initialRule 是內建 rule → 建立新 user-defined rule（不能改內建）
-     * - 若 initialRule 是 user rule 且 matchers 有變 → 詢問新名稱建立新 rule
-     *   （避免改動既存 rule 影響其他 widget；Timeline rule chip 可另行管理）
-     * - 若 initialRule 是 user rule 且 matchers 不變 → 直接綁此 rule
+     * - 若 initialRule 是 user rule 且 matchers + action 不變 → 直接綁此 rule
+     * - 否則 → 詢問新名稱建立新 rule（避免改動既存 rule 影響其他 widget）
      */
-    private fun handleMatchersReady(matchers: List<Matcher>, initialRule: Rule?) {
-        val unchanged = initialRule != null && matchers == initialRule.matchers
+    private fun handleListFilterReady(
+        matchers: List<Matcher>,
+        listFilter: RuleAction.ListFilter,
+        initialRule: Rule?
+    ) {
+        val unchanged = initialRule != null
+            && matchers == initialRule.matchers
+            && listFilter == initialRule.action
         if (unchanged && initialRule != null) {
             bindAndFinish(initialRule)
             return
         }
-        promptName(initialRule, matchers)
+        promptName(initialRule, matchers, listFilter)
     }
 
-    private fun promptName(initialRule: Rule?, matchers: List<Matcher>) {
+    private fun promptName(initialRule: Rule?, matchers: List<Matcher>, listFilter: RuleAction.ListFilter) {
         val defaultName = initialRule?.name ?: deriveLabel(matchers)
         val editText = TextInputEditText(this).apply {
             setText(defaultName)
@@ -112,13 +119,7 @@ class WidgetConfigActivity : AppCompatActivity() {
             .setView(layout)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val name = editText.text?.toString()?.trim()?.ifEmpty { defaultName } ?: defaultName
-                val baseAction = (initialRule?.action as? RuleAction.ListFilter)
-                    ?: RuleAction.ListFilter()
-                val rule = Rule(
-                    name = name,
-                    matchers = matchers,
-                    action = baseAction
-                )
+                val rule = Rule(name = name, matchers = matchers, action = listFilter)
                 RuleRepository.addRule(this, rule)
                 bindAndFinish(rule)
             }

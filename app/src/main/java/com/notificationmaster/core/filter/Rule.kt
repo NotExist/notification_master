@@ -79,7 +79,9 @@ data class MatchContext(
     // DerivedProperty matcher 用
     val isAudible: Boolean? = null,
     val likelyHeadsup: Boolean? = null,
-    val isRemoved: Boolean? = null
+    val isRemoved: Boolean? = null,
+    /** Field matcher 動態欄位映射（in-memory 比對用；Service 暫不填，fail-open） */
+    val fieldValues: Map<String, Any?>? = null
 )
 
 /**
@@ -221,6 +223,50 @@ sealed interface Matcher {
     }
 
     /**
+     * 通用欄位匹配（NotificationEntity column）— 主要用於 LIST_FILTER rule
+     * 透過 SQL 路徑執行；in-memory 路徑（RuleEngine 對 Service event）對未填值
+     * 的欄位永遠通過（fail-open），避免影響其他 ActionType 流程。
+     *
+     * 欄位需在 [FieldWhitelist] 內。op = IS_NULL / IS_NOT_NULL 不需 value。
+     */
+    data class Field(
+        val field: String,
+        val op: FieldOp,
+        val value: String? = null
+    ) : Matcher {
+        init { FieldWhitelist.require(field) }
+
+        override fun matches(context: MatchContext): Boolean {
+            // in-memory：Service 不維護任意欄位值；fail-open（依賴 SQL 篩選）
+            val v = context.fieldValues?.get(field) ?: return true
+            return when (op) {
+                FieldOp.IS_NULL -> v == null
+                FieldOp.IS_NOT_NULL -> v != null
+                FieldOp.EQ -> v.toString() == value
+                FieldOp.NEQ -> v.toString() != value
+                FieldOp.LIKE -> v.toString().contains(value.orEmpty(), ignoreCase = true)
+                FieldOp.LT -> compareNum(v, value) < 0
+                FieldOp.LTE -> compareNum(v, value) <= 0
+                FieldOp.GT -> compareNum(v, value) > 0
+                FieldOp.GTE -> compareNum(v, value) >= 0
+            }
+        }
+
+        private fun compareNum(ctxValue: Any?, value: String?): Int {
+            val a = (ctxValue as? Number)?.toLong() ?: ctxValue.toString().toLongOrNull() ?: 0L
+            val b = value?.toLongOrNull() ?: 0L
+            return a.compareTo(b)
+        }
+
+        override fun toJson() = JSONObject().apply {
+            put("type", "Field")
+            put("field", field)
+            put("op", op.name)
+            if (value != null) put("value", value)
+        }
+    }
+
+    /**
      * 依推斷屬性匹配（isAudible / likelyHeadsup / isRemoved）
      *
      * 每個欄位：true = 必須, false = 排除, null = 不限。
@@ -277,6 +323,11 @@ sealed interface Matcher {
                 isAudible = if (json.isNull("isAudible")) null else json.getBoolean("isAudible"),
                 likelyHeadsup = if (json.isNull("likelyHeadsup")) null else json.getBoolean("likelyHeadsup"),
                 isRemoved = if (json.isNull("isRemoved")) null else json.getBoolean("isRemoved")
+            )
+            "Field" -> Field(
+                field = json.getString("field"),
+                op = FieldOp.fromName(json.getString("op")),
+                value = if (json.has("value") && !json.isNull("value")) json.getString("value") else null
             )
             else -> throw IllegalArgumentException("Unknown matcher type: $type")
         }

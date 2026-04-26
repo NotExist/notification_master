@@ -412,27 +412,36 @@ class TimelineFragment : Fragment() {
      * editingRuleId != null：更新既有 rule 的 matchers
      */
     private fun openListFilterEditor(initial: EventFilterSpec, editingRuleId: String?) {
+        val existingListFilter = editingRuleId?.let {
+            (RuleEngine.getRule(it)?.action as? RuleAction.ListFilter)
+        } ?: RuleAction.ListFilter(
+            orderBy = initial.orderBy,
+            limit = initial.limit,
+            deduplicate = initial.deduplicate
+        )
         FilterRuleDialogHelper.showAddRuleDialog(
             context = requireContext(),
             widgetMode = true,
             existingWidgetMatchers = initial.matchers,
-            onMatchersReady = { matchers ->
+            existingWidgetListFilter = existingListFilter,
+            onListFilterReady = { matchers, listFilter ->
                 if (editingRuleId != null) {
                     val existing = RuleEngine.getRule(editingRuleId) ?: return@showAddRuleDialog
-                    val updated = existing.copy(matchers = matchers)
+                    val updated = existing.copy(matchers = matchers, action = listFilter)
                     RuleRepository.updateRule(requireContext(), updated)
-                    if (activeRuleId == editingRuleId) {
-                        applyRule(updated)
-                    }
+                    if (activeRuleId == editingRuleId) applyRule(updated)
                     renderRuleChips()
                 } else {
-                    promptNewRuleName(matchers, initial)
+                    promptNewRuleName(matchers, listFilter)
                 }
             }
         )
     }
 
-    private fun promptNewRuleName(matchers: List<com.notificationmaster.core.filter.Matcher>, base: EventFilterSpec) {
+    private fun promptNewRuleName(
+        matchers: List<com.notificationmaster.core.filter.Matcher>,
+        listFilter: RuleAction.ListFilter
+    ) {
         val editText = com.google.android.material.textfield.TextInputEditText(requireContext())
         val inputLayout = com.google.android.material.textfield.TextInputLayout(
             requireContext(), null, com.google.android.material.R.attr.textInputOutlinedStyle
@@ -447,15 +456,7 @@ class TimelineFragment : Fragment() {
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val name = editText.text?.toString()?.trim().orEmpty()
                 if (name.isEmpty()) return@setPositiveButton
-                val rule = Rule(
-                    name = name,
-                    matchers = matchers,
-                    action = RuleAction.ListFilter(
-                        orderBy = base.orderBy,
-                        limit = base.limit,
-                        deduplicate = base.deduplicate
-                    )
-                )
+                val rule = Rule(name = name, matchers = matchers, action = listFilter)
                 RuleRepository.addRule(requireContext(), rule)
                 renderRuleChips()
                 applyRule(rule)
