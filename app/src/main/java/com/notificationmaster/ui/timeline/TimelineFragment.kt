@@ -207,15 +207,20 @@ class TimelineFragment : Fragment() {
     }
 
     private fun setupFilterChips() {
-        binding.chipGroupFilter.setOnCheckedStateChangeListener { _, _ ->
-            if (suppressChipListener) return@setOnCheckedStateChangeListener
-            // 使用者手動改核心 chip → 清空 preset 選擇
-            activePresetName = null
-            clearPresetSelection()
-            rebuildSpecFromChips()
-            binding.swipeRefresh.isRefreshing = true
-            loadNotifications()
+        // 核心 chip 容器改為 LinearLayout（強制單行）— 改對每個 chip 個別監聽
+        val onChipChange = { _: View ->
+            if (!suppressChipListener) {
+                activePresetName = null
+                clearPresetSelection()
+                rebuildSpecFromChips()
+                binding.swipeRefresh.isRefreshing = true
+                loadNotifications()
+            }
         }
+        binding.chipDeduplicated.setOnClickListener(onChipChange)
+        binding.chipAudible.setOnClickListener(onChipChange)
+        binding.chipHeadsup.setOnClickListener(onChipChange)
+        binding.chipDismissed.setOnClickListener(onChipChange)
     }
 
     private fun setupPresetChips() {
