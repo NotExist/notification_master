@@ -26,11 +26,11 @@ import com.notificationmaster.data.filter.EventFilterSpec
 import com.notificationmaster.data.filter.FilterPreset
 import com.notificationmaster.data.filter.FilterPresetRepository
 import com.notificationmaster.data.filter.PresetSource
+import com.notificationmaster.data.filter.coreFilterSpecOf
 import com.notificationmaster.data.db.dao.count
 import com.notificationmaster.data.db.dao.query
 import com.notificationmaster.databinding.FragmentTimelineBinding
 import com.notificationmaster.service.NotificationCaptureService
-import com.notificationmaster.ui.filter.FilterEditorBottomSheet
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import com.notificationmaster.ui.filter.SoundPickerLauncher
 import com.notificationmaster.ui.main.MainActivity
@@ -391,31 +391,32 @@ class TimelineFragment : Fragment() {
     }
 
     private fun openFilterEditor(initial: EventFilterSpec, editingPresetName: String?) {
-        FilterEditorBottomSheet.show(
-            parentFragmentManager,
-            initial,
-            editingPresetName,
-            onApply = { spec ->
-                activePresetName = null
-                clearPresetSelection()
-                coreSpec = spec
-                syncChipsFromSpec(spec)
-                loadNotifications()
-            },
-            onSaveAsPreset = { name, spec ->
-                val now = System.currentTimeMillis()
-                val existing = presetRepo.getPreset(name)
-                val preset = FilterPreset(
-                    name = name,
-                    spec = spec,
-                    createdAt = existing?.createdAt ?: now,
-                    updatedAt = now,
-                    source = PresetSource.USER
-                )
-                presetRepo.savePreset(preset)
-                activePresetName = name
-                coreSpec = spec
-                syncChipsFromSpec(spec)
+        // 統一用 FilterRuleDialogHelper widgetMode 編輯 matchers，套用後加上目前
+        // 的顯示控制（deduplicate / orderBy / limit）組成 EventFilterSpec
+        FilterRuleDialogHelper.showAddRuleDialog(
+            context = requireContext(),
+            widgetMode = true,
+            existingWidgetMatchers = initial.matchers,
+            onMatchersReady = { matchers ->
+                val newSpec = initial.copy(matchers = matchers)
+                if (editingPresetName != null) {
+                    // 直接更新既有 preset
+                    val existing = presetRepo.getPreset(editingPresetName)
+                    val preset = FilterPreset(
+                        name = editingPresetName,
+                        spec = newSpec,
+                        createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis(),
+                        source = PresetSource.USER
+                    )
+                    presetRepo.savePreset(preset)
+                    activePresetName = editingPresetName
+                } else {
+                    activePresetName = null
+                    clearPresetSelection()
+                }
+                coreSpec = newSpec
+                syncChipsFromSpec(newSpec)
                 loadNotifications()
             }
         )
@@ -426,7 +427,7 @@ class TimelineFragment : Fragment() {
         val audible = binding.chipAudible.isChecked
         val headsup = binding.chipHeadsup.isChecked
         val dismissed = binding.chipDismissed.isChecked
-        coreSpec = EventFilterSpec(
+        coreSpec = coreFilterSpecOf(
             isAudible = if (audible) true else null,
             likelyHeadsup = if (headsup) true else null,
             isRemoved = if (dismissed) true else null,
@@ -457,12 +458,9 @@ class TimelineFragment : Fragment() {
 
     /** 是否走天分頁漸進載入：全部 / 純去重，其餘皆走全域 spec 查詢 */
     private fun usesDayPaging(): Boolean =
-        coreSpec.packageName == null && coreSpec.channelId == null &&
-            coreSpec.notificationKey == null &&
-            coreSpec.isAudible == null && coreSpec.likelyHeadsup == null &&
-            coreSpec.isRemoved == null &&
-            coreSpec.keyword == null && coreSpec.timeFrom == null && coreSpec.timeTo == null &&
-            coreSpec.extraPredicates.isEmpty() && coreSpec.limit == null
+        coreSpec.matchers.isEmpty() &&
+            coreSpec.timeFrom == null && coreSpec.timeTo == null &&
+            coreSpec.limit == null
 
     private fun handleIncomingIntent(): Boolean {
         val act = activity ?: return false

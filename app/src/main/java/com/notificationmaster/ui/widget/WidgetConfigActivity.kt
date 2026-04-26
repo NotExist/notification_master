@@ -15,7 +15,7 @@ import com.notificationmaster.data.filter.EventFilterSpec
 import com.notificationmaster.data.filter.FilterPreset
 import com.notificationmaster.data.filter.FilterPresetRepository
 import com.notificationmaster.data.filter.PresetSource
-import com.notificationmaster.ui.filter.FilterEditorBottomSheet
+import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 
 /**
  * Widget 設定 Activity
@@ -150,23 +150,15 @@ class WidgetConfigActivity : AppCompatActivity() {
             ?.let { runCatching { EventFilterSpec.fromJsonString(it) }.getOrNull() }
             ?: EventFilterSpec.RecentAudible
 
-        FilterEditorBottomSheet.show(
-            fm = supportFragmentManager,
-            initial = existingSpec,
-            editingPresetName = null,
-            onApply = { spec ->
+        FilterRuleDialogHelper.showAddRuleDialog(
+            context = this,
+            widgetMode = true,
+            existingWidgetMatchers = existingSpec.matchers,
+            onMatchersReady = { matchers ->
+                val spec = existingSpec.copy(matchers = matchers)
                 saveAndFinish(spec, presetName = null, label = deriveLabel(spec))
             },
-            onSaveAsPreset = { name, spec ->
-                presetRepo.savePreset(FilterPreset(
-                    name = name,
-                    spec = spec,
-                    createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis(),
-                    source = PresetSource.USER
-                ))
-                saveAndFinish(spec, presetName = name, label = name)
-            }
+            onWidgetCancelled = { showPresetChooser(preselectedName = null) }
         )
     }
 
@@ -181,8 +173,8 @@ class WidgetConfigActivity : AppCompatActivity() {
         spec.isAudible == true -> getString(R.string.preset_recent_audible)
         spec.likelyHeadsup == true -> getString(R.string.preset_recent_headsup)
         spec.isRemoved == true -> getString(R.string.preset_recent_dismissed)
-        spec.packageName != null -> spec.packageName
-        else -> getString(R.string.filter_editor_title)
+        spec.packageName != null -> spec.packageName!!
+        else -> getString(R.string.widget_label_default_custom)
     }
 
     private fun saveAndFinish(spec: EventFilterSpec, presetName: String?, label: String) {
