@@ -74,6 +74,8 @@ class TimelineFragment : Fragment() {
     private var activeRuleId: String? = null
     /** 是否正由程式調整 chip 狀態（避免 listener re-entrancy） */
     private var suppressChipListener = false
+    /** 套 rule 前 user 自選的去重狀態，rule 取消後還原 */
+    private var userDedupBeforeRule: Boolean? = null
 
     private var currentFilterText = ""
     private var allNotifications: List<NotificationEntity> = emptyList()
@@ -209,20 +211,14 @@ class TimelineFragment : Fragment() {
     }
 
     private fun setupFilterChips() {
-        // 核心 chip 容器為 LinearLayout（強制單行）— 對每個 chip 個別監聽
-        val onChipChange = { _: View ->
-            if (!suppressChipListener) {
-                activeRuleId = null
-                clearRuleSelection()
-                rebuildSpecFromChips()
-                binding.swipeRefresh.isRefreshing = true
-                loadNotifications()
-            }
+        // 「去重」獨立 boolean 切換器；rule 啟用時會被 disable
+        binding.chipDeduplicated.setOnClickListener {
+            if (suppressChipListener) return@setOnClickListener
+            // disabled 狀態下不會觸發；rule 模式由 rule chip 點擊取消
+            rebuildSpecFromChips()
+            binding.swipeRefresh.isRefreshing = true
+            loadNotifications()
         }
-        binding.chipDeduplicated.setOnClickListener(onChipChange)
-        binding.chipAudible.setOnClickListener(onChipChange)
-        binding.chipHeadsup.setOnClickListener(onChipChange)
-        binding.chipDismissed.setOnClickListener(onChipChange)
     }
 
     private fun setupRuleChips() {
@@ -249,11 +245,13 @@ class TimelineFragment : Fragment() {
         }
         toRemove.forEach { group.removeView(it) }
 
-        val rules = RuleEngine.getListFilterRules().filter { !it.isBuiltIn }
+        // 內建 rule 排前面，user-defined 排後面（穩定順序）
+        val rules = RuleEngine.getListFilterRules()
+            .sortedWith(compareByDescending<Rule> { it.isBuiltIn }.thenBy { it.createdAt })
         val inflater = LayoutInflater.from(requireContext())
         for ((i, rule) in rules.withIndex()) {
             val chip = inflater.inflate(R.layout.chip_preset, group, false) as Chip
-            chip.text = rule.name ?: rule.id.take(8)
+            chip.text = ruleDisplayName(rule)
             chip.tag = rule.id
             chip.isChecked = (activeRuleId == rule.id)
             chip.setOnClickListener {
@@ -261,8 +259,7 @@ class TimelineFragment : Fragment() {
                 if (chip.isChecked) {
                     applyRule(rule)
                 } else {
-                    activeRuleId = null
-                    rebuildSpecFromChips()
+                    deactivateRule()
                     binding.swipeRefresh.isRefreshing = true
                     loadNotifications()
                 }
@@ -277,6 +274,14 @@ class TimelineFragment : Fragment() {
         group.addView(addChip)
     }
 
+    /** 顯示名：內建 rule 用 strings 對照；user-defined 用 rule.name；fallback id */
+    private fun ruleDisplayName(rule: Rule): String = when (rule.id) {
+        RuleRepository.builtInRuleIdAudible() -> getString(R.string.preset_recent_audible)
+        RuleRepository.builtInRuleIdHeadsup() -> getString(R.string.preset_recent_headsup)
+        RuleRepository.builtInRuleIdDismissed() -> getString(R.string.preset_recent_dismissed)
+        else -> rule.name ?: rule.id.take(8)
+    }
+
     private fun clearRuleSelection() {
         val group = binding.chipGroupPresets
         for (i in 0 until group.childCount) {
@@ -286,11 +291,36 @@ class TimelineFragment : Fragment() {
     }
 
     private fun applyRule(rule: Rule) {
+        // 第一次進 rule 模式時記下 user dedup；切換 rule 之間不重複記
+        if (activeRuleId == null) userDedupBeforeRule = binding.chipDeduplicated.isChecked
         activeRuleId = rule.id
         coreSpec = rule.toFilterSpec()
-        syncChipsFromSpec(coreSpec)
+        // 去重 chip 顯示 rule 的 dedup 狀態並 disable
+        suppressChipListener = true
+        try { binding.chipDeduplicated.isChecked = coreSpec.deduplicate }
+        finally { suppressChipListener = false }
+        setDedupChipEnabled(false)
+        syncRuleChipSelection()
         binding.swipeRefresh.isRefreshing = true
         loadNotifications()
+    }
+
+    /** 取消當前 rule，回到 chip 模式並還原 user 之前的去重設定 */
+    private fun deactivateRule() {
+        activeRuleId = null
+        clearRuleSelection()
+        setDedupChipEnabled(true)
+        suppressChipListener = true
+        try { binding.chipDeduplicated.isChecked = userDedupBeforeRule ?: true }
+        finally { suppressChipListener = false }
+        userDedupBeforeRule = null
+        rebuildSpecFromChips()
+    }
+
+    /** 去重 chip enabled 狀態（rule 模式時 disable，rule 自帶 dedup 設定） */
+    private fun setDedupChipEnabled(enabled: Boolean) {
+        binding.chipDeduplicated.isEnabled = enabled
+        binding.chipDeduplicated.alpha = if (enabled) 1f else 0.4f
     }
 
     private fun showRuleMenu(rule: Rule) {
@@ -305,7 +335,7 @@ class TimelineFragment : Fragment() {
             )
         }
         MaterialAlertDialogBuilder(requireContext())
-            .setTitle(rule.name ?: rule.id.take(8))
+            .setTitle(ruleDisplayName(rule))
             .setItems(items) { _, which ->
                 if (rule.isBuiltIn) {
                     if (which == 0) requestCreateWidget(rule.id)
@@ -357,8 +387,7 @@ class TimelineFragment : Fragment() {
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 RuleRepository.removeRule(requireContext(), rule.id)
                 if (activeRuleId == rule.id) {
-                    activeRuleId = null
-                    rebuildSpecFromChips()
+                    deactivateRule()
                     loadNotifications()
                 }
                 renderRuleChips()
@@ -393,9 +422,7 @@ class TimelineFragment : Fragment() {
                     val updated = existing.copy(matchers = matchers)
                     RuleRepository.updateRule(requireContext(), updated)
                     if (activeRuleId == editingRuleId) {
-                        coreSpec = updated.toFilterSpec()
-                        syncChipsFromSpec(coreSpec)
-                        loadNotifications()
+                        applyRule(updated)
                     }
                     renderRuleChips()
                 } else {
@@ -430,39 +457,21 @@ class TimelineFragment : Fragment() {
                     )
                 )
                 RuleRepository.addRule(requireContext(), rule)
-                activeRuleId = rule.id
-                coreSpec = rule.toFilterSpec()
-                syncChipsFromSpec(coreSpec)
                 renderRuleChips()
-                loadNotifications()
+                applyRule(rule)
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
     private fun rebuildSpecFromChips() {
-        val dedup = binding.chipDeduplicated.isChecked
-        val audible = binding.chipAudible.isChecked
-        val headsup = binding.chipHeadsup.isChecked
-        val dismissed = binding.chipDismissed.isChecked
-        coreSpec = coreFilterSpecOf(
-            isAudible = if (audible) true else null,
-            likelyHeadsup = if (headsup) true else null,
-            isRemoved = if (dismissed) true else null,
-            deduplicate = dedup
-        )
+        coreSpec = coreFilterSpecOf(deduplicate = binding.chipDeduplicated.isChecked)
     }
 
-    /** 將 spec 反映到核心 chip 勾選狀態（Intent / rule / editor 套用後） */
-    private fun syncChipsFromSpec(spec: EventFilterSpec) {
+    /** 同步 Layer 2 rule chip 勾選（不動核心 chip，避免互斥模式混淆） */
+    private fun syncRuleChipSelection() {
         suppressChipListener = true
         try {
-            binding.chipDeduplicated.isChecked = spec.deduplicate
-            binding.chipAudible.isChecked = (spec.isAudible == true)
-            binding.chipHeadsup.isChecked = (spec.likelyHeadsup == true)
-            binding.chipDismissed.isChecked = (spec.isRemoved == true)
-
-            // Rule chip 勾選：activeRuleId 有值時勾起對應 chip
             val group = binding.chipGroupPresets
             for (i in 0 until group.childCount) {
                 val c = group.getChildAt(i) as? Chip ?: continue
@@ -493,12 +502,7 @@ class TimelineFragment : Fragment() {
 
         val rule = RuleEngine.getRule(ruleId) ?: return false
         if (rule.action.actionType != ActionType.LIST_FILTER) return false
-
-        activeRuleId = ruleId
-        coreSpec = rule.toFilterSpec()
-        syncChipsFromSpec(coreSpec)
-        binding.swipeRefresh.isRefreshing = true
-        loadNotifications()
+        applyRule(rule)
         return true
     }
 

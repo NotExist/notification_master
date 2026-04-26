@@ -14,6 +14,7 @@ import com.notificationmaster.R
 import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.data.db.dao.query
+import com.notificationmaster.data.filter.toFilterSpec
 import com.notificationmaster.databinding.FragmentShortcutHeadsupBinding
 import com.notificationmaster.ui.main.MainActivity
 import com.notificationmaster.ui.search.NotificationAdapter
@@ -59,7 +60,7 @@ class HeadsupBottomSheetFragment : BottomSheetDialogFragment() {
         }
         val dao = NotificationMasterApp.getInstance().database.notificationDao()
         viewLifecycleOwner.lifecycleScope.launch {
-            dao.query(rule).collectLatest { notifications ->
+            dao.query(rule.toFilterSpec().copy(limit = 20)).collectLatest { notifications ->
                 if (_binding == null) return@collectLatest
                 adapter.submitList(notifications)
                 if (notifications.isEmpty()) {

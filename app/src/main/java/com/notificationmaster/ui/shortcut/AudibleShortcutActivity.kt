@@ -11,6 +11,7 @@ import com.notificationmaster.R
 import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.data.db.dao.query
+import com.notificationmaster.data.filter.toFilterSpec
 import com.notificationmaster.databinding.ActivityShortcutListBinding
 import com.notificationmaster.ui.main.MainActivity
 import com.notificationmaster.ui.search.NotificationAdapter
@@ -51,7 +52,8 @@ class AudibleShortcutActivity : AppCompatActivity() {
         }
         val dao = NotificationMasterApp.getInstance().database.notificationDao()
         lifecycleScope.launch {
-            dao.query(rule).collectLatest { notifications ->
+            // Shortcut 短覽：rule 套上 limit 上限，避免內建 rule 無 limit 撈太多
+            dao.query(rule.toFilterSpec().copy(limit = 20)).collectLatest { notifications ->
                 adapter.submitList(notifications)
                 if (notifications.isEmpty()) {
                     binding.recyclerView.visibility = View.GONE

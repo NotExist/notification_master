@@ -40,59 +40,24 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- 核心篩選 chip（多選 AND，未選 = 全部）— 用 LinearLayout 強制單行 -->
-        <HorizontalScrollView
+        <!-- 去重切換（獨立 boolean，與 rule 模式正交；rule 啟用時 disable） -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:scrollbars="none"
+            android:orientation="horizontal"
             android:paddingHorizontal="16dp"
             android:paddingVertical="4dp">
 
-            <LinearLayout
-                android:id="@+id/chip_group_filter"
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_deduplicated"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:text="@string/timeline_show_deduplicated"
+                android:checked="true"
+                app:ensureMinTouchTargetSize="false"
+                style="@style/Widget.Material3.Chip.Filter" />
 
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/chip_deduplicated"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/timeline_show_deduplicated"
-                    android:checked="true"
-                    app:ensureMinTouchTargetSize="false"
-                    style="@style/Widget.Material3.Chip.Filter" />
-
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/chip_audible"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/timeline_audible_only"
-                    app:ensureMinTouchTargetSize="false"
-                    style="@style/Widget.Material3.Chip.Filter" />
-
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/chip_headsup"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/timeline_headsup_only"
-                    app:ensureMinTouchTargetSize="false"
-                    style="@style/Widget.Material3.Chip.Filter" />
-
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/chip_dismissed"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/timeline_dismissed_only"
-                    app:ensureMinTouchTargetSize="false"
-                    style="@style/Widget.Material3.Chip.Filter" />
-
-            </LinearLayout>
-
-        </HorizontalScrollView>
+        </LinearLayout>
 
         <!-- 命名 Preset chip（單選，點擊套用整套 spec；+ chip 開啟自訂 sheet） -->
         <HorizontalScrollView

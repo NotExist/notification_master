@@ -42,14 +42,14 @@ object RuleRepository {
             listOf(createSelfFilterRule(context))
         }
 
-        // 確保內建 LIST_FILTER rules（RecentAudible/Headsup/Dismissed）存在
+        // 確保內建 LIST_FILTER rules（RecentAudible/Headsup/Dismissed）存在且為最新版本
         val rules = ensureBuiltInListFilterRules(parsed)
-        val seeded = rules.size != parsed.size
+        val builtInsChanged = rules != parsed
 
         RuleEngine.setRules(rules)
         RuleEngine.setLastTriggeredTimes(AppPreferences.getRuleLastTriggered(context))
 
-        if ((v2Json == null && rules.isNotEmpty()) || seeded) {
+        if ((v2Json == null && rules.isNotEmpty()) || builtInsChanged) {
             save(context)
         }
 
@@ -63,35 +63,37 @@ object RuleRepository {
     private const val BUILTIN_RECENT_DISMISSED_ID = "builtin-list-recent-dismissed"
 
     /**
-     * 若記憶體中缺少內建 LIST_FILTER rule，補齊。回傳補齊後的 rule list。
+     * 確保內建 LIST_FILTER rules 存在；存在的對應 id 會被最新版本覆寫
+     * （讓內建 rule 的 matchers/action 升級不被舊持久化卡住）。
      */
     private fun ensureBuiltInListFilterRules(existing: List<Rule>): List<Rule> {
-        val byId = existing.associateBy { it.id }
         val builtIns = builtInListFilterRules()
-        val missing = builtIns.filter { it.id !in byId }
-        return if (missing.isEmpty()) existing else existing + missing
+        val builtInIds = builtIns.map { it.id }.toSet()
+        val withoutOldBuiltIns = existing.filter { it.id !in builtInIds }
+        return withoutOldBuiltIns + builtIns
     }
 
     private fun builtInListFilterRules(): List<Rule> = listOf(
+        // 不帶 limit：Timeline 套用時走無限歷史（Shortcut 短覽端自己加 limit）
         Rule(
             id = BUILTIN_RECENT_AUDIBLE_ID,
             name = "RecentAudible",
             matchers = listOf(Matcher.DerivedProperty(isAudible = true)),
-            action = RuleAction.ListFilter(deduplicate = true, limit = 20),
+            action = RuleAction.ListFilter(deduplicate = true),
             isBuiltIn = true
         ),
         Rule(
             id = BUILTIN_RECENT_HEADSUP_ID,
             name = "RecentHeadsup",
             matchers = listOf(Matcher.DerivedProperty(likelyHeadsup = true)),
-            action = RuleAction.ListFilter(deduplicate = true, limit = 20),
+            action = RuleAction.ListFilter(deduplicate = true),
             isBuiltIn = true
         ),
         Rule(
             id = BUILTIN_RECENT_DISMISSED_ID,
             name = "RecentDismissed",
             matchers = listOf(Matcher.DerivedProperty(isRemoved = true)),
-            action = RuleAction.ListFilter(deduplicate = true, limit = 30),
+            action = RuleAction.ListFilter(deduplicate = true),
             isBuiltIn = true
         )
     )
