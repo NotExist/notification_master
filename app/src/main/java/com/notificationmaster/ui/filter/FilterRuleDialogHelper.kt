@@ -663,21 +663,21 @@ object FilterRuleDialogHelper {
         // === 共用：從 Dialog 表單驗證並建構 Matcher 列表 ===
         /**
          * 驗證表單欄位並建構 Matcher 列表。
-         * 驗證失敗時顯示 Toast/error 並回傳 null。
+         * @param silent true 時不彈 Toast / 不設 input layout error；給即時預覽 polling 用
          */
-        fun buildMatchersFromDialog(): List<Matcher>? {
+        fun buildMatchersFromDialog(silent: Boolean = false): List<Matcher>? {
             val packageName = editPackageName.text.toString().trim()
             if (!widgetMode && packageName.isEmpty()) {
-                layoutPackageName.error = context.getString(R.string.filter_package_name_required)
+                if (!silent) layoutPackageName.error = context.getString(R.string.filter_package_name_required)
                 return null
             }
-            layoutPackageName.error = null
+            if (!silent) layoutPackageName.error = null
 
             if (!widgetMode) {
                 val selectedEventTypes = eventTypes.filterIndexed { i, _ -> checkBoxes[i].isChecked && checkBoxes[i].isEnabled }
                     .map { it.name }.toSet()
                 if (selectedEventTypes.isEmpty()) {
-                    Toast.makeText(context, R.string.filter_event_type_required, Toast.LENGTH_SHORT).show()
+                    if (!silent) Toast.makeText(context, R.string.filter_event_type_required, Toast.LENGTH_SHORT).show()
                     return null
                 }
             }
@@ -696,7 +696,7 @@ object FilterRuleDialogHelper {
             if (kwPattern.isNotEmpty()) {
                 val selectedFields = keywordFieldCheckBoxes.filter { it.value.isChecked }.keys
                 if (selectedFields.isEmpty()) {
-                    Toast.makeText(context, R.string.filter_keyword_field_required, Toast.LENGTH_SHORT).show()
+                    if (!silent) Toast.makeText(context, R.string.filter_keyword_field_required, Toast.LENGTH_SHORT).show()
                     return null
                 }
                 matchers.add(Matcher.Keyword(kwPattern, selectedFields, switchKeywordRegex.isChecked))
@@ -740,7 +740,7 @@ object FilterRuleDialogHelper {
         scope.launch {
             while (true) {
                 kotlinx.coroutines.delay(500)
-                val matchers = try { buildMatchersFromDialog() } catch (_: Exception) { null }
+                val matchers = try { buildMatchersFromDialog(silent = true) } catch (_: Exception) { null }
                 if (matchers == null) {
                     textPreviewCount.text = ""
                     continue
