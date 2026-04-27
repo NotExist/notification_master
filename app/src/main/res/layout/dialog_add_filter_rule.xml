@@ -86,6 +86,25 @@
                 android:completionThreshold="1" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- Channel Group ID（API 26+；同 channel 維度，緊接 Channel ID 顯示） -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/layout_group_id"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/filter_group_id"
+            android:layout_marginBottom="8dp"
+            app:helperTextEnabled="true"
+            app:helperText="@string/filter_group_id_hint">
+
+            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                android:id="@+id/edit_group_id"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textNoSuggestions"
+                android:completionThreshold="1" />
+        </com.google.android.material.textfield.TextInputLayout>
+
         <!-- ══ 事件類型 ══ -->
         <LinearLayout
             android:id="@+id/section_header_event_types"
@@ -280,51 +299,6 @@
 
         </LinearLayout>
 
-        <!-- ══ Channel 屬性匹配（選填，API 26+） ══ -->
-        <LinearLayout
-            android:id="@+id/section_header_channel_property"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginTop="16dp"
-            android:layout_marginBottom="8dp">
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/label_channel_property"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/filter_channel_property_title"
-                android:textAppearance="?attr/textAppearanceLabelMedium"
-                android:textColor="?attr/colorPrimary" />
-
-            <com.google.android.material.divider.MaterialDivider
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp" />
-        </LinearLayout>
-
-        <!-- 最低重要性已由「加入條件」中 importance >= N 替代，不再獨立提供 -->
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/layout_group_id"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/filter_group_id"
-            app:helperTextEnabled="true"
-            app:helperText="@string/filter_group_id_hint">
-
-            <com.google.android.material.textfield.MaterialAutoCompleteTextView
-                android:id="@+id/edit_group_id"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textNoSuggestions"
-                android:completionThreshold="1" />
-
-        </com.google.android.material.textfield.TextInputLayout>
-
         <!-- ══ 加入條件（任意 NotificationEntity 欄位 field+op+value） ══ -->
         <LinearLayout
             android:id="@+id/layout_field_predicates_section"
@@ -340,12 +314,17 @@
                 android:gravity="center_vertical">
 
                 <com.google.android.material.textview.MaterialTextView
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/filter_section_field_predicates"
                     android:textAppearance="?attr/textAppearanceLabelMedium"
                     android:textColor="?attr/colorPrimary" />
+
+                <com.google.android.material.divider.MaterialDivider
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginHorizontal="8dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_add_field_predicate"
@@ -372,13 +351,26 @@
             android:visibility="gone"
             android:layout_marginTop="16dp">
 
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/filter_section_list_filter"
-                android:textAppearance="?attr/textAppearanceLabelMedium"
-                android:textColor="?attr/colorPrimary"
-                android:layout_marginBottom="8dp" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/filter_section_list_filter"
+                    android:textAppearance="?attr/textAppearanceLabelMedium"
+                    android:textColor="?attr/colorPrimary" />
+
+                <com.google.android.material.divider.MaterialDivider
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"

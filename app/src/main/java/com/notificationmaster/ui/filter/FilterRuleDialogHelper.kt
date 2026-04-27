@@ -138,7 +138,8 @@ object FilterRuleDialogHelper {
         }
 
         // ChannelProperty 相關 views
-        val sectionHeaderChannelProperty = dialogView.findViewById<View>(R.id.section_header_channel_property)
+        // section_header_channel_property 區塊已拆除（importance 移到「加入條件」、
+        // group_id 搬到 ChannelID 之後）
         // (importance 下拉已移除，由「加入條件」importance >= N 取代)
         val layoutGroupId = dialogView.findViewById<TextInputLayout>(R.id.layout_group_id)
         val editGroupId = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.edit_group_id)
@@ -340,9 +341,8 @@ object FilterRuleDialogHelper {
         containerKeywordFields.addView(row1)
         containerKeywordFields.addView(row2)
 
-        // ChannelProperty 區塊：API 26+ 才顯示（importance 已搬到「加入條件」）
+        // ChannelGroupID：API 26+ 才顯示
         if (!ApiVersionHelper.supportsNotificationChannel()) {
-            sectionHeaderChannelProperty.visibility = View.GONE
             layoutGroupId.visibility = View.GONE
         }
 
