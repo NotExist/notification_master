@@ -392,12 +392,6 @@
     <string name="field_has_bubble_metadata">有 BubbleMetadata</string>
     <string name="field_has_full_screen_intent">有 FullScreenIntent</string>
     <string name="field_has_content_intent">有 ContentIntent</string>
-    <string name="field_is_ongoing">is_ongoing（持續）</string>
-    <string name="field_is_foreground_service">is_foreground_service</string>
-    <string name="field_is_high_priority">is_high_priority</string>
-    <string name="field_is_local_only">is_local_only</string>
-    <string name="field_is_group_summary">is_group_summary</string>
-    <string name="field_flags">flags</string>
     <string name="field_post_time">post_time</string>
     <string name="field_capture_time">capture_time</string>
     <string name="field_when_time">when_time</string>
@@ -474,6 +468,7 @@
     <string name="filter_importance_max">最高</string>
     <string name="filter_importance_display">importance ≥ %s</string>
     <string name="filter_group_id">Channel Group ID（選填）</string>
+    <string name="filter_group_id_hint">來自 NotificationChannel.getGroup() (API 26+)；同 App 內 channel 的分群 ID（如 LINE 的「訊息」群、「通話」群）。僅對到達通知的 in-memory 規則（SkipRecord 等）生效，列表篩選不支援。</string>
 
     <!-- Filter Dialog 區段標題 -->
     <string name="filter_section_target">匹配目標</string>
@@ -495,9 +490,10 @@
     <string name="derived_audible">有聲通知</string>
     <string name="derived_headsup">彈出通知</string>
     <string name="derived_removed">已移除</string>
-    <string name="flag_state_require">✓ 必須</string>
-    <string name="flag_state_exclude">✗ 排除</string>
-    <string name="flag_state_ignore">— 不限</string>
+    <string name="flag_state_require">✓</string>
+    <string name="flag_state_exclude">✗</string>
+    <string name="flag_state_ignore">—</string>
+    <string name="flag_state_legend">三態：✓ 必須 ／ ✗ 排除 ／ — 不限</string>
 
     <!-- Channel -->
     <string name="channel_name_unset">Channel Name 未設定</string>

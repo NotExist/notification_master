@@ -249,8 +249,12 @@ class TimelineFragment : Fragment() {
         val rules = RuleEngine.getListFilterRules()
             .sortedWith(compareByDescending<Rule> { it.isBuiltIn }.thenBy { it.createdAt })
         val inflater = LayoutInflater.from(requireContext())
+        val chipSpacing = (8 * resources.displayMetrics.density).toInt()
         for ((i, rule) in rules.withIndex()) {
             val chip = inflater.inflate(R.layout.chip_preset, group, false) as Chip
+            // 第一個 chip 緊貼分隔線（不加左 margin），其餘 8dp
+            (chip.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.marginStart =
+                if (i == 0) 0 else chipSpacing
             chip.text = ruleDisplayName(rule)
             chip.tag = rule.id
             chip.isChecked = (activeRuleId == rule.id)

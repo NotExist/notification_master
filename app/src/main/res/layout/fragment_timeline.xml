@@ -60,6 +60,8 @@
                     android:layout_height="wrap_content"
                     android:text="@string/timeline_show_deduplicated"
                     android:checked="true"
+                    app:checkedIconVisible="false"
+                    app:chipIconVisible="false"
                     app:ensureMinTouchTargetSize="false"
                     style="@style/Widget.Material3.Chip.Filter" />
 
@@ -80,8 +82,11 @@
                         android:id="@+id/chip_add_preset"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
                         android:text="@string/timeline_preset_add"
                         android:checkable="false"
+                        app:checkedIconVisible="false"
+                        app:chipIconVisible="false"
                         app:ensureMinTouchTargetSize="false"
                         style="@style/Widget.Material3.Chip.Filter" />
 

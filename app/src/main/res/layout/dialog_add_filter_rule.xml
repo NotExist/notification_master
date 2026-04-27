@@ -170,6 +170,15 @@
                     android:layout_marginStart="8dp" />
             </LinearLayout>
 
+            <!-- 三態說明 -->
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/flag_state_legend"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:layout_marginBottom="8dp" />
+
             <!-- Bit flags 容器（程式動態填入） -->
             <LinearLayout
                 android:id="@+id/container_flags"
@@ -296,29 +305,16 @@
                 android:layout_marginStart="8dp" />
         </LinearLayout>
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/layout_min_importance"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:hint="@string/filter_min_importance">
-
-            <com.google.android.material.textfield.MaterialAutoCompleteTextView
-                android:id="@+id/dropdown_min_importance"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="none"
-                android:editable="false" />
-
-        </com.google.android.material.textfield.TextInputLayout>
+        <!-- 最低重要性已由「加入條件」中 importance >= N 替代，不再獨立提供 -->
 
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/layout_group_id"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="@string/filter_group_id">
+            android:hint="@string/filter_group_id"
+            app:helperTextEnabled="true"
+            app:helperText="@string/filter_group_id_hint">
 
             <com.google.android.material.textfield.MaterialAutoCompleteTextView
                 android:id="@+id/edit_group_id"

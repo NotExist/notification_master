@@ -21,25 +21,19 @@ object FieldWhitelist {
         "visibility" to Def("visibility", Type.INT),
         "category" to Def("category", Type.TEXT),
 
-        // Bubble / intent
+        // Bubble / intent（無對應 NotificationFlag）
         "has_bubble_metadata" to Def("has_bubble_metadata", Type.BOOL),
         "has_full_screen_intent" to Def("has_full_screen_intent", Type.BOOL),
         "has_content_intent" to Def("has_content_intent", Type.BOOL),
-
-        // Flags 系列 booleans
-        "is_ongoing" to Def("is_ongoing", Type.BOOL),
-        "is_foreground_service" to Def("is_foreground_service", Type.BOOL),
-        "is_high_priority" to Def("is_high_priority", Type.BOOL),
-        "is_local_only" to Def("is_local_only", Type.BOOL),
-        "is_group_summary" to Def("is_group_summary", Type.BOOL),
-
-        // Flags int
-        "flags" to Def("flags", Type.INT),
 
         // 時間
         "post_time" to Def("post_time", Type.LONG),
         "capture_time" to Def("capture_time", Type.LONG),
         "when_time" to Def("when_time", Type.LONG)
+
+        // 註：is_ongoing / is_foreground_service / is_high_priority /
+        // is_local_only / is_group_summary 已被「通知旗標」三態選擇器覆蓋，
+        // 不在此白名單重複提供。
     )
 
     fun contains(field: String): Boolean = fields.containsKey(field)

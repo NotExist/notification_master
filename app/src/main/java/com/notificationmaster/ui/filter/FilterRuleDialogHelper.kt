@@ -139,8 +139,7 @@ object FilterRuleDialogHelper {
 
         // ChannelProperty 相關 views
         val sectionHeaderChannelProperty = dialogView.findViewById<View>(R.id.section_header_channel_property)
-        val layoutMinImportance = dialogView.findViewById<TextInputLayout>(R.id.layout_min_importance)
-        val dropdownMinImportance = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.dropdown_min_importance)
+        // (importance 下拉已移除，由「加入條件」importance >= N 取代)
         val layoutGroupId = dialogView.findViewById<TextInputLayout>(R.id.layout_group_id)
         val editGroupId = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.edit_group_id)
 
@@ -341,28 +340,9 @@ object FilterRuleDialogHelper {
         containerKeywordFields.addView(row1)
         containerKeywordFields.addView(row2)
 
-        // === Importance dropdown 設定 ===
-        data class ImportanceOption(val label: String, val value: Int?)
-        val importanceOptions = listOf(
-            ImportanceOption(context.getString(R.string.filter_importance_any), null),
-            ImportanceOption(context.getString(R.string.filter_importance_min), 1),
-            ImportanceOption(context.getString(R.string.filter_importance_low), 2),
-            ImportanceOption(context.getString(R.string.filter_importance_default), 3),
-            ImportanceOption(context.getString(R.string.filter_importance_high), 4),
-            ImportanceOption(context.getString(R.string.filter_importance_max), 5)
-        )
-        var selectedImportance: Int? = null
-        val importanceAdapter = ArrayAdapter(context, android.R.layout.simple_dropdown_item_1line, importanceOptions.map { it.label })
-        dropdownMinImportance.setAdapter(importanceAdapter)
-        dropdownMinImportance.setText(importanceOptions[0].label, false)
-        dropdownMinImportance.setOnItemClickListener { _, _, pos, _ ->
-            selectedImportance = importanceOptions[pos].value
-        }
-
-        // ChannelProperty 區塊：API 26+ 才顯示
+        // ChannelProperty 區塊：API 26+ 才顯示（importance 已搬到「加入條件」）
         if (!ApiVersionHelper.supportsNotificationChannel()) {
             sectionHeaderChannelProperty.visibility = View.GONE
-            layoutMinImportance.visibility = View.GONE
             layoutGroupId.visibility = View.GONE
         }
 
@@ -506,12 +486,12 @@ object FilterRuleDialogHelper {
                     btnToggleKeyword.text = context.getString(R.string.filter_keyword_collapse)
                 }
                 existingWidgetMatchers.filterIsInstance<Matcher.ChannelProperty>().firstOrNull()?.let { cp ->
+                    // 既有 minImportance 升級轉成 Field("importance", GTE, value) 條件
                     cp.minImportance?.let { imp ->
-                        val idx = importanceOptions.indexOfFirst { it.value == imp }
-                        if (idx >= 0) {
-                            selectedImportance = imp
-                            dropdownMinImportance.setText(importanceOptions[idx].label, false)
-                        }
+                        addFieldPredicateRow(
+                            context, containerFieldPredicates, fieldPredicateRows,
+                            Matcher.Field("importance", FieldOp.GTE, imp.toString())
+                        )
                     }
                     cp.groupId?.let { editGroupId.setText(it) }
                 }
@@ -598,11 +578,10 @@ object FilterRuleDialogHelper {
             }
             existingRule.matchers.filterIsInstance<Matcher.ChannelProperty>().firstOrNull()?.let { cp ->
                 cp.minImportance?.let { imp ->
-                    val idx = importanceOptions.indexOfFirst { it.value == imp }
-                    if (idx >= 0) {
-                        selectedImportance = imp
-                        dropdownMinImportance.setText(importanceOptions[idx].label, false)
-                    }
+                    addFieldPredicateRow(
+                        context, containerFieldPredicates, fieldPredicateRows,
+                        Matcher.Field("importance", FieldOp.GTE, imp.toString())
+                    )
                 }
                 cp.groupId?.let { editGroupId.setText(it) }
             }
@@ -717,8 +696,8 @@ object FilterRuleDialogHelper {
             }
 
             val gid = editGroupId.text?.toString()?.trim()?.ifEmpty { null }
-            if (selectedImportance != null || gid != null) {
-                matchers.add(Matcher.ChannelProperty(minImportance = selectedImportance, groupId = gid))
+            if (gid != null) {
+                matchers.add(Matcher.ChannelProperty(minImportance = null, groupId = gid))
             }
 
             // Flags matcher
