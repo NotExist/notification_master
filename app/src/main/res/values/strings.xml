@@ -372,9 +372,12 @@
     <string name="filter_list_order_post_desc">發佈時間倒序</string>
     <string name="filter_list_order_post_asc">發佈時間正序</string>
     <string name="filter_list_order_capture_desc">擷取時間倒序</string>
+    <string name="filter_list_order_capture_asc">擷取時間正序</string>
+    <string name="filter_list_order_event_desc">事件時間倒序</string>
+    <string name="filter_list_order_event_asc">事件時間正序</string>
 
-    <!-- 加入條件（FieldMatcher） -->
-    <string name="filter_section_field_predicates">加入條件</string>
+    <!-- 加入條件（FieldMatcher）— 涵蓋 priority/importance/visibility 等通知屬性 -->
+    <string name="filter_section_field_predicates">屬性條件</string>
     <string name="filter_add_field_predicate">+ 條件</string>
     <string name="filter_field_label">欄位</string>
     <string name="filter_op_label">運算子</string>

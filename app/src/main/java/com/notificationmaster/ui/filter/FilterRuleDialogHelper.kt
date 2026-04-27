@@ -456,13 +456,20 @@ object FilterRuleDialogHelper {
             layoutActionSettings.visibility = View.GONE
             layoutListFilterSettings.visibility = View.VISIBLE
 
-            // OrderBy dropdown
+            // OrderBy dropdown（發佈/擷取/事件時間 × 正反）
             val orderLabels = listOf(
                 context.getString(R.string.filter_list_order_post_desc),
                 context.getString(R.string.filter_list_order_post_asc),
-                context.getString(R.string.filter_list_order_capture_desc)
+                context.getString(R.string.filter_list_order_capture_desc),
+                context.getString(R.string.filter_list_order_capture_asc),
+                context.getString(R.string.filter_list_order_event_desc),
+                context.getString(R.string.filter_list_order_event_asc)
             )
-            val orderValues = listOf(OrderBy.PostTimeDesc, OrderBy.PostTimeAsc, OrderBy.CaptureTimeDesc)
+            val orderValues = listOf(
+                OrderBy.PostTimeDesc, OrderBy.PostTimeAsc,
+                OrderBy.CaptureTimeDesc, OrderBy.CaptureTimeAsc,
+                OrderBy.EventTimeDesc, OrderBy.EventTimeAsc
+            )
             dropdownListOrder.setAdapter(ArrayAdapter(context, android.R.layout.simple_dropdown_item_1line, orderLabels))
             val initOrderIdx = orderValues.indexOf(existingWidgetListFilter?.orderBy ?: OrderBy.PostTimeDesc).coerceAtLeast(0)
             dropdownListOrder.setText(orderLabels[initOrderIdx], false)
@@ -877,9 +884,16 @@ object FilterRuleDialogHelper {
                         val orderLabels = listOf(
                             context.getString(R.string.filter_list_order_post_desc),
                             context.getString(R.string.filter_list_order_post_asc),
-                            context.getString(R.string.filter_list_order_capture_desc)
+                            context.getString(R.string.filter_list_order_capture_desc),
+                            context.getString(R.string.filter_list_order_capture_asc),
+                            context.getString(R.string.filter_list_order_event_desc),
+                            context.getString(R.string.filter_list_order_event_asc)
                         )
-                        val orderValues = listOf(OrderBy.PostTimeDesc, OrderBy.PostTimeAsc, OrderBy.CaptureTimeDesc)
+                        val orderValues = listOf(
+                            OrderBy.PostTimeDesc, OrderBy.PostTimeAsc,
+                            OrderBy.CaptureTimeDesc, OrderBy.CaptureTimeAsc,
+                            OrderBy.EventTimeDesc, OrderBy.EventTimeAsc
+                        )
                         val orderIdx = orderLabels.indexOf(dropdownListOrder.text?.toString()).coerceAtLeast(0)
                         val limit = editListLimit.text?.toString()?.trim()?.toIntOrNull()
                         val listFilter = RuleAction.ListFilter(
@@ -1162,7 +1176,7 @@ object FilterRuleDialogHelper {
     // === Field 條件 row（任意 NotificationEntity column predicate） ===
 
     private class FieldPredicateRow(
-        val rootView: LinearLayout,
+        val rootView: View,
         private val fieldDropdown: MaterialAutoCompleteTextView,
         private val opDropdown: MaterialAutoCompleteTextView,
         private val valueEdit: TextInputEditText,
@@ -1181,6 +1195,11 @@ object FilterRuleDialogHelper {
         }
     }
 
+    /**
+     * 加入一筆條件 row，使用 MaterialCardView 兩列佈局：
+     * - 第 1 列：欄位 dropdown + 移除按鈕
+     * - 第 2 列：運算子 dropdown + 值 input（weight 1:1.5）
+     */
     private fun addFieldPredicateRow(
         context: Context,
         container: LinearLayout,
@@ -1189,22 +1208,35 @@ object FilterRuleDialogHelper {
     ) {
         val density = context.resources.displayMetrics.density
         val pad = (8 * density).toInt()
+        val cardPad = (12 * density).toInt()
 
-        val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
+        val card = com.google.android.material.card.MaterialCardView(context).apply {
+            cardElevation = 0f
+            strokeWidth = (1 * density).toInt()
+            strokeColor = com.google.android.material.color.MaterialColors.getColor(
+                this, com.google.android.material.R.attr.colorOutlineVariant, 0
+            )
+            setContentPadding(cardPad, cardPad, cardPad, cardPad)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = pad }
         }
 
+        val outer = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        card.addView(outer)
+
+        // === 第 1 列：欄位 + 移除按鈕 ===
+        val row1 = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
         val fieldKeys = FieldWhitelist.fields.keys.toList()
         val fieldLabels = fieldKeys.map { fieldDisplayName(context, it) }
-
         val fieldLayout = TextInputLayout(
             context, null, com.google.android.material.R.attr.textInputOutlinedExposedDropdownMenuStyle
         ).apply {
             hint = context.getString(R.string.filter_field_label)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.4f)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         val fieldDropdown = MaterialAutoCompleteTextView(context).apply {
             inputType = android.text.InputType.TYPE_NULL
@@ -1215,13 +1247,35 @@ object FilterRuleDialogHelper {
         }
         fieldLayout.addView(fieldDropdown)
 
+        val removeBtn = android.widget.ImageButton(context).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            val outValue = android.util.TypedValue()
+            context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true)
+            setBackgroundResource(outValue.resourceId)
+            layoutParams = LinearLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt()).apply {
+                marginStart = pad
+            }
+            contentDescription = context.getString(R.string.filter_add_field_predicate)
+        }
+        row1.addView(fieldLayout)
+        row1.addView(removeBtn)
+
+        // === 第 2 列：運算子 + 值 ===
+        val row2 = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            (layoutParams as? LinearLayout.LayoutParams ?: LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            )).also {
+                it.topMargin = pad
+                layoutParams = it
+            }
+        }
         val opLayout = TextInputLayout(
             context, null, com.google.android.material.R.attr.textInputOutlinedExposedDropdownMenuStyle
         ).apply {
             hint = context.getString(R.string.filter_op_label)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f).apply {
-                marginStart = pad / 2
-            }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         val opLabels = FieldOp.entries.map { it.name }
         val opDropdown = MaterialAutoCompleteTextView(context).apply {
@@ -1231,13 +1285,12 @@ object FilterRuleDialogHelper {
             setText(prefill?.op?.name ?: FieldOp.EQ.name, false)
         }
         opLayout.addView(opDropdown)
-
         val valueLayout = TextInputLayout(
-            context, null, com.google.android.material.R.attr.textInputOutlinedDenseStyle
+            context, null, com.google.android.material.R.attr.textInputOutlinedStyle
         ).apply {
             hint = context.getString(R.string.filter_value_label)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.2f).apply {
-                marginStart = pad / 2
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.5f).apply {
+                marginStart = pad
             }
         }
         val valueEdit = TextInputEditText(context).apply {
@@ -1245,27 +1298,18 @@ object FilterRuleDialogHelper {
             maxLines = 1
         }
         valueLayout.addView(valueEdit)
+        row2.addView(opLayout)
+        row2.addView(valueLayout)
 
-        val removeBtn = android.widget.ImageButton(context).apply {
-            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            background = null
-            layoutParams = LinearLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt()).apply {
-                marginStart = pad / 2
-            }
-            contentDescription = context.getString(R.string.filter_add_field_predicate)
-        }
+        outer.addView(row1)
+        outer.addView(row2)
 
-        row.addView(fieldLayout)
-        row.addView(opLayout)
-        row.addView(valueLayout)
-        row.addView(removeBtn)
-
-        val rowObj = FieldPredicateRow(row, fieldDropdown, opDropdown, valueEdit, fieldKeys, fieldLabels)
+        val rowObj = FieldPredicateRow(card, fieldDropdown, opDropdown, valueEdit, fieldKeys, fieldLabels)
         rows.add(rowObj)
-        container.addView(row)
+        container.addView(card)
 
         removeBtn.setOnClickListener {
-            container.removeView(row)
+            container.removeView(card)
             rows.remove(rowObj)
         }
     }

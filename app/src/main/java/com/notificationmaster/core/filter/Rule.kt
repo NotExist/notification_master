@@ -33,7 +33,11 @@ enum class ActionType {
 /**
  * 列表排序方式（給 [RuleAction.ListFilter] 使用）
  */
-enum class OrderBy { PostTimeDesc, PostTimeAsc, CaptureTimeDesc;
+enum class OrderBy {
+    PostTimeDesc, PostTimeAsc,
+    CaptureTimeDesc, CaptureTimeAsc,
+    EventTimeDesc, EventTimeAsc;
+
     companion object {
         fun fromName(name: String): OrderBy = entries.firstOrNull { it.name == name } ?: PostTimeDesc
     }
