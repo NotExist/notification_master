@@ -225,7 +225,7 @@
     <string name="desc_importance">系統判定的通知重要性（API 26+），決定是否發聲、是否 heads-up、是否顯示。\n\nNONE(0)=不顯示\nMIN(1)=靜音，不在狀態列\nLOW(2)=靜音，在狀態列\nDEFAULT(3)=發聲\nHIGH(4)=發聲 + heads-up\nMAX(5)=同 HIGH</string>
     <string name="desc_channel_id">App 建立的通知頻道 ID，同一 App 的不同類型通知通常使用不同頻道。使用者可在系統設定中對各頻道獨立調整行為。</string>
     <string name="desc_channel_name">頻道顯示名稱，由 App 在建立頻道時設定。此值從 Ranking 取得，若首次記錄時不可用則顯示「未取得」，後續事件會自動補齊。</string>
-    <string name="desc_channel_group">頻道所屬的群組 ID，App 可將多個頻道分組管理。</string>
+    <string name="desc_channel_group">頻道所屬的群組 ID，來自 NotificationChannel.getGroup()（API 26+）。同 App 內可將多個 channel 分群（例如 LINE 把「訊息」「通話」分到不同群）。\n\n用於規則篩選時，僅對到達通知的 in-memory 規則（如 SKIP_RECORD）生效，列表篩選（LIST_FILTER）不支援。</string>
     <string name="desc_category">App 宣告的通知分類標記，如 msg（訊息）、email（郵件）、call（來電）、alarm（鬧鐘）等。系統可據此調整行為（如勿擾模式例外）。</string>
     <string name="desc_group_key">App 設定的通知分組鍵，同一 groupKey 的通知在通知面板中折疊為一組。</string>
     <string name="desc_override_group_key">系統覆寫的分組鍵，優先於 App 設定的 groupKey。系統可能自動將同一 App 的通知歸組。</string>
@@ -471,7 +471,6 @@
     <string name="filter_importance_max">最高</string>
     <string name="filter_importance_display">importance ≥ %s</string>
     <string name="filter_group_id">Channel Group ID（選填）</string>
-    <string name="filter_group_id_hint">來自 NotificationChannel.getGroup() (API 26+)；同 App 內 channel 的分群 ID（如 LINE 的「訊息」群、「通話」群）。僅對到達通知的 in-memory 規則（SkipRecord 等）生效，列表篩選不支援。</string>
 
     <!-- Filter Dialog 區段標題 -->
     <string name="filter_section_target">匹配目標</string>
