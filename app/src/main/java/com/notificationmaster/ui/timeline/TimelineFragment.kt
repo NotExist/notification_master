@@ -429,7 +429,9 @@ class TimelineFragment : Fragment() {
             widgetMode = true,
             existingWidgetMatchers = initial.matchers,
             existingWidgetListFilter = existingListFilter,
-            onListFilterReady = { matchers, listFilter ->
+            existingWidgetLabel = null, // Timeline 不使用 widget label 欄位
+            onListFilterReady = { matchers, listFilter, _ ->
+                // _ = widgetLabel（Timeline 不需要）
                 if (editingRuleId != null) {
                     val existing = RuleEngine.getRule(editingRuleId) ?: return@showAddRuleDialog
                     val updated = existing.copy(matchers = matchers, action = listFilter)

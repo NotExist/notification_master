@@ -93,8 +93,9 @@ object FilterRuleDialogHelper {
         widgetMode: Boolean = false,
         existingWidgetMatchers: List<Matcher>? = null,
         existingWidgetListFilter: RuleAction.ListFilter? = null,
+        existingWidgetLabel: String? = null,
         onMatchersReady: ((List<Matcher>) -> Unit)? = null,
-        onListFilterReady: ((List<Matcher>, RuleAction.ListFilter) -> Unit)? = null,
+        onListFilterReady: ((List<Matcher>, RuleAction.ListFilter, String) -> Unit)? = null,
         onWidgetCancelled: (() -> Unit)? = null
     ) {
         val isEditMode = existingRule != null
@@ -431,6 +432,10 @@ object FilterRuleDialogHelper {
             updateEventTypeAvailability(effectiveActionType)
         }
 
+        // === Widget 標題（widgetMode 用） ===
+        val layoutWidgetLabel = dialogView.findViewById<TextInputLayout>(R.id.layout_widget_label)
+        val editWidgetLabel = dialogView.findViewById<TextInputEditText>(R.id.edit_widget_label)
+
         // === ListFilter 顯示控制（widgetMode 用） ===
         val layoutListFilterSettings = dialogView.findViewById<LinearLayout>(R.id.layout_list_filter_settings)
         val dropdownListOrder = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.dropdown_list_order)
@@ -455,6 +460,11 @@ object FilterRuleDialogHelper {
             containerEventTypes.visibility = View.GONE
             layoutActionSettings.visibility = View.GONE
             layoutListFilterSettings.visibility = View.VISIBLE
+            // widget label 欄位只在 widget 設定情境顯示（Timeline 編 rule 時呼叫端傳 null）
+            if (existingWidgetLabel != null) {
+                layoutWidgetLabel.visibility = View.VISIBLE
+                editWidgetLabel.setText(existingWidgetLabel)
+            }
 
             // OrderBy dropdown（發佈/擷取/事件時間 × 正反）
             val orderLabels = listOf(
@@ -901,7 +911,8 @@ object FilterRuleDialogHelper {
                             limit = limit,
                             deduplicate = switchListDedup.isChecked
                         )
-                        onListFilterReady.invoke(matchers, listFilter)
+                        val widgetLabel = editWidgetLabel.text?.toString()?.trim().orEmpty()
+                        onListFilterReady.invoke(matchers, listFilter, widgetLabel)
                     } else {
                         onMatchersReady?.invoke(matchers)
                     }

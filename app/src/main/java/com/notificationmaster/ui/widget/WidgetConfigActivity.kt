@@ -5,8 +5,6 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
 import com.notificationmaster.R
 import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.core.filter.Matcher
@@ -18,18 +16,16 @@ import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 
 /**
- * Widget 設定 Activity（Plan D + 後續調整）
+ * Widget 設定 Activity
  *
- * widget 是「呈現某個 LIST_FILTER rule」的容器，本身有獨立 label。
+ * widget = 「呈現某個 LIST_FILTER rule」的容器；本身有獨立 label。
  *
- * 流程（新建）：
- * 1. onCreate → showRuleChooser：列出所有 LIST_FILTER rules（內建 + user-defined）+
- *    「自訂篩選」選項
- * 2. 選 rule → showLabelDialog（預填 rule 顯示名）→ bindAndFinish
- * 3. 選自訂 → openEditor widgetMode → 編輯確認 → 詢問 rule 名稱 → 建 rule →
- *    showLabelDialog → bindAndFinish
- *
- * 重設既有 widget：showRuleChooser 預選當前綁定 rule（同樣流程）
+ * 流程：
+ * 1. onCreate → showRuleChooser：列出所有 LIST_FILTER rules + 「自訂篩選…」
+ * 2. 選 rule → 進編輯器（matchers/listFilter 預填、widget label 預填顯示名）
+ * 3. 選自訂 → 進編輯器（空 matchers、預設 ListFilter、widget label 預填「自訂篩選」）
+ * 4. 編輯器確認 → 若 matchers/listFilter 沒變 → 直接 bind；變了 → 建新 rule
+ *    (rule.name = widget label) → bind
  *
  * 透明 theme，所有 UI 走 dialog；本 Activity 不顯示自身 contentView。
  */
@@ -77,10 +73,13 @@ class WidgetConfigActivity : AppCompatActivity() {
             .setSingleChoiceItems(labels.toTypedArray<CharSequence>(), initialIdx) { dlg, which ->
                 dlg.dismiss()
                 if (which == customIndex) {
-                    openEditor(initialRule = null)
+                    openEditor(initialRule = null, defaultLabel = getString(R.string.widget_label_default_custom))
                 } else {
                     val rule = rules[which]
-                    showLabelDialog(rule, defaultLabel = ruleDisplayLabel(rule))
+                    val currentLabel = AppPreferences.getWidgetLabel(this, appWidgetId)
+                    val defaultLabel = if (preselectedRuleId == rule.id && currentLabel != null)
+                        currentLabel else ruleDisplayLabel(rule)
+                    openEditor(initialRule = rule, defaultLabel = defaultLabel)
                 }
             }
             .setNegativeButton(android.R.string.cancel) { _, _ -> finish() }
@@ -88,15 +87,16 @@ class WidgetConfigActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun openEditor(initialRule: Rule?) {
+    private fun openEditor(initialRule: Rule?, defaultLabel: String) {
         val existingListFilter = initialRule?.action as? RuleAction.ListFilter
         FilterRuleDialogHelper.showAddRuleDialog(
             context = this,
             widgetMode = true,
             existingWidgetMatchers = initialRule?.matchers ?: emptyList(),
             existingWidgetListFilter = existingListFilter,
-            onListFilterReady = { matchers, listFilter ->
-                handleListFilterReady(matchers, listFilter, initialRule)
+            existingWidgetLabel = defaultLabel,
+            onListFilterReady = { matchers, listFilter, widgetLabel ->
+                handleListFilterReady(matchers, listFilter, widgetLabel, initialRule, defaultLabel)
             },
             onWidgetCancelled = { showRuleChooser(initialRule?.id) }
         )
@@ -104,47 +104,28 @@ class WidgetConfigActivity : AppCompatActivity() {
 
     /**
      * 編輯器確認後：
-     * - matchers + action 與 initialRule 相同 → 直接綁此 rule
-     * - 否則 → 詢問新 rule 名稱建立 user-defined rule（避免改動既存 rule 影響其他 widget）
+     * - matchers + action 與 initialRule 相同 → 直接綁此 rule，套用 user 輸入的 label
+     * - 否則 → 建新 user-defined rule（rule.name 用 widgetLabel；若 widgetLabel 空就 deriveLabel）
      */
     private fun handleListFilterReady(
         matchers: List<Matcher>,
         listFilter: RuleAction.ListFilter,
-        initialRule: Rule?
+        widgetLabel: String,
+        initialRule: Rule?,
+        defaultLabel: String
     ) {
+        val effectiveLabel = widgetLabel.ifEmpty { defaultLabel }
         val unchanged = initialRule != null
             && matchers == initialRule.matchers
             && listFilter == initialRule.action
         if (unchanged && initialRule != null) {
-            showLabelDialog(initialRule, defaultLabel = ruleDisplayLabel(initialRule))
+            bindAndFinish(initialRule, effectiveLabel)
             return
         }
-        promptRuleName(initialRule, matchers, listFilter)
-    }
-
-    /** 建立新 rule 流程：先詢問 rule 名稱，建好後再進 widget label 設定 */
-    private fun promptRuleName(initialRule: Rule?, matchers: List<Matcher>, listFilter: RuleAction.ListFilter) {
-        val defaultName = initialRule?.let { ruleDisplayLabel(it) } ?: deriveLabel(matchers)
-        showInputDialog(
-            titleRes = R.string.preset_save_title,
-            hintRes = R.string.preset_save_name_hint,
-            defaultText = defaultName
-        ) { name ->
-            val rule = Rule(name = name.ifEmpty { defaultName }, matchers = matchers, action = listFilter)
-            RuleRepository.addRule(this, rule)
-            showLabelDialog(rule, defaultLabel = name.ifEmpty { defaultName })
-        }
-    }
-
-    /** Widget 標題輸入；標題與 rule.name 解耦 */
-    private fun showLabelDialog(rule: Rule, defaultLabel: String) {
-        showInputDialog(
-            titleRes = R.string.widget_label_dialog_title,
-            hintRes = R.string.widget_label_hint,
-            defaultText = defaultLabel
-        ) { label ->
-            bindAndFinish(rule, label.ifEmpty { defaultLabel })
-        }
+        val ruleName = effectiveLabel.ifEmpty { deriveLabel(matchers) }
+        val rule = Rule(name = ruleName, matchers = matchers, action = listFilter)
+        RuleRepository.addRule(this, rule)
+        bindAndFinish(rule, effectiveLabel)
     }
 
     private fun bindAndFinish(rule: Rule, label: String) {
@@ -167,34 +148,6 @@ class WidgetConfigActivity : AppCompatActivity() {
 
         setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
         finish()
-    }
-
-    private fun showInputDialog(
-        titleRes: Int,
-        hintRes: Int,
-        defaultText: String,
-        onConfirm: (String) -> Unit
-    ) {
-        val editText = TextInputEditText(this).apply {
-            setText(defaultText)
-            setSelection(text?.length ?: 0)
-        }
-        val layout = TextInputLayout(
-            this, null, com.google.android.material.R.attr.textInputOutlinedStyle
-        ).apply {
-            hint = getString(hintRes)
-            setPadding(48, 16, 48, 0)
-            addView(editText)
-        }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(titleRes)
-            .setView(layout)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                onConfirm(editText.text?.toString()?.trim().orEmpty())
-            }
-            .setNegativeButton(android.R.string.cancel) { _, _ -> finish() }
-            .setOnCancelListener { finish() }
-            .show()
     }
 
     /** 內建 rule 走 i18n 顯示名（與 Timeline chip / Shortcut 一致） */

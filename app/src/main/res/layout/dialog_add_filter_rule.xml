@@ -10,6 +10,24 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
+        <!-- Widget 標題（widgetMode 顯示在最頂端） -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/layout_widget_label"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/widget_label_dialog_title"
+            android:layout_marginBottom="12dp"
+            android:visibility="gone">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/edit_widget_label"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
+
         <!-- Category 選擇（僅在 category 未指定時顯示） -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/layout_category"
