@@ -569,6 +569,11 @@
     <string name="widget_type_dismissed">已移除通知</string>
     <string name="widget_type_custom">自訂篩選…</string>
     <string name="widget_label_dialog_title">Widget 顯示名稱</string>
+    <string name="widget_label_hint">Widget 標題（顯示在 widget 上方，與 rule 名稱獨立）</string>
+
+    <!-- Widget 設定流程：rule 選擇器 -->
+    <string name="widget_chooser_title">選擇要呈現的列表篩選</string>
+    <string name="widget_chooser_custom">自訂篩選…</string>
     <string name="widget_label_default_flags">旗標篩選</string>
     <string name="widget_label_default_custom">自訂篩選</string>
 </resources>

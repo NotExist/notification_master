@@ -18,14 +18,18 @@ import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 
 /**
- * Widget 設定 Activity（Plan D — 直接進 RuleEngine widgetMode 編輯器）
+ * Widget 設定 Activity（Plan D + 後續調整）
  *
- * 流程：
- * 1. onCreate → 直接打開 FilterRuleDialogHelper.widgetMode 編輯 matchers
- *    （重設模式：以既有 widget 綁定的 rule.matchers 為初值）
- * 2. 確認後輸入 rule 顯示名稱 → 建立 LIST_FILTER Rule → 存入 RuleEngine
- * 3. 將 rule.id 寫入 widget_rule_id_<appWidgetId> SharedPreferences
- * 4. 觸發 widget 重繪
+ * widget 是「呈現某個 LIST_FILTER rule」的容器，本身有獨立 label。
+ *
+ * 流程（新建）：
+ * 1. onCreate → showRuleChooser：列出所有 LIST_FILTER rules（內建 + user-defined）+
+ *    「自訂篩選」選項
+ * 2. 選 rule → showLabelDialog（預填 rule 顯示名）→ bindAndFinish
+ * 3. 選自訂 → openEditor widgetMode → 編輯確認 → 詢問 rule 名稱 → 建 rule →
+ *    showLabelDialog → bindAndFinish
+ *
+ * 重設既有 widget：showRuleChooser 預選當前綁定 rule（同樣流程）
  *
  * 透明 theme，所有 UI 走 dialog；本 Activity 不顯示自身 contentView。
  */
@@ -54,16 +58,34 @@ class WidgetConfigActivity : AppCompatActivity() {
 
         RuleRepository.load(this)
 
-        // 預選：requestPin 帶入 → 重新設定既有綁定 → 預設 RecentAudible 內建
         val preselectedRuleId = intent?.getStringExtra(EXTRA_PRESELECTED_RULE_ID)
             ?: AppPreferences.getWidgetRuleId(this, appWidgetId)
-            ?: RuleRepository.builtInRuleIdAudible()
-        val preselected = RuleEngine.getRule(preselectedRuleId)
-        // 若 rule 已被刪除（user 手動清過），fallback 內建
-        val initialRule = preselected
-            ?: RuleEngine.getRule(RuleRepository.builtInRuleIdAudible())
+        showRuleChooser(preselectedRuleId)
+    }
 
-        openEditor(initialRule)
+    private fun showRuleChooser(preselectedRuleId: String?) {
+        val rules = RuleEngine.getListFilterRules()
+            .sortedWith(compareByDescending<Rule> { it.isBuiltIn }.thenBy { it.createdAt })
+        val labels = rules.map { ruleDisplayLabel(it) } + getString(R.string.widget_chooser_custom)
+        val customIndex = rules.size
+        val initialIdx = preselectedRuleId
+            ?.let { id -> rules.indexOfFirst { it.id == id }.takeIf { it >= 0 } }
+            ?: 0
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.widget_chooser_title)
+            .setSingleChoiceItems(labels.toTypedArray<CharSequence>(), initialIdx) { dlg, which ->
+                dlg.dismiss()
+                if (which == customIndex) {
+                    openEditor(initialRule = null)
+                } else {
+                    val rule = rules[which]
+                    showLabelDialog(rule, defaultLabel = ruleDisplayLabel(rule))
+                }
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> finish() }
+            .setOnCancelListener { finish() }
+            .show()
     }
 
     private fun openEditor(initialRule: Rule?) {
@@ -76,15 +98,14 @@ class WidgetConfigActivity : AppCompatActivity() {
             onListFilterReady = { matchers, listFilter ->
                 handleListFilterReady(matchers, listFilter, initialRule)
             },
-            onWidgetCancelled = { finish() }
+            onWidgetCancelled = { showRuleChooser(initialRule?.id) }
         )
     }
 
     /**
      * 編輯器確認後：
-     * - 若 initialRule 是內建 rule → 建立新 user-defined rule（不能改內建）
-     * - 若 initialRule 是 user rule 且 matchers + action 不變 → 直接綁此 rule
-     * - 否則 → 詢問新名稱建立新 rule（避免改動既存 rule 影響其他 widget）
+     * - matchers + action 與 initialRule 相同 → 直接綁此 rule
+     * - 否則 → 詢問新 rule 名稱建立 user-defined rule（避免改動既存 rule 影響其他 widget）
      */
     private fun handleListFilterReady(
         matchers: List<Matcher>,
@@ -95,44 +116,40 @@ class WidgetConfigActivity : AppCompatActivity() {
             && matchers == initialRule.matchers
             && listFilter == initialRule.action
         if (unchanged && initialRule != null) {
-            bindAndFinish(initialRule)
+            showLabelDialog(initialRule, defaultLabel = ruleDisplayLabel(initialRule))
             return
         }
-        promptName(initialRule, matchers, listFilter)
+        promptRuleName(initialRule, matchers, listFilter)
     }
 
-    private fun promptName(initialRule: Rule?, matchers: List<Matcher>, listFilter: RuleAction.ListFilter) {
-        // 預填命名：內建 rule 用 i18n 名（避免顯示內部識別字串如「RecentAudible」）
+    /** 建立新 rule 流程：先詢問 rule 名稱，建好後再進 widget label 設定 */
+    private fun promptRuleName(initialRule: Rule?, matchers: List<Matcher>, listFilter: RuleAction.ListFilter) {
         val defaultName = initialRule?.let { ruleDisplayLabel(it) } ?: deriveLabel(matchers)
-        val editText = TextInputEditText(this).apply {
-            setText(defaultName)
-            setSelection(text?.length ?: 0)
+        showInputDialog(
+            titleRes = R.string.preset_save_title,
+            hintRes = R.string.preset_save_name_hint,
+            defaultText = defaultName
+        ) { name ->
+            val rule = Rule(name = name.ifEmpty { defaultName }, matchers = matchers, action = listFilter)
+            RuleRepository.addRule(this, rule)
+            showLabelDialog(rule, defaultLabel = name.ifEmpty { defaultName })
         }
-        val layout = TextInputLayout(
-            this, null, com.google.android.material.R.attr.textInputOutlinedStyle
-        ).apply {
-            hint = getString(R.string.preset_save_name_hint)
-            setPadding(48, 16, 48, 0)
-            addView(editText)
-        }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.preset_save_title)
-            .setView(layout)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                val name = editText.text?.toString()?.trim()?.ifEmpty { defaultName } ?: defaultName
-                val rule = Rule(name = name, matchers = matchers, action = listFilter)
-                RuleRepository.addRule(this, rule)
-                bindAndFinish(rule)
-            }
-            .setNegativeButton(android.R.string.cancel) { _, _ -> finish() }
-            .setOnCancelListener { finish() }
-            .show()
     }
 
-    private fun bindAndFinish(rule: Rule) {
+    /** Widget 標題輸入；標題與 rule.name 解耦 */
+    private fun showLabelDialog(rule: Rule, defaultLabel: String) {
+        showInputDialog(
+            titleRes = R.string.widget_label_dialog_title,
+            hintRes = R.string.widget_label_hint,
+            defaultText = defaultLabel
+        ) { label ->
+            bindAndFinish(rule, label.ifEmpty { defaultLabel })
+        }
+    }
+
+    private fun bindAndFinish(rule: Rule, label: String) {
         AppPreferences.setWidgetRuleIdSync(this, appWidgetId, rule.id)
-        AppPreferences.setWidgetLabelSync(this, appWidgetId, ruleDisplayLabel(rule))
-        // 清除舊架構 keys
+        AppPreferences.setWidgetLabelSync(this, appWidgetId, label)
         AppPreferences.removeWidgetLegacyKeys(this, appWidgetId)
 
         val awm = AppWidgetManager.getInstance(this)
@@ -152,7 +169,35 @@ class WidgetConfigActivity : AppCompatActivity() {
         finish()
     }
 
-    /** 內建 rule 走 i18n 顯示名（與 Timeline chip / Shortcut 一致），其他 rule 用 name 或推導 */
+    private fun showInputDialog(
+        titleRes: Int,
+        hintRes: Int,
+        defaultText: String,
+        onConfirm: (String) -> Unit
+    ) {
+        val editText = TextInputEditText(this).apply {
+            setText(defaultText)
+            setSelection(text?.length ?: 0)
+        }
+        val layout = TextInputLayout(
+            this, null, com.google.android.material.R.attr.textInputOutlinedStyle
+        ).apply {
+            hint = getString(hintRes)
+            setPadding(48, 16, 48, 0)
+            addView(editText)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(titleRes)
+            .setView(layout)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                onConfirm(editText.text?.toString()?.trim().orEmpty())
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> finish() }
+            .setOnCancelListener { finish() }
+            .show()
+    }
+
+    /** 內建 rule 走 i18n 顯示名（與 Timeline chip / Shortcut 一致） */
     private fun ruleDisplayLabel(rule: Rule): String = when (rule.id) {
         RuleRepository.builtInRuleIdAudible() -> getString(R.string.preset_recent_audible)
         RuleRepository.builtInRuleIdHeadsup() -> getString(R.string.preset_recent_headsup)
