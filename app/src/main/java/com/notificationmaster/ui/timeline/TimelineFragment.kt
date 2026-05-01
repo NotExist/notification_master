@@ -76,6 +76,8 @@ class TimelineFragment : Fragment() {
     private var suppressChipListener = false
     /** 套 rule 前 user 自選的去重狀態，rule 取消後還原 */
     private var userDedupBeforeRule: Boolean? = null
+    /** 切換篩選後，主資料 Flow 第一筆 emission 尚未到達；期間抑制其他 flow 觸發的 UI 更新 */
+    private var awaitingInitialData: Boolean = false
 
     private var currentFilterText = ""
     private var allNotifications: List<NotificationEntity> = emptyList()
@@ -540,8 +542,10 @@ class TimelineFragment : Fragment() {
     private fun loadNotifications() {
         loadJob?.cancel()
 
+        awaitingInitialData = true
         todayNotifications = emptyList()
         historicalDays.clear()
+        allNotifications = emptyList()
         isLoadingMore = false
         hasReachedEnd = false
         removedIds = emptySet()
@@ -572,7 +576,8 @@ class TimelineFragment : Fragment() {
                         val newSet = ids.toSet()
                         if (removedIds != newSet) {
                             removedIds = newSet
-                            applyFilterAndDisplay()
+                            // 主資料 Flow 第一筆未到時不要先 trigger UI（會用舊 allNotifications）
+                            if (!awaitingInitialData) applyFilterAndDisplay()
                         }
                     }
                 }
@@ -603,6 +608,7 @@ class TimelineFragment : Fragment() {
                     if (_binding == null) return@collectLatest
                     _binding?.swipeRefresh?.isRefreshing = false
                     todayNotifications = liveNotifications
+                    awaitingInitialData = false
                     combineAndDisplay()
                 }
             } else {
@@ -611,6 +617,7 @@ class TimelineFragment : Fragment() {
                     if (_binding == null) return@collectLatest
                     _binding?.swipeRefresh?.isRefreshing = false
                     allNotifications = notifications
+                    awaitingInitialData = false
                     applyFilterAndDisplay()
                 }
             }
