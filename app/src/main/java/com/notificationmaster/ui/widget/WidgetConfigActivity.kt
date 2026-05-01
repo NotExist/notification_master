@@ -102,7 +102,8 @@ class WidgetConfigActivity : AppCompatActivity() {
     }
 
     private fun promptName(initialRule: Rule?, matchers: List<Matcher>, listFilter: RuleAction.ListFilter) {
-        val defaultName = initialRule?.name ?: deriveLabel(matchers)
+        // 預填命名：內建 rule 用 i18n 名（避免顯示內部識別字串如「RecentAudible」）
+        val defaultName = initialRule?.let { ruleDisplayLabel(it) } ?: deriveLabel(matchers)
         val editText = TextInputEditText(this).apply {
             setText(defaultName)
             setSelection(text?.length ?: 0)
@@ -130,7 +131,7 @@ class WidgetConfigActivity : AppCompatActivity() {
 
     private fun bindAndFinish(rule: Rule) {
         AppPreferences.setWidgetRuleIdSync(this, appWidgetId, rule.id)
-        AppPreferences.setWidgetLabelSync(this, appWidgetId, rule.name ?: deriveLabel(rule.matchers))
+        AppPreferences.setWidgetLabelSync(this, appWidgetId, ruleDisplayLabel(rule))
         // 清除舊架構 keys
         AppPreferences.removeWidgetLegacyKeys(this, appWidgetId)
 
@@ -149,6 +150,14 @@ class WidgetConfigActivity : AppCompatActivity() {
 
         setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
         finish()
+    }
+
+    /** 內建 rule 走 i18n 顯示名（與 Timeline chip / Shortcut 一致），其他 rule 用 name 或推導 */
+    private fun ruleDisplayLabel(rule: Rule): String = when (rule.id) {
+        RuleRepository.builtInRuleIdAudible() -> getString(R.string.preset_recent_audible)
+        RuleRepository.builtInRuleIdHeadsup() -> getString(R.string.preset_recent_headsup)
+        RuleRepository.builtInRuleIdDismissed() -> getString(R.string.preset_recent_dismissed)
+        else -> rule.name ?: deriveLabel(rule.matchers)
     }
 
     private fun deriveLabel(matchers: List<Matcher>): String {
