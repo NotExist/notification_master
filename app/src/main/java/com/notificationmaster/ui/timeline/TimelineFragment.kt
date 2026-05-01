@@ -231,7 +231,8 @@ class TimelineFragment : Fragment() {
         }
         renderRuleChips()
         binding.chipAddPreset.setOnClickListener {
-            openListFilterEditor(initial = coreSpec, editingRuleId = null)
+            // 「+ 自訂篩選」永遠是空白起點，不受當前 active rule / 去重 chip 影響
+            openListFilterEditor(initial = EventFilterSpec.All, editingRuleId = null)
         }
     }
 
