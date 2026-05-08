@@ -302,7 +302,12 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(34),
                 supported = sdk >= 34,
                 features = listOf(
-                    FeatureItem("PendingIntent 類型", "識別意圖類型（Activity / Service / Broadcast / FgService）", implemented = true)
+                    FeatureItem("PendingIntent 類型", "識別意圖類型（Activity / Service / Broadcast / FgService）", implemented = true),
+                    FeatureItem(
+                        "BAL Hardening / Activity Launch 限制",
+                        "Android 14 (API 34) 起，跨 UID 透過 PendingIntent 啟動 Activity 預設禁止；呼叫端若不在前景或未顯式授權，target Activity 啟動會被靜默丟棄（PendingIntent.send 不丟例外）。Detail 頁觸發第三方 contentIntent 時已加 ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED 帶 BAL 允許。OEM 自啟動 / 背景活動管理（MIUI / EMUI / OneUI 等）為廠商客製攔截，無法以程式繞過，需引導使用者於系統設定放行該 App 的背景活動權限",
+                        implemented = true
+                    )
                 )
             ),
             ApiFeatureGroup(

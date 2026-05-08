@@ -1249,6 +1249,26 @@ class NotificationDetailFragment : Fragment() {
      * 新增一行 intent 資訊：12dp 圓形狀態指示器 + 文字
      * 綠色 = 快取中（可點擊觸發），灰色 = 已過期
      */
+    /**
+     * 觸發第三方 PendingIntent；API 34+ 帶上 BAL（Background Activity Launch）允許
+     * options 避免被靜默丟棄。`PendingIntent.CanceledException` 由呼叫端處理。
+     *
+     * 注意：BAL 限制是 framework 層級，OEM 自啟動 / 背景活動管理（MIUI / EMUI /
+     * OneUI 等）會額外攔截，無法用程式繞過，需引導使用者放行該 App 的背景活動權限。
+     */
+    @Throws(PendingIntent.CanceledException::class)
+    private fun sendPendingIntentWithBal(ctx: android.content.Context, pi: PendingIntent) {
+        if (android.os.Build.VERSION.SDK_INT >= 34) {
+            val opts = android.app.ActivityOptions.makeBasic()
+                .setPendingIntentBackgroundActivityStartMode(
+                    android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                ).toBundle()
+            pi.send(ctx, 0, null, null, null, null, opts)
+        } else {
+            pi.send()
+        }
+    }
+
     private fun addIntentRow(container: LinearLayout, text: String, pendingIntent: PendingIntent?) {
         val ctx = container.context
         val dp = resources.displayMetrics.density
@@ -1284,11 +1304,10 @@ class NotificationDetailFragment : Fragment() {
             row.setBackgroundResource(typedValue.resourceId)
             row.setOnClickListener {
                 try {
-                    pendingIntent.send()
+                    sendPendingIntentWithBal(ctx, pendingIntent)
                     Toast.makeText(ctx, R.string.intent_triggered, Toast.LENGTH_SHORT).show()
                 } catch (_: PendingIntent.CanceledException) {
                     Toast.makeText(ctx, R.string.intent_send_failed, Toast.LENGTH_SHORT).show()
-                    // 圓點變灰
                     updateDotColor(dot, dotSizePx, false)
                 }
             }
