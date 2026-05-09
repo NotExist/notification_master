@@ -96,6 +96,14 @@
 
         </HorizontalScrollView>
 
+        <!-- 載入進度線（切換 chip / rule 時顯示，主資料 flow 第一筆到後隱藏） -->
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/progress_loading"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:indeterminate="true"
+            android:visibility="gone" />
+
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"

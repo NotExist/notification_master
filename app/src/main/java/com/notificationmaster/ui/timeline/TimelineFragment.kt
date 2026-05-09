@@ -551,6 +551,7 @@ class TimelineFragment : Fragment() {
         removedIds = emptySet()
 
         binding.swipeRefresh.isRefreshing = true
+        binding.progressLoading.visibility = View.VISIBLE
 
         val database = NotificationMasterApp.getInstance().database
         val dao = database.notificationDao()
@@ -607,6 +608,7 @@ class TimelineFragment : Fragment() {
                 dao.query(todaySpec).collectLatest { liveNotifications ->
                     if (_binding == null) return@collectLatest
                     _binding?.swipeRefresh?.isRefreshing = false
+                    _binding?.progressLoading?.visibility = View.GONE
                     todayNotifications = liveNotifications
                     awaitingInitialData = false
                     combineAndDisplay()
@@ -616,6 +618,7 @@ class TimelineFragment : Fragment() {
                 dao.query(coreSpec).collectLatest { notifications ->
                     if (_binding == null) return@collectLatest
                     _binding?.swipeRefresh?.isRefreshing = false
+                    _binding?.progressLoading?.visibility = View.GONE
                     allNotifications = notifications
                     awaitingInitialData = false
                     applyFilterAndDisplay()
@@ -720,8 +723,13 @@ class TimelineFragment : Fragment() {
     private fun refreshCountText(loadedOverride: List<NotificationEntity>? = null) {
         val source = loadedOverride
             ?: filterNotifications(allNotifications, currentFilterText)
-        val loaded = loadedCountForCounter(source)
-        val text = getString(R.string.timeline_count_format_loaded_total, loaded, totalCount)
+        // 載入期間（資料 flow 第一筆未到）loaded 顯示「…」，避免顯示 0 誤導
+        val loadedDisplay: String = if (awaitingInitialData) {
+            getString(R.string.timeline_count_loading_placeholder)
+        } else {
+            loadedCountForCounter(source).toString()
+        }
+        val text = getString(R.string.timeline_count_format_loaded_total_str, loadedDisplay, totalCount)
         (activity as? MainActivity)?.setToolbarCount(text)
     }
 
