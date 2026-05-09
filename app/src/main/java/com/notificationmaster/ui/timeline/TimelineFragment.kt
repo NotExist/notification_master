@@ -729,7 +729,7 @@ class TimelineFragment : Fragment() {
         } else {
             loadedCountForCounter(source).toString()
         }
-        val text = getString(R.string.timeline_count_format_loaded_total_str, loadedDisplay, totalCount)
+        val text = getString(R.string.timeline_count_format_loaded_total, loadedDisplay, totalCount)
         (activity as? MainActivity)?.setToolbarCount(text)
     }
 
