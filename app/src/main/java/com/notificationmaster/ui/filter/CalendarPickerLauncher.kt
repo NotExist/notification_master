@@ -47,12 +47,15 @@ class CalendarPickerLauncher(private val fragment: Fragment) {
     /**
      * 開啟日曆選擇器。若無權限，先彈出說明 dialog 引導使用者授權。
      *
-     * @param onSelected 使用者選定日曆後的 callback（取消時不觸發）
+     * 參數順序對齊 [SoundPickerLauncher.pick] 慣例：onSelected 為最後，
+     * 讓呼叫端用 trailing lambda 不會誤綁到 onCancel。
+     *
      * @param onCancel 取消或拒絕授權時的 callback
+     * @param onSelected 使用者選定日曆後的 callback（取消時不觸發）
      */
     fun pick(
-        onSelected: (CalendarInfo) -> Unit,
-        onCancel: (() -> Unit)? = null
+        onCancel: (() -> Unit)? = null,
+        onSelected: (CalendarInfo) -> Unit
     ) {
         val ctx = fragment.requireContext()
         val exporter = CalendarExporter(ctx)
