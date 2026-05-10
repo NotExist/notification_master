@@ -179,7 +179,7 @@ class RuleTest {
     fun `packageName returns Package matcher value`() {
         val rule = Rule(
             matchers = listOf(Matcher.Package("com.test.app")),
-            action = RuleAction.CalendarExport
+            action = RuleAction.CalendarExport()
         )
         assertEquals("com.test.app", rule.packageName)
     }
@@ -260,10 +260,19 @@ class RuleTest {
     }
 
     @Test
-    fun `CalendarExport action JSON round-trip`() {
-        val a = RuleAction.CalendarExport
-        val restored = RuleAction.fromJson(a.toJson())
+    fun `CalendarExport action JSON round-trip - null calendarId`() {
+        val a = RuleAction.CalendarExport(calendarId = null)
+        val restored = RuleAction.fromJson(a.toJson()) as RuleAction.CalendarExport
         assertEquals(ActionType.CALENDAR_EXPORT, restored.actionType)
+        assertEquals(null, restored.calendarId)
+    }
+
+    @Test
+    fun `CalendarExport action JSON round-trip - with calendarId`() {
+        val a = RuleAction.CalendarExport(calendarId = 42L)
+        val restored = RuleAction.fromJson(a.toJson()) as RuleAction.CalendarExport
+        assertEquals(ActionType.CALENDAR_EXPORT, restored.actionType)
+        assertEquals(42L, restored.calendarId)
     }
 
     @Test

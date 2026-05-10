@@ -231,7 +231,7 @@ class RuleEngineMatchTest {
         RuleEngine.setRulesForTesting(listOf(
             Rule(
                 matchers = listOf(Matcher.Package("com.example.calendar")),
-                action = RuleAction.CalendarExport
+                action = RuleAction.CalendarExport()
             )
         ))
 
@@ -248,7 +248,7 @@ class RuleEngineMatchTest {
                     Matcher.Package("com.example.calendar"),
                     Matcher.Channel("reminders")
                 ),
-                action = RuleAction.CalendarExport
+                action = RuleAction.CalendarExport()
             )
         ))
 
@@ -262,7 +262,7 @@ class RuleEngineMatchTest {
         RuleEngine.setRulesForTesting(listOf(
             Rule(
                 matchers = listOf(Matcher.Package("com.example.calendar")),
-                action = RuleAction.CalendarExport
+                action = RuleAction.CalendarExport()
             )
         ))
 
@@ -618,7 +618,7 @@ class RuleEngineMatchTest {
             ),
             Rule(
                 matchers = listOf(Matcher.Package("com.b")),
-                action = RuleAction.CalendarExport
+                action = RuleAction.CalendarExport()
             ),
             Rule(
                 matchers = listOf(Matcher.Package("com.c")),
@@ -642,7 +642,7 @@ class RuleEngineMatchTest {
         RuleEngine.setRulesForTesting(listOf(
             Rule(
                 matchers = listOf(Matcher.Package("com.example.app")),
-                action = RuleAction.CalendarExport
+                action = RuleAction.CalendarExport()
             )
         ))
         assertFalse(RuleEngine.isAllEmpty())
