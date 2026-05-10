@@ -71,8 +71,13 @@ class NotificationCaptureService : NotificationListenerService() {
     /** 追蹤延遲清除的排程任務，key = notification key */
     private val pendingDismissJobs = ConcurrentHashMap<String, Job>()
 
-    /** 追蹤即時日曆匯出的事件 ID，key = notification key */
-    private val calendarExportMap = ConcurrentHashMap<String, Long>()
+    /**
+     * 追蹤即時日曆匯出的事件 ID，key = notification key，value = (calendarId, eventId) list。
+     *
+     * 一則通知可能同時匹配多條 CALENDAR_EXPORT 規則，每條規則寫入不同日曆 ⇒
+     * 同 notificationKey 對應多筆 (calendarId, eventId)。REMOVED 時對所有 entry 各自更新 endTime。
+     */
+    private val calendarExportMap = ConcurrentHashMap<String, MutableList<Pair<Long, Long>>>()
 
     companion object {
         private const val TAG = "NotificationCapture"
@@ -110,11 +115,7 @@ class NotificationCaptureService : NotificationListenerService() {
         deviceStateCapture = DeviceStateCapture(this)
         mediaExtractor = MediaExtractor(this)
         calendarExporter = CalendarExporter(this)
-        val accName = AppPreferences.getRealtimeCalendarAccountName(this)
-        val accType = AppPreferences.getRealtimeCalendarAccountType(this)
-        if (accName != null && accType != null) {
-            calendarExporter.setTargetAccount(accName, accType)
-        }
+        // 帳號資訊已由 per-rule calendarId 取代全域設定，每次寫入時依日曆即時查詢設定
         alertManager = PersistentAlertManager(this)
         RuleRepository.load(this)
         instance = this
@@ -1018,26 +1019,20 @@ class NotificationCaptureService : NotificationListenerService() {
     }
 
     /**
-     * 回找已匯出的日曆事件 ID（記憶體映射 → CalendarContract 查詢）
-     * @param remove 是否從映射中移除（REMOVED 時為 true）
+     * 為指定 calendarId 設定 exporter 的目標帳號（CALLER_IS_SYNCADAPTER 寫入需要）。
+     * 找不到日曆 → 回傳 false（呼叫端應視為「目標消失」跳過）。
      */
-    /**
-     * REMOVED 溯源：找到最近一筆同 key 的日曆事件 ID 並從 map 移除
-     */
-    private fun resolveCalendarEventIdForRemoval(notificationKey: String): Long {
-        val eventId = calendarExportMap.remove(notificationKey)
-        if (eventId != null) return eventId
-
-        // Process 重啟後 map 為空，fallback 到日曆查詢（取最新一筆）
-        val calendarId = AppPreferences.getRealtimeCalendarId(this)
-        if (calendarId < 0) return -1L
-        return calendarExporter.findEventByNotificationKey(calendarId, notificationKey)
+    private fun applyTargetAccount(calendarId: Long): Boolean {
+        val cal = calendarExporter.getAvailableCalendars().firstOrNull { it.id == calendarId }
+            ?: return false
+        calendarExporter.setTargetAccount(cal.accountName, cal.accountType)
+        return true
     }
 
     /**
-     * 檢查是否需要即時匯出到日曆
-     * 條件：即時匯出已啟用 + CALENDAR_EXPORT 白名單匹配
-     * UPDATED 時更新既有事件內容，不建立重複事件
+     * 檢查是否需要即時匯出到日曆。
+     * 條件：即時匯出總開關啟用 + 至少一條 CALENDAR_EXPORT rule 匹配。
+     * 每條匹配的 rule 各自寫入到自身 calendarId（per-rule calendar）。
      */
     private fun checkRealtimeCalendarExport(
         entity: NotificationEntity,
@@ -1048,44 +1043,43 @@ class NotificationCaptureService : NotificationListenerService() {
             return
         }
 
-        val calendarId = AppPreferences.getRealtimeCalendarId(this)
-        if (calendarId < 0) {
-            CalendarExportLog.log(entity.packageName, "skipped", "invalid calendarId=$calendarId")
+        val matched = RuleEngine.findAllMatchingRules(ActionType.CALENDAR_EXPORT, matchCtx)
+        if (matched.isEmpty()) {
+            CalendarExportLog.log(entity.packageName, "skipped",
+                "no match: ${matchCtx.channelId} event=${matchCtx.eventType}")
             return
         }
 
-        // 每次重新讀取帳號資訊（使用者可能在 Service 運行中變更設定）
-        val accName = AppPreferences.getRealtimeCalendarAccountName(this)
-        val accType = AppPreferences.getRealtimeCalendarAccountType(this)
-        if (accName != null && accType != null) {
-            calendarExporter.setTargetAccount(accName, accType)
-        }
-
-        // 只匯出白名單匹配的通知
-        val whitelistRules = RuleEngine.getRules(ActionType.CALENDAR_EXPORT)
-        if (whitelistRules.isEmpty()) {
-            CalendarExportLog.log(entity.packageName, "skipped", "no rules")
-            return
-        }
-
-        if (!RuleEngine.matches(ActionType.CALENDAR_EXPORT, matchCtx)) {
-            CalendarExportLog.log(entity.packageName, "skipped", "no match: ${matchCtx.channelId} event=${matchCtx.eventType}")
-            return
-        }
-
-        // 一律建立新日曆事件（電話類 App 重用通知 key，不能以 key 判斷是否為「同一事件」）
-        val eventId = calendarExporter.exportSingleNotification(entity, calendarId, ExportDetailLevel.FULL)
-        if (eventId > 0) {
-            calendarExportMap[entity.notificationKey] = eventId  // REMOVED 溯源用（覆寫為最新）
-            CalendarExportLog.log(entity.packageName, "exported", "eventId=$eventId")
-        } else {
-            CalendarExportLog.log(entity.packageName, "failed", "returnValue=$eventId")
+        for (rule in matched) {
+            val targetId = (rule.action as? RuleAction.CalendarExport)?.calendarId
+            if (targetId == null) {
+                CalendarExportLog.log(entity.packageName, "skipped",
+                    "rule ${rule.id}: calendarId not configured")
+                continue
+            }
+            if (!applyTargetAccount(targetId)) {
+                CalendarExportLog.log(entity.packageName, "skipped",
+                    "rule ${rule.id}: target calendar #$targetId not found")
+                continue
+            }
+            // 一律建立新日曆事件（電話類 App 重用通知 key，不能以 key 判斷是否為「同一事件」）
+            val eventId = calendarExporter.exportSingleNotification(entity, targetId, ExportDetailLevel.FULL)
+            if (eventId > 0) {
+                calendarExportMap.getOrPut(entity.notificationKey) { mutableListOf() }
+                    .add(targetId to eventId)
+                CalendarExportLog.log(entity.packageName, "exported",
+                    "rule ${rule.id} cal=$targetId eventId=$eventId")
+            } else {
+                CalendarExportLog.log(entity.packageName, "failed",
+                    "rule ${rule.id} cal=$targetId returnValue=$eventId")
+            }
         }
     }
 
     /**
-     * 通知移除時更新對應日曆事件的結束時間
-     * 輕量級檢查：packageName/channelId 匹配 + EventTypes 包含 REMOVED
+     * 通知移除時更新對應日曆事件的結束時間。
+     * 輕量級檢查：packageName/channelId 匹配 + EventTypes 包含 REMOVED。
+     * 對所有先前匯出（多 calendar）的事件各自更新 endTime。
      */
     private fun checkRealtimeCalendarRemoval(
         notificationKey: String,
@@ -1098,28 +1092,52 @@ class NotificationCaptureService : NotificationListenerService() {
             return
         }
 
-        val eventId = resolveCalendarEventIdForRemoval(notificationKey)
-        if (eventId < 0) {
-            CalendarExportLog.log(packageName, "removal_skipped", "no calendar event found")
-            return
-        }
-
-        // 輕量級規則檢查：只比對 package/channel + EventTypes
-        val shouldUpdate = RuleEngine.getRules(ActionType.CALENDAR_EXPORT).any { rule ->
+        // 取出所有 packageName/channelId 匹配且含 REMOVED 的 CALENDAR_EXPORT rule
+        val applicableRules = RuleEngine.getRules(ActionType.CALENDAR_EXPORT).filter { rule ->
             rule.packageName == packageName &&
-            (rule.channelId == null || rule.channelId == channelId) &&
-            EventType.REMOVED.name in rule.eventTypes
+                (rule.channelId == null || rule.channelId == channelId) &&
+                EventType.REMOVED.name in rule.eventTypes
         }
-        if (!shouldUpdate) {
+        if (applicableRules.isEmpty()) {
             CalendarExportLog.log(packageName, "removal_skipped", "no REMOVED in rule")
             return
         }
 
-        val success = calendarExporter.updateCalendarEventEndTime(eventId, removalTime)
-        if (success) {
-            CalendarExportLog.log(packageName, "end_time_updated", "eventId=$eventId")
+        // 1. 嘗試用記憶體 map 中已記錄的 (calendarId, eventId)
+        val tracked = calendarExportMap.remove(notificationKey).orEmpty()
+
+        // 2. Process 重啟後 map 為空 → 對每條 applicable rule 的 calendarId 各自 findEventByNotificationKey
+        val targets: List<Pair<Long, Long>> = if (tracked.isNotEmpty()) {
+            tracked
         } else {
-            CalendarExportLog.log(packageName, "end_time_failed", "eventId=$eventId")
+            applicableRules
+                .mapNotNull { (it.action as? RuleAction.CalendarExport)?.calendarId }
+                .distinct()
+                .mapNotNull { calId ->
+                    if (!applyTargetAccount(calId)) return@mapNotNull null
+                    val eId = calendarExporter.findEventByNotificationKey(calId, notificationKey)
+                    if (eId > 0) calId to eId else null
+                }
+        }
+
+        if (targets.isEmpty()) {
+            CalendarExportLog.log(packageName, "removal_skipped", "no calendar event found")
+            return
+        }
+
+        for ((calId, eventId) in targets) {
+            // 不同 calendar 可能屬不同帳號，每筆事件更新前重設 target account
+            if (!applyTargetAccount(calId)) {
+                CalendarExportLog.log(packageName, "end_time_failed",
+                    "cal=$calId eventId=$eventId target missing")
+                continue
+            }
+            val success = calendarExporter.updateCalendarEventEndTime(eventId, removalTime)
+            if (success) {
+                CalendarExportLog.log(packageName, "end_time_updated", "cal=$calId eventId=$eventId")
+            } else {
+                CalendarExportLog.log(packageName, "end_time_failed", "cal=$calId eventId=$eventId")
+            }
         }
     }
 

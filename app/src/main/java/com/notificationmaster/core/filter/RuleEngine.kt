@@ -132,6 +132,52 @@ object RuleEngine {
         findMatchingRule(actionType, context) != null
 
     /**
+     * 全部匹配的規則（沿用 channel-shadows-package 優先邏輯）。
+     *
+     * 與 [findMatchingRule] 的差別：當 channel/package 級候選有多條皆匹配時，
+     * 一律全部回傳。供需要對「每條匹配規則各自執行動作」的場景使用，
+     * 例如 CALENDAR_EXPORT 每條 rule 自帶 calendarId 寫到不同日曆。
+     *
+     * 觸發時間僅在 results 非空時更新一次（避免每條 rule 重複觸發 flow）。
+     */
+    fun findAllMatchingRules(actionType: ActionType, context: MatchContext): List<Rule> {
+        val candidates = rules.filter { it.action.actionType == actionType }
+        if (candidates.isEmpty()) return emptyList()
+
+        val results: List<Rule> = if (context.channelId != null) {
+            val channelCandidates = candidates.filter { rule ->
+                rule.isChannelLevel
+                    && rule.matchers.filterIsInstance<Matcher.Package>()
+                        .any { it.packageName == context.packageName }
+                    && rule.matchers.filterIsInstance<Matcher.Channel>()
+                        .any { it.channelId == context.channelId }
+            }
+            if (channelCandidates.isNotEmpty()) {
+                channelCandidates.filter { it.matches(context) }
+            } else {
+                candidates.filter { rule ->
+                    !rule.isChannelLevel
+                        && rule.matchers.filterIsInstance<Matcher.Package>()
+                            .any { it.packageName == context.packageName }
+                }.filter { it.matches(context) }
+            }
+        } else {
+            candidates.filter { rule ->
+                !rule.isChannelLevel
+                    && rule.matchers.filterIsInstance<Matcher.Package>()
+                        .any { it.packageName == context.packageName }
+            }.filter { it.matches(context) }
+        }
+
+        if (results.isNotEmpty()) {
+            val now = System.currentTimeMillis()
+            results.forEach { lastTriggered[it.id] = now }
+            triggerFlow.value++
+        }
+        return results
+    }
+
+    /**
      * 僅來源匹配：packageName + channelId（不檢查 eventType / keyword 等）
      * 日曆匯出白名單用
      */
