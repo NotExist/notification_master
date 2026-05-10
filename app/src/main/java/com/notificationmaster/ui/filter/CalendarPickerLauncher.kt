@@ -30,14 +30,18 @@ class CalendarPickerLauncher(private val fragment: Fragment) {
 
     private var pendingPickerAction: (() -> Unit)? = null
 
+    private var pendingDeniedAction: (() -> Unit)? = null
+
     private val permissionLauncher = fragment.registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
         val granted = result[Manifest.permission.READ_CALENDAR] == true &&
             result[Manifest.permission.WRITE_CALENDAR] == true
         val action = pendingPickerAction
+        val denied = pendingDeniedAction
         pendingPickerAction = null
-        if (granted) action?.invoke()
+        pendingDeniedAction = null
+        if (granted) action?.invoke() else denied?.invoke()
     }
 
     /**
@@ -56,9 +60,31 @@ class CalendarPickerLauncher(private val fragment: Fragment) {
             exporter.showPickerDialog(onCancel = onCancel, onSelected = onSelected)
             return
         }
-        pendingPickerAction = {
-            CalendarExporter(ctx).showPickerDialog(onCancel = onCancel, onSelected = onSelected)
+        ensurePermission(
+            onGranted = { CalendarExporter(ctx).showPickerDialog(onCancel = onCancel, onSelected = onSelected) },
+            onDenied = onCancel
+        )
+    }
+
+    /**
+     * 僅請求日曆權限（不開 picker）。供僅需要授權門檻的入口使用，例如即時匯出總開關。
+     */
+    fun requestPermissionOnly(
+        onGranted: () -> Unit,
+        onDenied: (() -> Unit)? = null
+    ) {
+        val ctx = fragment.requireContext()
+        if (CalendarExporter(ctx).hasCalendarPermission()) {
+            onGranted()
+            return
         }
+        ensurePermission(onGranted, onDenied)
+    }
+
+    private fun ensurePermission(onGranted: () -> Unit, onDenied: (() -> Unit)?) {
+        val ctx = fragment.requireContext()
+        pendingPickerAction = onGranted
+        pendingDeniedAction = onDenied
         AlertDialog.Builder(ctx)
             .setTitle(R.string.permission_calendar_title)
             .setMessage(R.string.permission_calendar_message)
@@ -70,7 +96,8 @@ class CalendarPickerLauncher(private val fragment: Fragment) {
             }
             .setNegativeButton(R.string.cancel) { _, _ ->
                 pendingPickerAction = null
-                onCancel?.invoke()
+                pendingDeniedAction = null
+                onDenied?.invoke()
             }
             .show()
     }

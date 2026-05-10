@@ -362,56 +362,8 @@
 
                 </LinearLayout>
 
-                <!-- 即時匯出 — 目標日曆選擇（Switch 開啟時顯示） -->
-                <LinearLayout
-                    android:id="@+id/layout_realtime_calendar_options"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="vertical"
-                    android:visibility="gone"
-                    tools:visibility="visible">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_choose_target_calendar"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="@string/settings_choose_target_calendar"
-                        style="@style/Widget.Material3.Button.TonalButton" />
-
-                    <TextView
-                        android:id="@+id/text_target_calendar_name"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:textAppearance="?attr/textAppearanceBodySmall"
-                        android:textColor="?android:attr/textColorSecondary"
-                        tools:text="目標：Notification Master" />
-
-                </LinearLayout>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginTop="12dp"
-                    android:layout_marginBottom="12dp"
-                    android:background="?android:attr/listDivider" />
-
-                <!-- 手動匯出到指定日曆 -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_export_ical"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_export_ical"
-                    style="@style/Widget.Material3.Button.TonalButton" />
-
-                <!-- .ics 匯出 -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_export_ics_file"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_export_ics"
-                    style="@style/Widget.Material3.Button.TonalButton" />
+                <!-- per-rule calendar 後，每條規則自帶目標日曆，
+                     此處不再有「選擇目標日曆」設定 -->
 
             </LinearLayout>
 
@@ -719,6 +671,24 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:text="@string/settings_debug_update_ranking_map"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                <!-- 手動匯出到指定日曆（除錯用，每次手選目標） -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_export_ical"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/settings_export_ical"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                <!-- .ics 檔匯出（除錯用） -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_export_ics_file"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/settings_export_ics"
                     style="@style/Widget.Material3.Button.OutlinedButton" />
 
                 <!-- 簽章資訊（僅 debug build 顯示） -->

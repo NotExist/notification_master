@@ -40,6 +40,7 @@ import com.notificationmaster.export.archive.ArchiveImporter
 import com.notificationmaster.core.content.ExportDetailLevel
 import com.notificationmaster.export.calendar.CalendarExporter
 import com.notificationmaster.export.ical.IcsExporter
+import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -112,19 +113,8 @@ class SettingsFragment : Fragment() {
     // 防止 Switch 程式設值觸發 listener 迴圈
     private var isUpdatingRealtimeSwitch = false
 
-    // 日曆權限請求（通用）
-    private var pendingCalendarAction: (() -> Unit)? = null
-
-    private val calendarPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        if (permissions.values.all { it }) {
-            pendingCalendarAction?.invoke()
-        } else {
-            context?.let { Toast.makeText(it, "需要日曆權限", Toast.LENGTH_SHORT).show() }
-        }
-        pendingCalendarAction = null
-    }
+    // 日曆 picker（含權限請求 + picker dialog 統一封裝）
+    private val calendarPicker = CalendarPickerLauncher(this)
 
     // 通知權限請求（持續提醒用，API 33+）
     private var pendingNotificationAction: (() -> Unit)? = null
@@ -430,6 +420,16 @@ class SettingsFragment : Fragment() {
             }, 10_000L)
         }
 
+        // 手動匯出到指定日曆（除錯用，每次手選目標）
+        binding.btnExportIcal.setOnClickListener {
+            requestCalendarExport()
+        }
+
+        // .ics 檔匯出（除錯用）
+        binding.btnExportIcsFile.setOnClickListener {
+            showIcsExportDialog()
+        }
+
         NotificationCaptureService.showRankingBanner.observe(viewLifecycleOwner) { show ->
             _binding?.btnUpdateRankingMap?.alpha = if (show) 1.0f else 0.5f
         }
@@ -537,17 +537,7 @@ class SettingsFragment : Fragment() {
 
 
     private fun setupCalendarIntegration() {
-        // 匯出到系統日曆（既有的批次匯出）
-        binding.btnExportIcal.setOnClickListener {
-            requestCalendarExport()
-        }
-
-        // .ics 匯出按鈕
-        binding.btnExportIcsFile.setOnClickListener {
-            showIcsExportDialog()
-        }
-
-        // 即時匯出開關
+        // 即時匯出總開關（per-rule calendar 後，目標日曆改由各規則自帶）
         binding.switchRealtimeCalendar.isChecked =
             AppPreferences.isRealtimeCalendarEnabled(requireContext())
         binding.switchRealtimeCalendar.setOnCheckedChangeListener { _, isChecked ->
@@ -555,12 +545,7 @@ class SettingsFragment : Fragment() {
         }
         updateRealtimeCalendarDisplay()
 
-        // 目標日曆選擇
-        binding.btnChooseTargetCalendar.setOnClickListener {
-            requestCalendarPermissionThen { showTargetCalendarPicker() }
-        }
-
-        // 白名單
+        // 白名單（CALENDAR_EXPORT 規則管理）
         binding.btnCalendarWhitelist.setOnClickListener {
             findNavController().navigate(
                 R.id.action_settings_home_to_settings_filter,
@@ -719,31 +704,6 @@ class SettingsFragment : Fragment() {
     // === 日曆匯出 ===
 
     /**
-     * 共用日曆權限請求
-     */
-    private fun requestCalendarPermissionThen(action: () -> Unit) {
-        val exporter = CalendarExporter(requireContext())
-        if (exporter.hasCalendarPermission()) {
-            action()
-        } else {
-            pendingCalendarAction = action
-            AlertDialog.Builder(requireContext())
-                .setTitle("需要日曆權限")
-                .setMessage("此功能需要讀取和寫入日曆的權限。")
-                .setPositiveButton("授予權限") { _, _ ->
-                    calendarPermissionLauncher.launch(arrayOf(
-                        Manifest.permission.READ_CALENDAR,
-                        Manifest.permission.WRITE_CALENDAR
-                    ))
-                }
-                .setNegativeButton(R.string.cancel) { _, _ ->
-                    pendingCalendarAction = null
-                }
-                .show()
-        }
-    }
-
-    /**
      * 共用通知權限請求（API 33+）
      *
      * API 33 以下不需要此權限，直接執行 action。
@@ -772,13 +732,14 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    /**
+     * 手動匯出（除錯用）：每次手選目標日曆 + detail level，匯出最近 7 天通知
+     */
     private fun requestCalendarExport() {
-        requestCalendarPermissionThen { showCalendarPicker() }
-    }
-
-    private fun showCalendarPicker() {
-        val exporter = CalendarExporter(requireContext())
-        exporter.showPickerDialog { cal ->
+        calendarPicker.pick { cal ->
+            val exporter = CalendarExporter(requireContext()).apply {
+                setTargetAccount(cal.accountName, cal.accountType)
+            }
             showCalendarDetailLevelPicker(cal.id, exporter)
         }
     }
@@ -876,37 +837,24 @@ class SettingsFragment : Fragment() {
 
     // === 即時匯出設定 ===
 
+    /**
+     * per-rule calendar 後，總開關不再涉及目標日曆選擇 — 目標日曆改由各 CALENDAR_EXPORT
+     * rule 自帶。開關時僅檢查日曆權限（service 寫入時需要）。
+     */
     private fun handleRealtimeCalendarToggle(enabled: Boolean) {
         if (enabled) {
-            requestCalendarPermissionThen {
-                val calId = AppPreferences.getRealtimeCalendarId(requireContext())
-                if (calId < 0) {
-                    // 尚未選擇目標日曆，先引導選擇
-                    showTargetCalendarPicker()
-                } else {
+            calendarPicker.requestPermissionOnly(
+                onGranted = {
                     AppPreferences.setRealtimeCalendarEnabled(requireContext(), true)
                     updateRealtimeCalendarDisplay()
-                }
-            }
+                },
+                onDenied = { setRealtimeSwitchChecked(false) }
+            )
         } else {
             AppPreferences.setRealtimeCalendarEnabled(requireContext(), false)
             updateRealtimeCalendarDisplay()
         }
     }
-
-    private fun showTargetCalendarPicker() {
-        CalendarExporter(requireContext()).showPickerDialog(
-            onCancel = { setRealtimeSwitchChecked(false) }
-        ) { cal ->
-            AppPreferences.setRealtimeCalendarTarget(
-                requireContext(), cal.id, cal.displayName, cal.accountName, cal.accountType
-            )
-            AppPreferences.setRealtimeCalendarEnabled(requireContext(), true)
-            setRealtimeSwitchChecked(true)
-            updateRealtimeCalendarDisplay()
-        }
-    }
-
 
     private fun setRealtimeSwitchChecked(checked: Boolean) {
         isUpdatingRealtimeSwitch = true
@@ -918,22 +866,10 @@ class SettingsFragment : Fragment() {
         val ctx = context ?: return
         val b = _binding ?: return
         val enabled = AppPreferences.isRealtimeCalendarEnabled(ctx)
-        val calName = AppPreferences.getRealtimeCalendarName(ctx)
-
-        // Switch 旁狀態文字：僅顯示啟用/未啟用
         b.textRealtimeCalendarStatus.text = getString(
             if (enabled) R.string.settings_realtime_calendar_on
             else R.string.settings_realtime_calendar_off
         )
-
-        // 展開區塊：目標日曆名稱顯示在按鈕下方
-        b.layoutRealtimeCalendarOptions.visibility = if (enabled) View.VISIBLE else View.GONE
-        if (enabled && calName != null) {
-            b.textTargetCalendarName.text = getString(R.string.settings_realtime_calendar_target, calName)
-            b.textTargetCalendarName.visibility = View.VISIBLE
-        } else {
-            b.textTargetCalendarName.visibility = View.GONE
-        }
     }
 
     // === 白名單篩選（共用） ===
