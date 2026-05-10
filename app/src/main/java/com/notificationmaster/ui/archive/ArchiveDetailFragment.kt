@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.databinding.FragmentArchiveDetailBinding
+import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import com.notificationmaster.ui.filter.SoundPickerLauncher
 import com.notificationmaster.ui.timeline.TimelineAdapter
@@ -30,6 +31,7 @@ class ArchiveDetailFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val soundPicker = SoundPickerLauncher(this)
+    private val calendarPicker = CalendarPickerLauncher(this)
 
     private val args: ArchiveDetailFragmentArgs by navArgs()
     private lateinit var adapter: TimelineAdapter
@@ -67,7 +69,8 @@ class ArchiveDetailFragment : Fragment() {
                     actionType = null,
                     prefillPackageName = notification.packageName,
                     prefillChannelId = notification.channelId,
-                    soundPicker = soundPicker
+                    soundPicker = soundPicker,
+                    calendarPicker = calendarPicker
                 )
             }
         )

@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.databinding.FragmentFilterSettingsBinding
 import com.notificationmaster.databinding.ItemFilterRuleBinding
+import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import com.notificationmaster.ui.filter.SoundPickerLauncher
 
@@ -42,6 +43,7 @@ class FilterSettingsFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val soundPicker = SoundPickerLauncher(this)
+    private val calendarPicker = CalendarPickerLauncher(this)
 
     private lateinit var actionType: ActionType
 
@@ -155,6 +157,7 @@ class FilterSettingsFragment : Fragment() {
             context = ctx,
             actionType = actionType,
             soundPicker = soundPicker,
+            calendarPicker = calendarPicker,
             onRuleAdded = { refreshList() }
         )
     }
@@ -166,6 +169,7 @@ class FilterSettingsFragment : Fragment() {
             actionType = actionType,
             existingRule = rule,
             soundPicker = soundPicker,
+            calendarPicker = calendarPicker,
             onRuleAdded = { refreshList() }
         )
     }
@@ -241,6 +245,13 @@ class FilterSettingsFragment : Fragment() {
 
                 // 動作效果（獨立顯示）
                 val actionInfo = when {
+                    actionType == ActionType.CALENDAR_EXPORT -> {
+                        val calId = (rule.action as? RuleAction.CalendarExport)?.calendarId
+                        ctx.getString(
+                            R.string.filter_calendar_target_display,
+                            com.notificationmaster.ui.filter.CalendarPickerLauncher.resolveLabel(ctx, calId)
+                        )
+                    }
                     actionType == ActionType.AUTO_DISMISS -> {
                         val delayMs = (rule.action as? RuleAction.AutoDismiss)?.delayMs ?: 0L
                         if (delayMs > 0) ctx.getString(R.string.filter_dismiss_delay_format, formatDismissDelay(ctx, delayMs))

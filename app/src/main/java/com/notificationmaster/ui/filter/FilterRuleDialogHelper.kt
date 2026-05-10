@@ -89,6 +89,7 @@ object FilterRuleDialogHelper {
         prefillChannelId: String? = null,
         existingRule: Rule? = null,
         soundPicker: SoundPickerLauncher? = null,
+        calendarPicker: CalendarPickerLauncher? = null,
         onRuleAdded: (() -> Unit)? = null,
         widgetMode: Boolean = false,
         existingWidgetMatchers: List<Matcher>? = null,
@@ -319,6 +320,25 @@ object FilterRuleDialogHelper {
         val switchAlarmStream = dialogView.findViewById<MaterialSwitch>(R.id.switch_alarm_stream)
         var selectedSoundUri: String? = null
 
+        // CalendarExport 相關 views
+        val btnChooseCalendar = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_choose_calendar)
+        var selectedCalendarId: Long? = (existingRule?.action as? RuleAction.CalendarExport)?.calendarId
+        fun refreshCalendarButtonText() {
+            btnChooseCalendar.text = context.getString(
+                R.string.filter_calendar_choose,
+                CalendarPickerLauncher.resolveLabel(context, selectedCalendarId)
+            )
+        }
+        refreshCalendarButtonText()
+        btnChooseCalendar.setOnClickListener {
+            calendarPicker?.pick(onSelected = { cal ->
+                selectedCalendarId = cal.id
+                refreshCalendarButtonText()
+            }) ?: run {
+                Toast.makeText(context, R.string.filter_preview_calendar_no_permission, Toast.LENGTH_SHORT).show()
+            }
+        }
+
         // === Keyword 欄位 checkbox 動態生成（兩行 × 兩欄） ===
         val keywordFieldLabels = listOf(
             KeywordField.TITLE to context.getString(R.string.filter_keyword_field_title),
@@ -367,9 +387,10 @@ object FilterRuleDialogHelper {
         fun updateActionSettingsVisibility(effectiveType: ActionType) {
             val showDismiss = effectiveType == ActionType.AUTO_DISMISS
             val showAlert = effectiveType == ActionType.PERSISTENT_ALERT
+            val showCalendar = effectiveType == ActionType.CALENDAR_EXPORT
 
             // 容器整體顯示/隱藏
-            layoutActionSettings.visibility = if (showDismiss || showAlert) View.VISIBLE else View.GONE
+            layoutActionSettings.visibility = if (showDismiss || showAlert || showCalendar) View.VISIBLE else View.GONE
 
             // AUTO_DISMISS 子元件
             layoutDismissDelay.visibility = if (showDismiss) View.VISIBLE else View.GONE
@@ -382,6 +403,9 @@ object FilterRuleDialogHelper {
             btnChooseSound.visibility = if (showAlert) View.VISIBLE else View.GONE
             switchAlertVibrate.visibility = if (showAlert) View.VISIBLE else View.GONE
             switchAlarmStream.visibility = if (showAlert) View.VISIBLE else View.GONE
+
+            // CALENDAR_EXPORT 子元件
+            btnChooseCalendar.visibility = if (showCalendar) View.VISIBLE else View.GONE
         }
 
         // === EventType CheckBox 動態生成 ===
@@ -937,11 +961,16 @@ object FilterRuleDialogHelper {
                     }
                 } else 0L
 
+                // CALENDAR_EXPORT 必填驗證
+                if (resolvedActionType == ActionType.CALENDAR_EXPORT && selectedCalendarId == null) {
+                    Toast.makeText(context, R.string.filter_calendar_required, Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+
                 // 建構 RuleAction
                 val action: RuleAction = when (resolvedActionType) {
                     ActionType.SKIP_RECORD -> RuleAction.SkipRecord
-                    // TODO commit 2: 從 calendar picker 取得 selectedCalendarId
-                    ActionType.CALENDAR_EXPORT -> RuleAction.CalendarExport(calendarId = null)
+                    ActionType.CALENDAR_EXPORT -> RuleAction.CalendarExport(calendarId = selectedCalendarId)
                     ActionType.AUTO_DISMISS -> RuleAction.AutoDismiss(delayMs = dismissDelayMs)
                     ActionType.PERSISTENT_ALERT -> RuleAction.PersistentAlert(
                         soundUri = selectedSoundUri,
@@ -1171,13 +1200,23 @@ object FilterRuleDialogHelper {
                     Toast.makeText(context, R.string.filter_preview_calendar_no_permission, Toast.LENGTH_SHORT).show()
                     return
                 }
-                exporter.showPickerDialog { cal ->
-                    val result = exporter.exportToCalendar(notifications, cal.id, ExportDetailLevel.FULL)
-                    Toast.makeText(context,
-                        context.getString(R.string.filter_preview_applied_calendar, result.successCount),
-                        Toast.LENGTH_SHORT
-                    ).show()
+                // 預覽套用一律走 rule 自帶 calendarId（與正式匯出行為一致）
+                val targetId = (rule.action as? RuleAction.CalendarExport)?.calendarId
+                if (targetId == null) {
+                    Toast.makeText(context, R.string.filter_calendar_required, Toast.LENGTH_SHORT).show()
+                    return
                 }
+                if (exporter.getAvailableCalendars().none { it.id == targetId }) {
+                    Toast.makeText(context,
+                        CalendarPickerLauncher.resolveLabel(context, targetId),
+                        Toast.LENGTH_SHORT).show()
+                    return
+                }
+                val result = exporter.exportToCalendar(notifications, targetId, ExportDetailLevel.FULL)
+                Toast.makeText(context,
+                    context.getString(R.string.filter_preview_applied_calendar, result.successCount),
+                    Toast.LENGTH_SHORT
+                ).show()
             }
             else -> {
                 Toast.makeText(context, R.string.filter_preview_apply_unsupported, Toast.LENGTH_SHORT).show()

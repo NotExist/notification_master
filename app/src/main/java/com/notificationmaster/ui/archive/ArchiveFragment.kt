@@ -13,6 +13,7 @@ import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.databinding.FragmentArchiveBinding
+import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import com.notificationmaster.ui.filter.SoundPickerLauncher
 import kotlinx.coroutines.flow.collectLatest
@@ -28,6 +29,7 @@ class ArchiveFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val soundPicker = SoundPickerLauncher(this)
+    private val calendarPicker = CalendarPickerLauncher(this)
 
     private lateinit var appSourceAdapter: AppSourceAdapter
     private lateinit var channelAdapter: ChannelAdapter
@@ -95,7 +97,8 @@ class ArchiveFragment : Fragment() {
                     context = requireContext(),
                     actionType = null,
                     prefillPackageName = appSource.packageName,
-                    soundPicker = soundPicker
+                    soundPicker = soundPicker,
+                    calendarPicker = calendarPicker
                 )
             }
         )
@@ -115,7 +118,8 @@ class ArchiveFragment : Fragment() {
                     actionType = null,
                     prefillPackageName = channel.packageName,
                     prefillChannelId = channel.channelId,
-                    soundPicker = soundPicker
+                    soundPicker = soundPicker,
+                    calendarPicker = calendarPicker
                 )
             }
         )

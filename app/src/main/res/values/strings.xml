@@ -515,6 +515,9 @@
     <!-- 日曆目標顯示（per-rule calendar） -->
     <string name="calendar_target_not_selected">未選擇日曆</string>
     <string name="calendar_target_missing">目標日曆 #%1$d（找不到）</string>
+    <string name="filter_calendar_choose">選擇目標日曆：%1$s</string>
+    <string name="filter_calendar_required">日曆匯出規則必須選擇目標日曆</string>
+    <string name="filter_calendar_target_display">→ %1$s</string>
 
     <!-- 持續提醒 -->
     <string name="persistent_alert_empty">尚無持續提醒規則</string>

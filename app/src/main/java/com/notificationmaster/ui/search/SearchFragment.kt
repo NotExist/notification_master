@@ -10,6 +10,7 @@ import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.notificationmaster.databinding.FragmentSearchBinding
+import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import com.notificationmaster.ui.filter.SoundPickerLauncher
 
@@ -22,6 +23,7 @@ class SearchFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val soundPicker = SoundPickerLauncher(this)
+    private val calendarPicker = CalendarPickerLauncher(this)
 
     private val viewModel: SearchViewModel by viewModels()
     private lateinit var notificationAdapter: NotificationAdapter
@@ -72,7 +74,8 @@ class SearchFragment : Fragment() {
                     actionType = null,
                     prefillPackageName = notification.packageName,
                     prefillChannelId = notification.channelId,
-                    soundPicker = soundPicker
+                    soundPicker = soundPicker,
+                    calendarPicker = calendarPicker
                 )
             }
         )

@@ -35,6 +35,7 @@ import com.notificationmaster.data.db.dao.query
 import com.notificationmaster.databinding.FragmentTimelineBinding
 import com.notificationmaster.service.NotificationCaptureService
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
+import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import com.notificationmaster.ui.filter.SoundPickerLauncher
 import com.notificationmaster.ui.main.MainActivity
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +65,7 @@ class TimelineFragment : Fragment() {
 
     // 系統原生鈴聲選擇器（field initializer 確保在 Fragment STARTED 前完成註冊）
     private val soundPicker = SoundPickerLauncher(this)
+    private val calendarPicker = CalendarPickerLauncher(this)
 
     private var adapter: TimelineAdapter? = null
 
@@ -175,7 +177,8 @@ class TimelineFragment : Fragment() {
                         actionType = null,
                         prefillPackageName = notification.packageName,
                         prefillChannelId = notification.channelId,
-                        soundPicker = soundPicker
+                        soundPicker = soundPicker,
+                        calendarPicker = calendarPicker
                     )
                 }
             )
