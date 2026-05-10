@@ -940,7 +940,8 @@ object FilterRuleDialogHelper {
                 // 建構 RuleAction
                 val action: RuleAction = when (resolvedActionType) {
                     ActionType.SKIP_RECORD -> RuleAction.SkipRecord
-                    ActionType.CALENDAR_EXPORT -> RuleAction.CalendarExport
+                    // TODO commit 2: 從 calendar picker 取得 selectedCalendarId
+                    ActionType.CALENDAR_EXPORT -> RuleAction.CalendarExport(calendarId = null)
                     ActionType.AUTO_DISMISS -> RuleAction.AutoDismiss(delayMs = dismissDelayMs)
                     ActionType.PERSISTENT_ALERT -> RuleAction.PersistentAlert(
                         soundUri = selectedSoundUri,

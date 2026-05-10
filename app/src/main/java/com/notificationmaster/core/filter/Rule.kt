@@ -352,10 +352,18 @@ sealed interface RuleAction {
         override fun toJson() = JSONObject().apply { put("type", "SkipRecord") }
     }
 
-    /** 日曆匯出白名單（原 CALENDAR_EXPORT） */
-    data object CalendarExport : RuleAction {
+    /**
+     * 日曆匯出白名單（原 CALENDAR_EXPORT）。
+     *
+     * `calendarId` 為每條規則自帶的目標日曆。null 表示「未配置」（例如從舊版備份匯入），
+     * service 端視為「目標消失」跳過。
+     */
+    data class CalendarExport(val calendarId: Long? = null) : RuleAction {
         override val actionType = ActionType.CALENDAR_EXPORT
-        override fun toJson() = JSONObject().apply { put("type", "CalendarExport") }
+        override fun toJson() = JSONObject().apply {
+            put("type", "CalendarExport")
+            put("calendarId", calendarId ?: JSONObject.NULL)
+        }
     }
 
     /** 自動清除通知（原 AUTO_DISMISS） */
@@ -419,7 +427,9 @@ sealed interface RuleAction {
     companion object {
         fun fromJson(json: JSONObject): RuleAction = when (val type = json.getString("type")) {
             "SkipRecord" -> SkipRecord
-            "CalendarExport" -> CalendarExport
+            "CalendarExport" -> CalendarExport(
+                calendarId = if (json.isNull("calendarId")) null else json.getLong("calendarId")
+            )
             "AutoDismiss" -> AutoDismiss(json.optLong("delayMs", 0))
             "PersistentAlert" -> PersistentAlert(
                 soundUri = if (json.isNull("soundUri")) null else json.getString("soundUri"),

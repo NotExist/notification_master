@@ -508,6 +508,14 @@
     <string name="permission_post_notifications_denied">未取得通知權限，持續提醒功能將無法運作</string>
     <string name="permission_grant">授予權限</string>
 
+    <!-- 日曆權限 -->
+    <string name="permission_calendar_title">需要日曆權限</string>
+    <string name="permission_calendar_message">此功能需要讀取和寫入日曆的權限。</string>
+
+    <!-- 日曆目標顯示（per-rule calendar） -->
+    <string name="calendar_target_not_selected">未選擇日曆</string>
+    <string name="calendar_target_missing">目標日曆 #%1$d（找不到）</string>
+
     <!-- 持續提醒 -->
     <string name="persistent_alert_empty">尚無持續提醒規則</string>
     <string name="persistent_alert_empty_hint">新增規則後，符合條件的通知到達時將以振動/鈴聲持續提醒。</string>
