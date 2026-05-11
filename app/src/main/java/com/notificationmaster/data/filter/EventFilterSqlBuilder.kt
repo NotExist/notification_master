@@ -10,8 +10,11 @@ import com.notificationmaster.core.filter.OrderBy
  * matchers 經 [MatcherSqlTranslator] 翻譯為 WHERE fragment（AND 組合），
  * 加上 spec 自身的時間範圍 / deduplicate / orderBy / limit 控制。
  *
- * Target = `notifications` 表。Plan 2 完成後改 `notification_events`，
- * spec 表達層不變，僅此類別內部翻譯改寫。
+ * Plan 2：target 表 = `notification_events`（alias `e`）。
+ * - deduplicate ON：每個 notification_key 取最新 event_time 對應的 event（單筆）
+ * - deduplicate OFF：所有 events 各自一筆
+ *
+ * 時間範圍仍以 `post_time` 為比對基準（events 表本身有 post_time column，取自 sbn.postTime）。
  */
 object EventFilterSqlBuilder {
 
@@ -32,11 +35,11 @@ object EventFilterSqlBuilder {
 
         // 時間範圍
         if (spec.timeFrom != null) {
-            where.append(" AND n.post_time >= ?")
+            where.append(" AND e.post_time >= ?")
             args.add(spec.timeFrom)
         }
         if (spec.timeTo != null) {
-            where.append(" AND n.post_time <= ?")
+            where.append(" AND e.post_time <= ?")
             args.add(spec.timeTo)
         }
 
@@ -46,30 +49,30 @@ object EventFilterSqlBuilder {
         val sql = when {
             count && spec.deduplicate -> """
                 SELECT COUNT(*) FROM (
-                    SELECT n.notification_key FROM notifications n
+                    SELECT e.notification_key FROM notification_events e
                     WHERE $where
-                    GROUP BY n.notification_key
+                    GROUP BY e.notification_key
                 )
             """.trimIndent()
 
             count && !spec.deduplicate -> """
-                SELECT COUNT(*) FROM notifications n
+                SELECT COUNT(*) FROM notification_events e
                 WHERE $where
             """.trimIndent()
 
             spec.deduplicate -> """
-                SELECT * FROM notifications WHERE id IN (
+                SELECT * FROM notification_events WHERE id IN (
                     SELECT id FROM (
-                        SELECT n.id, MAX(n.post_time) FROM notifications n
+                        SELECT e.id, MAX(e.event_time) FROM notification_events e
                         WHERE $where
-                        GROUP BY n.notification_key
+                        GROUP BY e.notification_key
                     )
                 )
                 $orderSql$limitSql
             """.trimIndent()
 
             else -> """
-                SELECT n.* FROM notifications n
+                SELECT e.* FROM notification_events e
                 WHERE $where
                 $orderSql$limitSql
             """.trimIndent()
@@ -83,10 +86,7 @@ object EventFilterSqlBuilder {
         OrderBy.PostTimeAsc -> "ORDER BY post_time ASC"
         OrderBy.CaptureTimeDesc -> "ORDER BY capture_time DESC"
         OrderBy.CaptureTimeAsc -> "ORDER BY capture_time ASC"
-        // Event time：以該通知最新事件時間排序（Plan 2：events 改以 notification_key 關聯）
-        OrderBy.EventTimeDesc ->
-            "ORDER BY (SELECT MAX(event_time) FROM notification_events e WHERE e.notification_key = notifications.notification_key) DESC"
-        OrderBy.EventTimeAsc ->
-            "ORDER BY (SELECT MAX(event_time) FROM notification_events e WHERE e.notification_key = notifications.notification_key) ASC"
+        OrderBy.EventTimeDesc -> "ORDER BY event_time DESC"
+        OrderBy.EventTimeAsc -> "ORDER BY event_time ASC"
     }
 }
