@@ -137,13 +137,12 @@ class NotificationEventAdapter(
             // 事件類型
             binding.textEventType.text = event.eventType.name
 
-            // 指示器顏色
+            // 指示器顏色（Plan 2：RANKING 已從 EventType 移除，改寫到 RankingObservation 軌道）
             val indicatorColor = when (event.eventType) {
                 EventType.INITIAL -> R.color.event_initial
                 EventType.POSTED -> R.color.event_posted
                 EventType.UPDATED -> R.color.event_updated
                 EventType.REMOVED -> R.color.event_removed
-                EventType.RANKING -> R.color.event_ranking
             }
             binding.viewIndicator.setBackgroundColor(
                 ContextCompat.getColor(context, indicatorColor)

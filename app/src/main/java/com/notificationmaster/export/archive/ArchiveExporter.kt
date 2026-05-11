@@ -54,13 +54,14 @@ class ArchiveExporter(
         val mediaIndex = JSONArray()
 
         for (notification in notifications) {
+            // Plan 2：events 改以 notification_key 關聯；DAO method 已 rename
             val events = database.notificationEventDao()
-                .getEventsByNotificationKey(notification.notificationKey)
+                .getEventsByKeySync(notification.notificationKey)
             allEvents.addAll(events)
 
-            // 媒體索引
+            // 媒體索引：FK 改 event_id，過渡期以 notifications.id 查回空 list（待 Phase 7 重設計）
             val attachments = database.mediaAttachmentDao()
-                .getAttachmentsByNotificationIdSync(notification.id)
+                .getAttachmentsByEventIdSync(notification.id)
             for (attachment in attachments) {
                 val mediaJson = JSONObject().apply {
                     put("notificationId", notification.id)
@@ -211,20 +212,26 @@ class ArchiveExporter(
     }
 
     private fun eventToJson(e: NotificationEventEntity): JSONObject {
+        // Plan 2：NotificationEventEntity 重構，移除 notification_id / rankingRank / rankingImportance /
+        //         isAmbient / isSuspended / suppressedVisualEffects / contentDiff 欄位。
+        //         改為自包含 eventRawJson；ranking 在 RankingObservation 獨立軌道（Phase 7+ 匯出格式重設計）。
         return JSONObject().apply {
             put("id", e.id)
-            put("notificationId", e.notificationId)
             put("notificationKey", e.notificationKey)
             put("eventType", e.eventType.name)
             put("eventTime", e.eventTime)
+            put("captureTime", e.captureTime)
+            put("packageName", e.packageName)
+            put("channelId", e.channelId)
+            put("postTime", e.postTime)
+            put("contentHash", e.contentHash)
+            put("title", e.title)
+            put("text", e.text)
             put("removalReason", e.removalReason)
             put("removalReasonCategory", e.removalReasonCategory)
-            put("rankingRank", e.rankingRank)
-            put("rankingImportance", e.rankingImportance)
-            put("isAmbient", e.isAmbient)
-            put("isSuspended", e.isSuspended)
-            put("suppressedVisualEffects", e.suppressedVisualEffects)
-            put("contentDiff", e.contentDiff)
+            put("isAudible", e.isAudible)
+            put("likelyHeadsup", e.likelyHeadsup)
+            put("eventRawJson", e.eventRawJson)
         }
     }
 }

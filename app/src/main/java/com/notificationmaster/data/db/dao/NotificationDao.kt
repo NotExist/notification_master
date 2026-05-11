@@ -79,11 +79,13 @@ interface NotificationDao {
      * 事件優先查詢：展開最近 :limit 筆通知的所有事件（預覽匹配用）
      * 每筆結果為一個 (notification, event_type) 組合，同一通知可能出現多次。
      * 呼叫端以 groupBy + any 判斷是否有任一事件匹配。
+     *
+     * Plan 2：FK rename 後，notifications↔events 改用 notification_key 關聯。
      */
     @Query("""
         SELECT n.*, e.event_type
         FROM notifications n
-        INNER JOIN notification_events e ON e.notification_id = n.id
+        INNER JOIN notification_events e ON e.notification_key = n.notification_key
         WHERE n.id IN (
             SELECT id FROM notifications ORDER BY post_time DESC LIMIT :limit
         )
@@ -292,15 +294,15 @@ interface NotificationDao {
     @Query("""
         SELECT n.* FROM notifications n
         INNER JOIN (
-            SELECT e.notification_id, MAX(e.event_time) AS removal_time
+            SELECT e.notification_key, MAX(e.event_time) AS removal_time
             FROM notification_events e
             WHERE e.event_type = 'REMOVED'
-            GROUP BY e.notification_id
-        ) r ON n.id = r.notification_id
+            GROUP BY e.notification_key
+        ) r ON n.notification_key = r.notification_key
         WHERE n.id IN (
             SELECT id FROM (
                 SELECT n2.id, MAX(n2.post_time) FROM notifications n2
-                INNER JOIN notification_events e2 ON n2.id = e2.notification_id
+                INNER JOIN notification_events e2 ON n2.notification_key = e2.notification_key
                 WHERE e2.event_type = 'REMOVED'
                 GROUP BY n2.notification_key
             )
@@ -343,15 +345,15 @@ interface NotificationDao {
     @Query("""
         SELECT n.* FROM notifications n
         INNER JOIN (
-            SELECT e.notification_id, MAX(e.event_time) AS removal_time
+            SELECT e.notification_key, MAX(e.event_time) AS removal_time
             FROM notification_events e
             WHERE e.event_type = 'REMOVED'
-            GROUP BY e.notification_id
-        ) r ON n.id = r.notification_id
+            GROUP BY e.notification_key
+        ) r ON n.notification_key = r.notification_key
         WHERE n.id IN (
             SELECT id FROM (
                 SELECT n2.id, MAX(n2.post_time) FROM notifications n2
-                INNER JOIN notification_events e2 ON n2.id = e2.notification_id
+                INNER JOIN notification_events e2 ON n2.notification_key = e2.notification_key
                 WHERE e2.event_type = 'REMOVED'
                 GROUP BY n2.notification_key
             )
@@ -421,15 +423,20 @@ interface NotificationDao {
 
     // === 查詢 - 搜尋 ===
 
+    /**
+     * 搜尋通知（內文 LIKE）
+     *
+     * Plan 2 過渡：media_attachments FK 改為 event_id，舊的「以檔名 LIKE 反查通知」JOIN 需先
+     * 經過 notification_events 跳板，待 Phase 7 整體搜尋 retarget 新 schema 時一起重寫。
+     * 此階段暫時不支援附件檔名搜尋。
+     */
     @Query("""
-        SELECT DISTINCT n.* FROM notifications n
-        LEFT JOIN media_attachments m ON n.id = m.notification_id
-        WHERE n.title LIKE '%' || :query || '%'
-           OR n.text LIKE '%' || :query || '%'
-           OR n.big_text LIKE '%' || :query || '%'
-           OR n.sub_text LIKE '%' || :query || '%'
-           OR m.file_path LIKE '%' || :query || '%'
-        ORDER BY n.post_time DESC
+        SELECT * FROM notifications
+        WHERE title LIKE '%' || :query || '%'
+           OR text LIKE '%' || :query || '%'
+           OR big_text LIKE '%' || :query || '%'
+           OR sub_text LIKE '%' || :query || '%'
+        ORDER BY post_time DESC
         LIMIT :limit
     """)
     suspend fun searchNotifications(query: String, limit: Int = 100): List<NotificationEntity>
@@ -475,22 +482,27 @@ interface NotificationDao {
 
     /**
      * 已移除模式：有 REMOVED 事件的 notification_key 總數
+     *
+     * Plan 2：FK rename 後改用 notification_key 關聯。
      */
     @Query("""
         SELECT COUNT(DISTINCT n.notification_key) FROM notifications n
-        INNER JOIN notification_events e ON n.id = e.notification_id
+        INNER JOIN notification_events e ON n.notification_key = e.notification_key
         WHERE e.event_type = 'REMOVED'
     """)
     fun getDismissedTotalCountFlow(): Flow<Int>
 
     /**
-     * 取得所有有 REMOVED 事件的 notification id 列表（供 timeline 淡化已移除通知用）
+     * 取得所有有 REMOVED 事件的 notification_key 列表（供 timeline 淡化已移除通知用）
+     *
+     * Plan 2：notification_events 不再持有 notification_id Long FK，改回 notification_key。
+     * 呼叫端的型別也需從 List<Long> 改為 List<String>。
      */
     @Query("""
-        SELECT DISTINCT notification_id FROM notification_events
+        SELECT DISTINCT notification_key FROM notification_events
         WHERE event_type = 'REMOVED'
     """)
-    fun getRemovedNotificationIdsFlow(): Flow<List<Long>>
+    fun getRemovedNotificationKeysFlow(): Flow<List<String>>
 
     @Query("SELECT COUNT(*) FROM notifications WHERE post_time >= :startOfDay")
     suspend fun getTodayCount(startOfDay: Long): Int

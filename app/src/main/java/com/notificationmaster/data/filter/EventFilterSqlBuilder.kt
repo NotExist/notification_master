@@ -83,10 +83,10 @@ object EventFilterSqlBuilder {
         OrderBy.PostTimeAsc -> "ORDER BY post_time ASC"
         OrderBy.CaptureTimeDesc -> "ORDER BY capture_time DESC"
         OrderBy.CaptureTimeAsc -> "ORDER BY capture_time ASC"
-        // Event time：以該通知最新事件時間排序（JOIN events MAX）
+        // Event time：以該通知最新事件時間排序（Plan 2：events 改以 notification_key 關聯）
         OrderBy.EventTimeDesc ->
-            "ORDER BY (SELECT MAX(event_time) FROM notification_events e WHERE e.notification_id = id) DESC"
+            "ORDER BY (SELECT MAX(event_time) FROM notification_events e WHERE e.notification_key = notifications.notification_key) DESC"
         OrderBy.EventTimeAsc ->
-            "ORDER BY (SELECT MAX(event_time) FROM notification_events e WHERE e.notification_id = id) ASC"
+            "ORDER BY (SELECT MAX(event_time) FROM notification_events e WHERE e.notification_key = notifications.notification_key) ASC"
     }
 }

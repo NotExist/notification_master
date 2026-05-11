@@ -160,15 +160,18 @@ class NotificationDetailFragment : Fragment() {
                 displayNotification(notification, channelEntity)
 
                 // 載入動作按鈕與 Intent 資訊
+                // Plan 2 過渡：children FK 已 rename event_id，但 UI 仍以 args.notificationId
+                //              （NotificationEntity.id）查詢；新 schema 下子物件實際掛在 event_id，
+                //              因此 Phase 7 Detail 重寫前此查詢回空。Compile 仍通過。
                 val actionDao = database.actionDao()
                 val actions = withContext(Dispatchers.IO) {
-                    actionDao.getActionsByNotificationIdSync(args.notificationId)
+                    actionDao.getActionsByEventIdSync(args.notificationId)
                 }
                 displayIntents(actions, notification)
 
-                // 載入媒體附件
+                // 載入媒體附件（同上）
                 val attachments = withContext(Dispatchers.IO) {
-                    mediaDao.getAttachmentsByNotificationIdSync(args.notificationId)
+                    mediaDao.getAttachmentsByEventIdSync(args.notificationId)
                 }
                 displayMediaAttachments(attachments)
 
@@ -183,7 +186,7 @@ class NotificationDetailFragment : Fragment() {
                 displayRanking(notification)
 
                 val deviceState = withContext(Dispatchers.IO) {
-                    database.deviceStateDao().getByNotificationId(args.notificationId)
+                    database.deviceStateDao().getByEventId(args.notificationId)
                 }
                 displayDeviceState(deviceState)
 
@@ -552,9 +555,10 @@ class NotificationDetailFragment : Fragment() {
 
     private fun showEventDetail(event: NotificationEventEntity) {
         viewLifecycleOwner.lifecycleScope.launch {
+            // Plan 2：event 不再持有 notification_id Long，改以 notificationKey 取最新通知快照
             val notification = withContext(Dispatchers.IO) {
                 NotificationMasterApp.getInstance().database
-                    .notificationDao().getById(event.notificationId)
+                    .notificationDao().getLatestByKey(event.notificationKey)
             }
             _binding ?: return@launch
 
@@ -575,27 +579,12 @@ class NotificationDetailFragment : Fragment() {
                 sb.appendLine("removal_reason_desc: ${ApiVersionHelper.getRemovalReasonDescription(event.removalReason)}")
             }
 
-            // 變動內容（UPDATED / RANKING 事件）
-            if (event.eventType == EventType.UPDATED || event.eventType == EventType.RANKING) {
+            // 變動內容（Plan 2：contentDiff column 已移除，改 read-time 由 EventDiffer 計算；
+            //          Phase 7 Detail 頁重寫前暫時不顯示 inline diff）
+            if (event.eventType == EventType.UPDATED) {
                 sb.appendLine()
                 sb.appendLine("── 變動內容 ──")
-                if (!event.contentDiff.isNullOrEmpty()) {
-                    try {
-                        val json = JSONObject(event.contentDiff)
-                        val keys = json.keys()
-                        while (keys.hasNext()) {
-                            val key = keys.next()
-                            val change = json.getJSONObject(key)
-                            val oldVal = change.opt("old")?.takeIf { it != JSONObject.NULL } ?: "(無)"
-                            val newVal = change.opt("new")?.takeIf { it != JSONObject.NULL } ?: "(無)"
-                            sb.appendLine("$key: $oldVal → $newVal")
-                        }
-                    } catch (_: Exception) {
-                        sb.appendLine(event.contentDiff)
-                    }
-                } else {
-                    sb.appendLine("(無變更)")
-                }
+                sb.appendLine("(Plan 2 重構中，inline diff 待 Phase 7 Detail 頁重寫)")
             }
 
             // 關聯通知記錄的完整資料

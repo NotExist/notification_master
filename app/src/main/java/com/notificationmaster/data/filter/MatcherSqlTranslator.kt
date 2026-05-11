@@ -121,9 +121,10 @@ object MatcherSqlTranslator {
 
         is Matcher.EventTypes -> {
             // 列表篩選的「事件型別」詮釋為「該通知曾發生過此型別事件」
+            // Plan 2：notification_events 表 FK 改 notification_key（不再持有 notification_id Long）
             val placeholders = List(matcher.types.size) { "?" }.joinToString(",")
             Fragment(
-                "EXISTS (SELECT 1 FROM notification_events e WHERE e.notification_id = n.id AND e.event_type IN ($placeholders))",
+                "EXISTS (SELECT 1 FROM notification_events e WHERE e.notification_key = n.notification_key AND e.event_type IN ($placeholders))",
                 matcher.types.toList()
             )
         }

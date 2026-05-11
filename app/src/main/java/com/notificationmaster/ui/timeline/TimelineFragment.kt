@@ -97,7 +97,9 @@ class TimelineFragment : Fragment() {
     private var isLoadingMore = false
     private var hasReachedEnd = false
     private var earliestPostTime: Long? = null
-    private var removedIds: Set<Long> = emptySet()
+    // Plan 2：notification_events 改回 notification_key 關聯（無 notification_id Long），
+    //         此處同步改為 key 集合；對比 NotificationEntity.notificationKey
+    private var removedIds: Set<String> = emptySet()
 
     private companion object {
         private const val TAG = "TimelineFragment"
@@ -575,7 +577,7 @@ class TimelineFragment : Fragment() {
             val showRemovedOverlay = coreSpec.isRemoved != true
             if (showRemovedOverlay) {
                 launch {
-                    dao.getRemovedNotificationIdsFlow().collectLatest { ids ->
+                    dao.getRemovedNotificationKeysFlow().collectLatest { ids ->
                         if (_binding == null) return@collectLatest
                         val newSet = ids.toSet()
                         if (removedIds != newSet) {
@@ -770,7 +772,7 @@ class TimelineFragment : Fragment() {
 
             items.add(TimelineItem.NotificationItem(
                 notification = notification,
-                isRemoved = removedIds.contains(notification.id)
+                isRemoved = removedIds.contains(notification.notificationKey)
             ))
         }
 
@@ -801,7 +803,7 @@ class TimelineFragment : Fragment() {
             items.add(TimelineItem.NotificationItem(
                 notification = notification,
                 similarCount = similarCount,
-                isRemoved = removedIds.contains(notification.id)
+                isRemoved = removedIds.contains(notification.notificationKey)
             ))
         }
 

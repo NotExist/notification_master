@@ -202,23 +202,33 @@ class ArchiveImporter(private val context: Context) {
     }
 
     private fun parseEvent(json: JSONObject): NotificationEventEntity {
+        // Plan 2：NotificationEventEntity 重構，移除舊欄位，新增 captureTime / packageName /
+        //         channelId / postTime / contentHash / title / text / isAudible / likelyHeadsup /
+        //         eventRawJson。舊匯出檔的相容性留 Phase 7+ 匯出格式重設計時處理。
         val notificationKey = json.getString("notificationKey")
         require(notificationKey.isNotBlank()) { "Event notificationKey must not be blank" }
 
+        // Plan 2 reason 編碼擴充：允許 0 與負值（如 -100 = RECONCILED_AFTER_FACT）
+        val rawReason = if (json.has("removalReason")) json.optInt("removalReason", Int.MIN_VALUE) else Int.MIN_VALUE
+        val removalReason = if (rawReason == Int.MIN_VALUE) null else rawReason
+
         return NotificationEventEntity(
             id = json.optLong("id", 0),
-            notificationId = json.getLong("notificationId"),
             notificationKey = notificationKey,
             eventType = EventType.valueOf(json.getString("eventType")),
             eventTime = json.getLong("eventTime"),
-            removalReason = json.optInt("removalReason", -1).takeIf { it >= 0 },
+            captureTime = json.optLong("captureTime", json.getLong("eventTime")),
+            packageName = json.optString("packageName", ""),
+            channelId = json.optString("channelId").takeIf { it != "null" && it.isNotEmpty() },
+            postTime = json.optLong("postTime", json.getLong("eventTime")),
+            contentHash = json.optString("contentHash", ""),
+            title = json.optString("title").takeIf { it != "null" && it.isNotEmpty() },
+            text = json.optString("text").takeIf { it != "null" && it.isNotEmpty() },
+            removalReason = removalReason,
             removalReasonCategory = json.optString("removalReasonCategory").takeIf { it != "null" && it.isNotEmpty() },
-            rankingRank = json.optInt("rankingRank", -1).takeIf { it >= 0 },
-            rankingImportance = json.optInt("rankingImportance", -1).takeIf { it >= 0 },
-            isAmbient = if (json.has("isAmbient")) json.optBoolean("isAmbient") else null,
-            isSuspended = if (json.has("isSuspended")) json.optBoolean("isSuspended") else null,
-            suppressedVisualEffects = json.optInt("suppressedVisualEffects", -1).takeIf { it >= 0 },
-            contentDiff = json.optString("contentDiff").takeIf { it != "null" && it.isNotEmpty() }
+            isAudible = json.optBoolean("isAudible", false),
+            likelyHeadsup = json.optBoolean("likelyHeadsup", false),
+            eventRawJson = json.optString("eventRawJson", "")
         )
     }
 }

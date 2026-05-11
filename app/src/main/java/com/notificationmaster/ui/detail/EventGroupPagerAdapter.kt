@@ -60,8 +60,14 @@ class EventGroupPagerAdapter(
 
         fun bind(entityId: Long) {
             lifecycleScope.launch {
+                // Plan 2 過渡：events 已改以 notification_key 關聯，不再有 notification_id Long。
+                //              此處 entityId 對應的 NotificationEntity.id 仍可用於從 NotificationDao
+                //              取得 notification_key，再用 key 查 events。Phase 7 移除 ViewPager 時整段刪。
                 val events = withContext(Dispatchers.IO) {
-                    eventDao.getEventsByNotificationIdSync(entityId)
+                    val db = com.notificationmaster.NotificationMasterApp.getInstance().database
+                    val key = db.notificationDao().getById(entityId)?.notificationKey
+                        ?: return@withContext emptyList()
+                    eventDao.getEventsByKeySync(key)
                 }
 
                 // 建立 GroupHeader + EventItem 列表
