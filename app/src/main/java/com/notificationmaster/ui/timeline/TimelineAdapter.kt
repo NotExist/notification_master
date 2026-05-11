@@ -11,9 +11,9 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notificationmaster.R
 import com.notificationmaster.core.cache.AppLabelCache
-import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.databinding.ItemTimelineDateHeaderBinding
 import com.notificationmaster.databinding.ItemTimelineNotificationBinding
+import com.notificationmaster.ui.common.NotificationDisplay
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -22,11 +22,15 @@ import java.util.Locale
 /**
  * 時間軸 Adapter
  * 支援日期分組標題和通知項目
+ *
+ * Plan 2 Phase 9：吃 [NotificationDisplay]（NotificationEventEntity + snapshot 合成的攤平資料）。
+ * Ranking-dependent 屬性目前以預設值填入；importance / isConversation / isAmbient / isSuspended
+ * 不再從列表項顯示，待 Phase 7b 由 RankingSnapshotMerger 合併最近 observation 後恢復。
  */
 class TimelineAdapter(
-    private val onItemClick: (NotificationEntity) -> Unit,
-    private val onSimilarClick: (NotificationEntity) -> Unit = {},
-    private val onItemLongClick: (NotificationEntity) -> Unit = {}
+    private val onItemClick: (NotificationDisplay) -> Unit,
+    private val onSimilarClick: (NotificationDisplay) -> Unit = {},
+    private val onItemLongClick: (NotificationDisplay) -> Unit = {}
 ) : ListAdapter<TimelineItem, RecyclerView.ViewHolder>(DiffCallback()) {
 
     init {
@@ -142,28 +146,28 @@ class TimelineAdapter(
         }
 
         fun bind(item: TimelineItem.NotificationItem) {
-            val notification = item.notification
+            val display = item.notification
             val context = binding.root.context
 
             // 已移除通知淡化（alpha=0.55）
             binding.root.alpha = if (item.isRemoved) 0.55f else 1.0f
 
             // 標題
-            binding.textTitle.text = notification.title ?: context.getString(R.string.no_title)
+            binding.textTitle.text = display.title ?: context.getString(R.string.no_title)
 
             // 時間（精確到秒）
-            binding.textTime.text = timeFormat.format(Date(notification.postTime))
+            binding.textTime.text = timeFormat.format(Date(display.postTime))
 
             // 內容
-            val content = notification.bigText ?: notification.text
+            val content = display.bigText ?: display.text
             binding.textContent.text = content ?: context.getString(R.string.no_content)
             binding.textContent.visibility = if (content != null) View.VISIBLE else View.GONE
 
             // App 名稱與圖示
-            binding.textAppName.text = AppLabelCache.getLabel(context, notification.packageName)
+            binding.textAppName.text = AppLabelCache.getLabel(context, display.packageName)
             try {
                 val pm = context.packageManager
-                val appInfo = pm.getApplicationInfo(notification.packageName, 0)
+                val appInfo = pm.getApplicationInfo(display.packageName, 0)
                 binding.imgAppIcon.setImageDrawable(pm.getApplicationIcon(appInfo))
             } catch (e: Exception) {
                 binding.imgAppIcon.setImageResource(android.R.drawable.sym_def_app_icon)
@@ -172,79 +176,59 @@ class TimelineAdapter(
             // 標籤
             binding.tagsContainer.removeAllViews()
 
-            // Importance / Priority tag
-            if (notification.importance >= 0) {
-                when (notification.importance) {
-                    0 -> addTag(binding.tagsContainer, "NONE", R.color.status_disabled, R.string.tag_importance_none_desc, "NONE")
-                    1 -> addTag(binding.tagsContainer, "MIN", R.color.tag_silent, R.string.tag_importance_min_desc, "MIN")
-                    2 -> addTag(binding.tagsContainer, "LOW", R.color.tag_silent, R.string.tag_importance_low_desc, "LOW")
-                    4 -> addTag(binding.tagsContainer, "HIGH", R.color.status_warning, R.string.tag_importance_high_desc, "HIGH")
-                    5 -> addTag(binding.tagsContainer, "MAX", R.color.status_warning, R.string.tag_importance_max_desc, "MAX")
-                }
-            } else {
-                when (notification.priority) {
-                    -2 -> addTag(binding.tagsContainer, "P:MIN", R.color.tag_silent, R.string.tag_priority_min_desc, "PRI:MIN")
-                    -1 -> addTag(binding.tagsContainer, "P:LOW", R.color.tag_silent, R.string.tag_priority_low_desc, "PRI:LOW")
-                    1 -> addTag(binding.tagsContainer, "P:HI", R.color.status_warning, R.string.tag_priority_high_desc, "PRI:HIGH")
-                    2 -> addTag(binding.tagsContainer, "P:MAX", R.color.status_warning, R.string.tag_priority_max_desc, "PRI:MAX")
-                }
+            // Priority tag（importance 暫時不可用，待 Phase 7b 由 ranking merger 補上）
+            when (display.priority) {
+                -2 -> addTag(binding.tagsContainer, "P:MIN", R.color.tag_silent, R.string.tag_priority_min_desc, "PRI:MIN")
+                -1 -> addTag(binding.tagsContainer, "P:LOW", R.color.tag_silent, R.string.tag_priority_low_desc, "PRI:LOW")
+                1 -> addTag(binding.tagsContainer, "P:HI", R.color.status_warning, R.string.tag_priority_high_desc, "PRI:HIGH")
+                2 -> addTag(binding.tagsContainer, "P:MAX", R.color.status_warning, R.string.tag_priority_max_desc, "PRI:MAX")
             }
 
             // 系統通知抽屜分類標籤
-            if (notification.isConversation ||
-                (notification.isMessagingStyle && !notification.shortcutId.isNullOrEmpty())) {
-                addTag(binding.tagsContainer, "Conv", R.color.tag_conversation, R.string.tag_conversation_desc, "Conversation")
-            }
-            if (notification.isMessagingStyle) {
+            if (display.isMessagingStyle) {
                 addTag(binding.tagsContainer, "Msg", R.color.tag_messaging_style, R.string.tag_messaging_style_desc, "MessagingStyle")
             }
 
             // 通知屬性標籤
-            if (notification.isOngoing) {
+            if (display.isOngoing) {
                 addTag(binding.tagsContainer, "OG", R.color.event_initial, R.string.tag_ongoing_desc, "Ongoing")
             }
-            if (notification.isNoClear) {
+            if (display.isNoClear) {
                 addTag(binding.tagsContainer, "NC", R.color.event_initial, R.string.tag_no_clear_desc, "NoClear")
             }
-            if (notification.isForegroundService) {
+            if (display.isForegroundService) {
                 addTag(binding.tagsContainer, "FGS", R.color.event_ranking, R.string.tag_fg_service_desc, "FG Service")
             }
-            if (notification.likelyHeadsup) {
+            if (display.likelyHeadsup) {
                 addTag(binding.tagsContainer, "HU", R.color.status_warning, R.string.tag_headsup_desc, "Heads-up")
             }
-            if (notification.isAudible) {
+            if (display.isAudible) {
                 addTag(binding.tagsContainer, "Audi", R.color.tag_audible, R.string.tag_audible_desc, "Audible")
             }
-            if (notification.isAutoCancel) {
+            if (display.isAutoCancel) {
                 addTag(binding.tagsContainer, "AC", R.color.event_updated, R.string.tag_auto_cancel_desc, "AutoCancel")
             }
-            if (notification.isHighPriority) {
+            if (display.isHighPriority) {
                 addTag(binding.tagsContainer, "HP", R.color.status_warning, R.string.tag_high_priority_desc, "HighPriority")
             }
-            if (notification.isLocalOnly) {
+            if (display.isLocalOnly) {
                 addTag(binding.tagsContainer, "Local", R.color.text_secondary, R.string.tag_local_only_desc, "LocalOnly")
             }
-            if (notification.isGroupSummary) {
+            if (display.isGroupSummary) {
                 addTag(binding.tagsContainer, "Sum", R.color.event_updated, R.string.tag_summary_desc, "Summary")
             }
-            if (notification.hasBubbleMetadata) {
+            if (display.hasBubbleMetadata) {
                 addTag(binding.tagsContainer, "Bub", R.color.status_enabled, R.string.tag_bubble_desc, "Bubble")
             }
-            if (notification.hasCustomContentView || notification.hasCustomBigContentView || notification.hasCustomHeadsUpContentView) {
+            if (display.hasCustomContentView || display.hasCustomBigContentView || display.hasCustomHeadsUpContentView) {
                 addTag(binding.tagsContainer, "CV", R.color.text_secondary, R.string.tag_custom_view_desc, "Custom View")
             }
-            if (notification.showChronometer) {
+            if (display.showChronometer) {
                 addTag(binding.tagsContainer, "Chrono", R.color.event_ranking, R.string.tag_chronometer_desc, "Chronometer")
-            }
-            if (notification.isAmbient) {
-                addTag(binding.tagsContainer, "Amb", R.color.tag_silent, R.string.tag_ambient_desc, "Ambient")
-            }
-            if (notification.isSuspended) {
-                addTag(binding.tagsContainer, "Susp", R.color.status_disabled, R.string.tag_suspended_desc, "Suspended")
             }
 
             // Style 標籤（基於 template 尾綴匹配）
-            val style = notification.template
+            val style = display.template
             when {
                 style == null -> { /* 無 Style，不加標籤 */ }
                 style.endsWith("BigTextStyle") ->
@@ -268,7 +252,7 @@ class TimelineAdapter(
                     item.similarCount - 1
                 )
                 binding.textSimilarCount.setOnClickListener {
-                    onSimilarClick(notification)
+                    onSimilarClick(display)
                 }
             } else {
                 binding.textSimilarCount.visibility = View.GONE
@@ -308,7 +292,7 @@ class TimelineAdapter(
                 oldItem is TimelineItem.DateHeader && newItem is TimelineItem.DateHeader ->
                     oldItem.date == newItem.date
                 oldItem is TimelineItem.NotificationItem && newItem is TimelineItem.NotificationItem ->
-                    oldItem.notification.id == newItem.notification.id
+                    oldItem.notification.eventId == newItem.notification.eventId
                 oldItem is TimelineItem.LoadingMore && newItem is TimelineItem.LoadingMore -> true
                 oldItem is TimelineItem.EndOfTimeline && newItem is TimelineItem.EndOfTimeline -> true
                 else -> false
@@ -327,7 +311,7 @@ class TimelineAdapter(
 sealed class TimelineItem {
     data class DateHeader(val date: Long) : TimelineItem()
     data class NotificationItem(
-        val notification: NotificationEntity,
+        val notification: NotificationDisplay,
         val similarCount: Int = 1,
         val isRemoved: Boolean = false
     ) : TimelineItem()

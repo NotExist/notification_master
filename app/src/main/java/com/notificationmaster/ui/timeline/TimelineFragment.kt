@@ -23,7 +23,6 @@ import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.core.permission.NlsConnectionManager
-import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.core.filter.ActionType
 import com.notificationmaster.core.filter.Rule
 import com.notificationmaster.core.filter.RuleAction
@@ -33,6 +32,7 @@ import com.notificationmaster.data.filter.EventFilterSpec
 import com.notificationmaster.data.filter.toFilterSpec
 import com.notificationmaster.databinding.FragmentTimelineBinding
 import com.notificationmaster.service.NotificationCaptureService
+import com.notificationmaster.ui.common.NotificationDisplay
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import com.notificationmaster.ui.filter.SoundPickerLauncher
@@ -59,6 +59,9 @@ import java.util.Locale
  * - + chip 開啟 BottomSheet 自訂篩選
  *
  * spec 為「全部」或「僅去重」時走天分頁漸進載入（ViewModel.loadNextDay），其餘走全域 spec 查詢。
+ *
+ * Plan 2 Phase 9：list 接 [NotificationDisplay]（NotificationEventEntity + snapshot），
+ * nav 進 Detail 傳 event id（語意換成 events PK；Detail 內反查 NotificationEntity 渲染）。
  */
 class TimelineFragment : Fragment() {
 
@@ -156,14 +159,14 @@ class TimelineFragment : Fragment() {
     private fun setupRecyclerView() {
         if (adapter == null) {
             adapter = TimelineAdapter(
-                onItemClick = { notification -> navigateToDetail(notification) },
-                onSimilarClick = { notification -> showSimilarNotifications(notification) },
-                onItemLongClick = { notification ->
+                onItemClick = { display -> navigateToDetail(display) },
+                onSimilarClick = { display -> showSimilarNotifications(display) },
+                onItemLongClick = { display ->
                     FilterRuleDialogHelper.showAddRuleDialog(
                         context = requireContext(),
                         actionType = null,
-                        prefillPackageName = notification.packageName,
-                        prefillChannelId = notification.channelId,
+                        prefillPackageName = display.packageName,
+                        prefillChannelId = display.channelId,
                         soundPicker = soundPicker,
                         calendarPicker = calendarPicker
                     )
@@ -525,7 +528,7 @@ class TimelineFragment : Fragment() {
     }
 
     private data class ListRenderInput(
-        val allNotifications: List<NotificationEntity>,
+        val allNotifications: List<NotificationDisplay>,
         val removedIds: Set<String>,
         val filterText: String,
         val spec: EventFilterSpec,
@@ -533,7 +536,7 @@ class TimelineFragment : Fragment() {
     )
 
     private data class CounterInput(
-        val allNotifications: List<NotificationEntity>,
+        val allNotifications: List<NotificationDisplay>,
         val totalCount: Int,
         val filterText: String,
         val spec: EventFilterSpec,
@@ -556,9 +559,9 @@ class TimelineFragment : Fragment() {
         binding.recyclerView.visibility = View.VISIBLE
 
         viewLifecycleOwner.lifecycleScope.launch {
-            val dao = NotificationMasterApp.getInstance().database.notificationDao()
+            val eventDao = NotificationMasterApp.getInstance().database.notificationEventDao()
             var timelineItems: List<TimelineItem> = if (input.spec.deduplicate) {
-                buildTimelineItemsWithSimilarCount(filtered, input.removedIds, dao)
+                buildTimelineItemsWithSimilarCount(filtered, input.removedIds, eventDao)
             } else {
                 buildTimelineItems(filtered, input.removedIds)
             }
@@ -595,14 +598,14 @@ class TimelineFragment : Fragment() {
     }
 
     private fun loadedCountForCounter(
-        filtered: List<NotificationEntity>,
+        filtered: List<NotificationDisplay>,
         spec: EventFilterSpec
     ): Int = if (spec.deduplicate) filtered.distinctBy { it.notificationKey }.size else filtered.size
 
     private fun filterNotifications(
-        notifications: List<NotificationEntity>,
+        notifications: List<NotificationDisplay>,
         query: String
-    ): List<NotificationEntity> {
+    ): List<NotificationDisplay> {
         if (query.isEmpty()) return notifications
         val lowerQuery = query.lowercase()
         return notifications.filter { n ->
@@ -620,7 +623,7 @@ class TimelineFragment : Fragment() {
     }
 
     private fun buildTimelineItems(
-        notifications: List<NotificationEntity>,
+        notifications: List<NotificationDisplay>,
         removedIds: Set<String>
     ): List<TimelineItem> {
         val items = mutableListOf<TimelineItem>()
@@ -640,9 +643,9 @@ class TimelineFragment : Fragment() {
     }
 
     private suspend fun buildTimelineItemsWithSimilarCount(
-        notifications: List<NotificationEntity>,
+        notifications: List<NotificationDisplay>,
         removedIds: Set<String>,
-        dao: com.notificationmaster.data.db.dao.NotificationDao
+        eventDao: com.notificationmaster.data.db.dao.NotificationEventDao
     ): List<TimelineItem> {
         val items = mutableListOf<TimelineItem>()
         var lastDate: Long? = null
@@ -655,7 +658,7 @@ class TimelineFragment : Fragment() {
             val dayStart = notificationDate
             val dayEnd = dayStart + ONE_DAY_MS
             val similarCount = withContext(Dispatchers.IO) {
-                dao.getDeduplicatedCount(notification.contentHash, dayStart, dayEnd)
+                eventDao.getDeduplicatedCount(notification.contentHash, dayStart, dayEnd)
             }
             items.add(TimelineItem.NotificationItem(
                 notification = notification,
@@ -751,18 +754,19 @@ class TimelineFragment : Fragment() {
         }
     }
 
-    private fun showSimilarNotifications(notification: NotificationEntity) {
-        val dao = NotificationMasterApp.getInstance().database.notificationDao()
+    private fun showSimilarNotifications(notification: NotificationDisplay) {
+        val eventDao = NotificationMasterApp.getInstance().database.notificationEventDao()
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
         val dayStart = getStartOfDay(notification.postTime)
         val dayEnd = dayStart + ONE_DAY_MS
         viewLifecycleOwner.lifecycleScope.launch {
-            val similar = withContext(Dispatchers.IO) {
-                dao.getSimilarNotifications(notification.contentHash, dayStart, dayEnd)
+            val similarEvents = withContext(Dispatchers.IO) {
+                eventDao.getSimilarEvents(notification.contentHash, dayStart, dayEnd)
             }
             if (_binding == null) return@launch
-            if (similar.size <= 1) return@launch
+            if (similarEvents.size <= 1) return@launch
 
+            val similar = withContext(Dispatchers.IO) { similarEvents.map(NotificationDisplay::from) }
             val items = similar.map { n ->
                 val appLabel = getAppLabel(n.packageName)
                 val time = timeFormat.format(Date(n.postTime))
@@ -779,8 +783,8 @@ class TimelineFragment : Fragment() {
         }
     }
 
-    private fun navigateToDetail(notification: NotificationEntity) {
-        val action = TimelineFragmentDirections.actionTimelineHomeToTimelineDetail(notification.id)
+    private fun navigateToDetail(display: NotificationDisplay) {
+        val action = TimelineFragmentDirections.actionTimelineHomeToTimelineDetail(display.eventId)
         findNavController().navigate(action)
     }
 }

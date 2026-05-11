@@ -24,6 +24,8 @@ import java.util.concurrent.Executors
 /**
  * 單項式通知 Widget（Plan D — RuleEngine LIST_FILTER 路線）
  * 顯示符合 rule 的最新一筆通知，點擊進入 Detail 頁
+ *
+ * Plan 2 Phase 9：資料源改為 notification_events；點擊傳 event.id。
  */
 class NotificationSingleWidgetProvider : AppWidgetProvider() {
 
@@ -83,8 +85,8 @@ class NotificationSingleWidgetProvider : AppWidgetProvider() {
 
             // 第二階段（background thread）：查最新一筆 push 完整 RemoteViews
             executor.execute {
-                val dao = NotificationMasterApp.getInstance().database.notificationDao()
-                val notification = try {
+                val dao = NotificationMasterApp.getInstance().database.notificationEventDao()
+                val event = try {
                     dao.querySync(spec).firstOrNull()
                 } catch (_: Exception) { null }
 
@@ -92,14 +94,14 @@ class NotificationSingleWidgetProvider : AppWidgetProvider() {
                 views.setTextViewText(R.id.widget_single_type, typeLabel)
                 views.setOnClickPendingIntent(R.id.widget_single_type, typePendingIntent)
 
-                if (notification != null) {
-                    views.setTextViewText(R.id.widget_single_title, notification.title ?: "No Title")
-                    views.setTextViewText(R.id.widget_single_time, timeFormat.format(Date(notification.postTime)))
-                    views.setTextViewText(R.id.widget_single_content, notification.bigText ?: notification.text ?: "")
+                if (event != null) {
+                    views.setTextViewText(R.id.widget_single_title, event.title ?: "No Title")
+                    views.setTextViewText(R.id.widget_single_time, timeFormat.format(Date(event.postTime)))
+                    views.setTextViewText(R.id.widget_single_content, event.text ?: "")
 
                     val detailIntent = Intent(appContext, MainActivity::class.java).apply {
                         action = MainActivity.ACTION_SHOW_DETAIL
-                        putExtra(MainActivity.EXTRA_NOTIFICATION_ID, notification.id)
+                        putExtra(MainActivity.EXTRA_NOTIFICATION_ID, event.id)
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     }
                     val pendingIntent = PendingIntent.getActivity(

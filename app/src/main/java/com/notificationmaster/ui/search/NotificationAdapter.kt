@@ -11,19 +11,21 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notificationmaster.R
 import com.notificationmaster.core.cache.AppLabelCache
-import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.databinding.ItemNotificationBinding
+import com.notificationmaster.ui.common.NotificationDisplay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * 通知列表 Adapter
+ * 通知列表 Adapter（Search / Shortcut / Filter Preview 共用）
+ *
+ * Plan 2 Phase 9：接 [NotificationDisplay]。
  */
 class NotificationAdapter(
-    private val onItemClick: (NotificationEntity) -> Unit,
-    private val onItemLongClick: (NotificationEntity) -> Unit = {}
-) : ListAdapter<NotificationEntity, NotificationAdapter.ViewHolder>(DiffCallback()) {
+    private val onItemClick: (NotificationDisplay) -> Unit,
+    private val onItemLongClick: (NotificationDisplay) -> Unit = {}
+) : ListAdapter<NotificationDisplay, NotificationAdapter.ViewHolder>(DiffCallback()) {
 
     init {
         stateRestorationPolicy = StateRestorationPolicy.PREVENT_WHEN_EMPTY
@@ -64,7 +66,7 @@ class NotificationAdapter(
             }
         }
 
-        fun bind(item: NotificationEntity) {
+        fun bind(item: NotificationDisplay) {
             val context = binding.root.context
 
             // 標題
@@ -138,12 +140,12 @@ class NotificationAdapter(
         }
     }
 
-    class DiffCallback : DiffUtil.ItemCallback<NotificationEntity>() {
-        override fun areItemsTheSame(oldItem: NotificationEntity, newItem: NotificationEntity): Boolean {
-            return oldItem.id == newItem.id
+    class DiffCallback : DiffUtil.ItemCallback<NotificationDisplay>() {
+        override fun areItemsTheSame(oldItem: NotificationDisplay, newItem: NotificationDisplay): Boolean {
+            return oldItem.eventId == newItem.eventId
         }
 
-        override fun areContentsTheSame(oldItem: NotificationEntity, newItem: NotificationEntity): Boolean {
+        override fun areContentsTheSame(oldItem: NotificationDisplay, newItem: NotificationDisplay): Boolean {
             return oldItem == newItem
         }
     }

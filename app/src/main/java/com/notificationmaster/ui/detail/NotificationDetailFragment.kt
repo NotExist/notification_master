@@ -144,11 +144,20 @@ class NotificationDetailFragment : Fragment() {
     private fun loadNotificationDetail() {
         val database = NotificationMasterApp.getInstance().database
         val notificationDao = database.notificationDao()
+        val eventDao = database.notificationEventDao()
         val mediaDao = database.mediaAttachmentDao()
 
         viewLifecycleOwner.lifecycleScope.launch {
-            val notification = withContext(Dispatchers.IO) {
-                notificationDao.getById(args.notificationId)
+            // Plan 2 Phase 9：args.notificationId 語義改為 event id（events PK）。
+            // 透過 event 反查最新的 NotificationEntity 作為 Detail 渲染來源；
+            // Phase 7b Detail 重寫後將直接吃 event + RankingSnapshotMerger，本反查路徑可移除。
+            val event = withContext(Dispatchers.IO) {
+                eventDao.getById(args.notificationId)
+            }
+            val notification = event?.let {
+                withContext(Dispatchers.IO) {
+                    notificationDao.getLatestByKey(it.notificationKey)
+                }
             }
 
             if (notification != null) {
@@ -159,17 +168,14 @@ class NotificationDetailFragment : Fragment() {
                 }
                 displayNotification(notification, channelEntity)
 
-                // 載入動作按鈕與 Intent 資訊
-                // Plan 2 過渡：children FK 已 rename event_id，但 UI 仍以 args.notificationId
-                //              （NotificationEntity.id）查詢；新 schema 下子物件實際掛在 event_id，
-                //              因此 Phase 7 Detail 重寫前此查詢回空。Compile 仍通過。
+                // 載入動作按鈕與 Intent 資訊（FK 為 event_id）
                 val actionDao = database.actionDao()
                 val actions = withContext(Dispatchers.IO) {
                     actionDao.getActionsByEventIdSync(args.notificationId)
                 }
                 displayIntents(actions, notification)
 
-                // 載入媒體附件（同上）
+                // 載入媒體附件（FK 為 event_id）
                 val attachments = withContext(Dispatchers.IO) {
                     mediaDao.getAttachmentsByEventIdSync(args.notificationId)
                 }
@@ -190,7 +196,7 @@ class NotificationDetailFragment : Fragment() {
                 }
                 displayDeviceState(deviceState)
 
-                // 取得同 key 的所有 Entity ID
+                // 取得同 key 的所有 NotificationEntity ID（Phase 7b 重寫前 pager 仍走舊路徑）
                 val entityIds = withContext(Dispatchers.IO) {
                     notificationDao.getEntityIdsByKey(notification.notificationKey)
                 }
@@ -198,8 +204,8 @@ class NotificationDetailFragment : Fragment() {
                 // 提交給 pager adapter
                 pagerAdapter.submitEntityIds(entityIds)
 
-                // 定位到當前瀏覽的 entity
-                val currentIndex = entityIds.indexOf(args.notificationId)
+                // 定位到當前瀏覽的 entity（用 notification.id，因 args.notificationId 是 event id）
+                val currentIndex = entityIds.indexOf(notification.id)
                 if (currentIndex >= 0) {
                     binding.pagerEvents.setCurrentItem(currentIndex, false)
                 }

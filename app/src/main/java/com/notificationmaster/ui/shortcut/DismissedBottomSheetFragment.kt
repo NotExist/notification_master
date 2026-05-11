@@ -16,10 +16,13 @@ import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.data.db.dao.query
 import com.notificationmaster.data.filter.toFilterSpec
 import com.notificationmaster.databinding.FragmentShortcutDismissedBinding
+import com.notificationmaster.ui.common.NotificationDisplay
 import com.notificationmaster.ui.main.MainActivity
 import com.notificationmaster.ui.search.NotificationAdapter
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Dismissed Shortcut BottomSheet — 從底部滑入顯示最近被移除的通知列表
@@ -43,10 +46,10 @@ class DismissedBottomSheetFragment : BottomSheetDialogFragment() {
 
         binding.textTitle.setText(R.string.shortcut_dismissed_title)
 
-        val adapter = NotificationAdapter(onItemClick = { notification ->
+        val adapter = NotificationAdapter(onItemClick = { display ->
             startActivity(Intent(MainActivity.ACTION_SHOW_DETAIL).apply {
                 setClass(requireContext(), MainActivity::class.java)
-                putExtra(MainActivity.EXTRA_NOTIFICATION_ID, notification.id)
+                putExtra(MainActivity.EXTRA_NOTIFICATION_ID, display.eventId)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             })
             dismiss()
@@ -58,12 +61,13 @@ class DismissedBottomSheetFragment : BottomSheetDialogFragment() {
         val rule = RuleEngine.getRule(RuleRepository.builtInRuleIdDismissed()) ?: run {
             dismiss(); return
         }
-        val dao = NotificationMasterApp.getInstance().database.notificationDao()
+        val dao = NotificationMasterApp.getInstance().database.notificationEventDao()
         viewLifecycleOwner.lifecycleScope.launch {
-            dao.query(rule.toFilterSpec().copy(limit = 30)).collectLatest { notifications ->
+            dao.query(rule.toFilterSpec().copy(limit = 30)).collectLatest { events ->
                 if (_binding == null) return@collectLatest
-                adapter.submitList(notifications)
-                if (notifications.isEmpty()) {
+                val displays = withContext(Dispatchers.IO) { events.map(NotificationDisplay::from) }
+                adapter.submitList(displays)
+                if (displays.isEmpty()) {
                     binding.recyclerView.visibility = View.GONE
                     binding.textEmpty.visibility = View.VISIBLE
                     binding.textEmpty.setText(R.string.shortcut_empty_dismissed)

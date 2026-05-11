@@ -78,16 +78,16 @@ class SearchFragment : Fragment() {
 
     private fun setupRecyclerView() {
         notificationAdapter = NotificationAdapter(
-            onItemClick = { notification ->
-                val action = SearchFragmentDirections.actionSearchHomeToSearchDetail(notification.id)
+            onItemClick = { display ->
+                val action = SearchFragmentDirections.actionSearchHomeToSearchDetail(display.eventId)
                 findNavController().navigate(action)
             },
-            onItemLongClick = { notification ->
+            onItemLongClick = { display ->
                 FilterRuleDialogHelper.showAddRuleDialog(
                     context = requireContext(),
                     actionType = null,
-                    prefillPackageName = notification.packageName,
-                    prefillChannelId = notification.channelId,
+                    prefillPackageName = display.packageName,
+                    prefillChannelId = display.channelId,
                     soundPicker = soundPicker,
                     calendarPicker = calendarPicker
                 )

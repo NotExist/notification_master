@@ -36,10 +36,12 @@ import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.core.filter.FieldOp
 import com.notificationmaster.core.filter.FieldWhitelist
 import com.notificationmaster.core.filter.OrderBy
+import com.notificationmaster.core.NotificationSnapshotParser
 import com.notificationmaster.data.db.dao.countSync
 import com.notificationmaster.data.db.entity.EventType
-import com.notificationmaster.data.db.entity.NotificationEntity
+import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.data.filter.EventFilterSpec
+import com.notificationmaster.ui.common.NotificationDisplay
 import com.notificationmaster.ui.search.NotificationAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -782,7 +784,7 @@ object FilterRuleDialogHelper {
                 val spec = EventFilterSpec(matchers = matchers)
                 val count = try {
                     withContext(Dispatchers.IO) {
-                        database.notificationDao().countSync(spec)
+                        database.notificationEventDao().countSync(spec)
                     }
                 } catch (_: Exception) { -1 }
                 textPreviewCount.text = if (count >= 0)
@@ -800,39 +802,27 @@ object FilterRuleDialogHelper {
 
             val previewLimit = 200
             scope.launch {
-                val (results, channelGroupMap) = withContext(Dispatchers.IO) {
-                    val events = database.notificationDao().getRecentEventsWithNotifications(previewLimit)
+                val (events, channelGroupMap) = withContext(Dispatchers.IO) {
+                    val ev = database.notificationEventDao().getRecentEvents(previewLimit)
                     val groupMap = database.channelDao().getAllChannelsSync()
                         .associate { (it.packageName to it.channelId) to it.groupId }
-                    events to groupMap
+                    ev to groupMap
                 }
-                // 事件優先：按通知分組，任一事件匹配即納入結果
-                val matched = results
-                    .groupBy { it.notification.id }
+                // 同 notification_key 的多個 event 共構一個邏輯通知，任一 event 匹配即納入
+                val matched = events
+                    .groupBy { it.notificationKey }
                     .values
-                    .filter { events ->
-                        events.any { r ->
-                            val mc = MatchContext(
-                                packageName = r.notification.packageName,
-                                channelId = r.notification.channelId,
-                                eventType = r.eventType,
-                                title = r.notification.title,
-                                text = r.notification.text,
-                                bigText = r.notification.bigText,
-                                subText = r.notification.subText,
-                                channelImportance = r.notification.importance.takeIf { it >= 0 },
-                                channelGroupId = r.notification.channelId?.let { chId ->
-                                    channelGroupMap[r.notification.packageName to chId]
-                                },
-                                flags = r.notification.flags,
-                                isAudible = r.notification.isAudible,
-                                likelyHeadsup = r.notification.likelyHeadsup,
-                                isRemoved = r.notification.removedAt != null
-                            )
+                    .filter { evGroup ->
+                        evGroup.any { e ->
+                            val mc = buildMatchContext(e, channelGroupMap)
                             tempRule.matches(mc)
                         }
                     }
-                    .map { it.first().notification }
+                    .map { evGroup ->
+                        // 顯示用「該 group 內最新 event」一筆
+                        evGroup.maxBy { it.eventTime }
+                    }
+                    .map(NotificationDisplay::from)
 
                 if (matched.isEmpty()) {
                     // 檢查是否有 INITIAL 事件符合（忽略 EventType 條件）
@@ -842,26 +832,13 @@ object FilterRuleDialogHelper {
                             matchers = tempMatchers.filter { it !is Matcher.EventTypes },
                             action = RuleAction.SkipRecord
                         )
-                        results
+                        events
                             .filter { it.eventType == EventType.INITIAL }
-                            .groupBy { it.notification.id }
+                            .groupBy { it.notificationKey }
                             .values
-                            .count { events ->
-                                events.any { r ->
-                                    val mc = MatchContext(
-                                        packageName = r.notification.packageName,
-                                        channelId = r.notification.channelId,
-                                        eventType = r.eventType,
-                                        title = r.notification.title,
-                                        text = r.notification.text,
-                                        bigText = r.notification.bigText,
-                                        subText = r.notification.subText,
-                                        channelImportance = r.notification.importance.takeIf { it >= 0 },
-                                        channelGroupId = r.notification.channelId?.let { chId ->
-                                            channelGroupMap[r.notification.packageName to chId]
-                                        }
-                                    )
-                                    relaxedRule.matches(mc)
+                            .count { evGroup ->
+                                evGroup.any { e ->
+                                    relaxedRule.matches(buildMatchContext(e, channelGroupMap))
                                 }
                             }
                     } else 0
@@ -1125,11 +1102,43 @@ object FilterRuleDialogHelper {
     }
 
     /**
+     * 從 NotificationEventEntity + snapshot 構造 in-memory matcher 用的 MatchContext。
+     *
+     * events 表不投影 channel importance / channelGroup 等 channel-meta 屬性，
+     * 這部份對應 SQL 路徑的 ALWAYS_TRUE 退化（Phase 9-1 決策）；in-memory 路徑
+     * 對 ChannelProperty.minImportance 仍會 fail-close（返 null → fail），這是
+     * 已知 UX 預覽偏保守的退化，等 Phase 7b RankingMerger 補上 importance 再對齊。
+     */
+    private fun buildMatchContext(
+        event: NotificationEventEntity,
+        channelGroupMap: Map<Pair<String, String>, String?>
+    ): MatchContext {
+        val snap = NotificationSnapshotParser.parse(event.eventRawJson)
+        return MatchContext(
+            packageName = event.packageName,
+            channelId = event.channelId,
+            eventType = event.eventType,
+            title = event.title,
+            text = event.text,
+            bigText = snap?.bigText,
+            subText = snap?.subText,
+            channelImportance = null,
+            channelGroupId = event.channelId?.let { chId ->
+                channelGroupMap[event.packageName to chId]
+            },
+            flags = snap?.flags,
+            isAudible = event.isAudible,
+            likelyHeadsup = event.likelyHeadsup,
+            isRemoved = event.eventType == EventType.REMOVED
+        )
+    }
+
+    /**
      * 顯示預覽結果 Dialog（RecyclerView + 套用按鈕）
      */
     private fun showPreviewResultDialog(
         context: Context,
-        matched: List<NotificationEntity>,
+        matched: List<NotificationDisplay>,
         previewLimit: Int,
         actionType: ActionType,
         tempRule: Rule
@@ -1178,21 +1187,34 @@ object FilterRuleDialogHelper {
 
     /**
      * 對預覽結果套用實際動作
+     *
+     * Plan 2 Phase 9：matched 為 NotificationDisplay 列表；ClipboardCopyHelper /
+     * CalendarExporter 仍吃 NotificationEntity（待 Phase 9-6/7 切換）。此處以
+     * notificationKey 反查 NotificationEntity 後傳遞。
      */
     private fun applyActionToResults(
         context: Context,
-        notifications: List<NotificationEntity>,
+        notifications: List<NotificationDisplay>,
         actionType: ActionType,
         rule: Rule
     ) {
+        val database = NotificationMasterApp.getInstance().database
         when (actionType) {
             ActionType.CLIPBOARD_COPY -> {
                 val keywordMatcher = rule.matchers.filterIsInstance<Matcher.Keyword>().firstOrNull()
-                var copyCount = 0
-                for (notification in notifications) {
-                    copyCount += ClipboardCopyHelper.copyToClipboard(context, notification, keywordMatcher)
+                kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                    var copyCount = 0
+                    for (display in notifications) {
+                        val entity = database.notificationDao().getLatestByKey(display.notificationKey)
+                            ?: continue
+                        copyCount += ClipboardCopyHelper.copyToClipboard(context, entity, keywordMatcher)
+                    }
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context,
+                            context.getString(R.string.filter_preview_applied_clipboard, copyCount),
+                            Toast.LENGTH_SHORT).show()
+                    }
                 }
-                Toast.makeText(context, context.getString(R.string.filter_preview_applied_clipboard, copyCount), Toast.LENGTH_SHORT).show()
             }
             ActionType.CALENDAR_EXPORT -> {
                 val exporter = CalendarExporter(context)
@@ -1212,11 +1234,18 @@ object FilterRuleDialogHelper {
                         Toast.LENGTH_SHORT).show()
                     return
                 }
-                val result = exporter.exportToCalendar(notifications, targetId, ExportDetailLevel.FULL)
-                Toast.makeText(context,
-                    context.getString(R.string.filter_preview_applied_calendar, result.successCount),
-                    Toast.LENGTH_SHORT
-                ).show()
+                kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                    val entities = notifications.mapNotNull {
+                        database.notificationDao().getLatestByKey(it.notificationKey)
+                    }
+                    val result = exporter.exportToCalendar(entities, targetId, ExportDetailLevel.FULL)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context,
+                            context.getString(R.string.filter_preview_applied_calendar, result.successCount),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
             }
             else -> {
                 Toast.makeText(context, R.string.filter_preview_apply_unsupported, Toast.LENGTH_SHORT).show()

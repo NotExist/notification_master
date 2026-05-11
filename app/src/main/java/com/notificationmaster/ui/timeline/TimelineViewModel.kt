@@ -9,12 +9,12 @@ import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.core.filter.Rule
 import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.filter.RuleRepository
-import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.dao.count
 import com.notificationmaster.data.db.dao.query
 import com.notificationmaster.data.filter.EventFilterSpec
 import com.notificationmaster.data.filter.coreFilterSpecOf
 import com.notificationmaster.data.filter.toFilterSpec
+import com.notificationmaster.ui.common.NotificationDisplay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +39,9 @@ import java.util.Calendar
  * scroll position 還原：Fragment 在 onPause 把 LayoutManager 的 Parcelable state 存到 [scrollState]，
  * 重建後 onViewCreated 取出，等 adapter 完成 submitList 後 restore。從 Detail 返回時等同回到進入前位置
  * （不再採 Plan 2 §I 原方案 §I 的 lastViewedKey + Snackbar 銜接）。
+ *
+ * Plan 2 Phase 9：列表資料切到 [com.notificationmaster.data.db.entity.NotificationEventEntity]，
+ * 渲染前一次性 transform 為 [NotificationDisplay]（snapshot 解析在 IO thread 集中完成）。
  */
 class TimelineViewModel(
     application: Application,
@@ -46,7 +49,7 @@ class TimelineViewModel(
 ) : AndroidViewModel(application) {
 
     private val database = NotificationMasterApp.getInstance().database
-    private val dao = database.notificationDao()
+    private val eventDao = database.notificationEventDao()
 
     // === 篩選狀態 ===
 
@@ -69,16 +72,16 @@ class TimelineViewModel(
 
     // === 載入狀態 ===
 
-    private val _todayNotifications = MutableStateFlow<List<NotificationEntity>>(emptyList())
-    val todayNotifications: StateFlow<List<NotificationEntity>> = _todayNotifications.asStateFlow()
+    private val _todayNotifications = MutableStateFlow<List<NotificationDisplay>>(emptyList())
+    val todayNotifications: StateFlow<List<NotificationDisplay>> = _todayNotifications.asStateFlow()
 
     private val _historicalDays =
-        MutableStateFlow<List<Pair<Long, List<NotificationEntity>>>>(emptyList())
-    val historicalDays: StateFlow<List<Pair<Long, List<NotificationEntity>>>> =
+        MutableStateFlow<List<Pair<Long, List<NotificationDisplay>>>>(emptyList())
+    val historicalDays: StateFlow<List<Pair<Long, List<NotificationDisplay>>>> =
         _historicalDays.asStateFlow()
 
-    private val _allNotifications = MutableStateFlow<List<NotificationEntity>>(emptyList())
-    val allNotifications: StateFlow<List<NotificationEntity>> = _allNotifications.asStateFlow()
+    private val _allNotifications = MutableStateFlow<List<NotificationDisplay>>(emptyList())
+    val allNotifications: StateFlow<List<NotificationDisplay>> = _allNotifications.asStateFlow()
 
     private val _totalCount = MutableStateFlow(0)
     val totalCount: StateFlow<Int> = _totalCount.asStateFlow()
@@ -198,7 +201,7 @@ class TimelineViewModel(
 
         loadJob = viewModelScope.launch {
             launch {
-                dao.count(specSnapshot).collectLatest { total ->
+                eventDao.count(specSnapshot).collectLatest { total ->
                     _totalCount.value = total
                 }
             }
@@ -206,7 +209,7 @@ class TimelineViewModel(
             val showRemovedOverlay = specSnapshot.isRemoved != true
             if (showRemovedOverlay) {
                 launch {
-                    dao.getRemovedNotificationKeysFlow().collectLatest { ids ->
+                    eventDao.getRemovedNotificationKeysFlow().collectLatest { ids ->
                         _removedIds.value = ids.toSet()
                     }
                 }
@@ -217,12 +220,12 @@ class TimelineViewModel(
                 val yesterdayStart = todayStart - ONE_DAY_MS
                 nextDayToLoad = yesterdayStart - ONE_DAY_MS
 
-                earliestPostTime = withContext(Dispatchers.IO) { dao.getEarliestPostTime() }
+                earliestPostTime = withContext(Dispatchers.IO) { eventDao.getEarliestPostTime() }
 
                 val yesterdaySpec =
                     specSnapshot.copy(timeFrom = yesterdayStart, timeTo = todayStart)
                 val yesterdayData = withContext(Dispatchers.IO) {
-                    dao.query(yesterdaySpec).first()
+                    eventDao.query(yesterdaySpec).first().map(NotificationDisplay::from)
                 }
                 if (yesterdayData.isNotEmpty()) {
                     _historicalDays.value =
@@ -232,14 +235,18 @@ class TimelineViewModel(
 
                 val todaySpec =
                     specSnapshot.copy(timeFrom = todayStart, timeTo = Long.MAX_VALUE)
-                dao.query(todaySpec).collectLatest { todayItems ->
-                    _todayNotifications.value = todayItems
+                eventDao.query(todaySpec).collectLatest { todayItems ->
+                    _todayNotifications.value = withContext(Dispatchers.IO) {
+                        todayItems.map(NotificationDisplay::from)
+                    }
                     _awaitingInitialData.value = false
                     recombineAll()
                 }
             } else {
-                dao.query(specSnapshot).collectLatest { items ->
-                    _allNotifications.value = items
+                eventDao.query(specSnapshot).collectLatest { items ->
+                    _allNotifications.value = withContext(Dispatchers.IO) {
+                        items.map(NotificationDisplay::from)
+                    }
                     _awaitingInitialData.value = false
                 }
             }
@@ -256,7 +263,9 @@ class TimelineViewModel(
             val dayEnd = dayStart + ONE_DAY_MS
             val spec = specSnapshot.copy(timeFrom = dayStart, timeTo = dayEnd)
 
-            val data = withContext(Dispatchers.IO) { dao.query(spec).first() }
+            val data = withContext(Dispatchers.IO) {
+                eventDao.query(spec).first().map(NotificationDisplay::from)
+            }
 
             if (data.isNotEmpty()) {
                 _historicalDays.value = _historicalDays.value + (dayStart to data)

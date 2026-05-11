@@ -13,10 +13,13 @@ import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.data.db.dao.query
 import com.notificationmaster.data.filter.toFilterSpec
 import com.notificationmaster.databinding.ActivityShortcutListBinding
+import com.notificationmaster.ui.common.NotificationDisplay
 import com.notificationmaster.ui.main.MainActivity
 import com.notificationmaster.ui.search.NotificationAdapter
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Audible Shortcut Activity — Dialog 風格置中浮動視窗
@@ -35,10 +38,10 @@ class AudibleShortcutActivity : AppCompatActivity() {
 
         binding.textTitle.setText(R.string.shortcut_audible_title)
 
-        val adapter = NotificationAdapter(onItemClick = { notification ->
+        val adapter = NotificationAdapter(onItemClick = { display ->
             startActivity(Intent(MainActivity.ACTION_SHOW_DETAIL).apply {
                 setClass(this@AudibleShortcutActivity, MainActivity::class.java)
-                putExtra(MainActivity.EXTRA_NOTIFICATION_ID, notification.id)
+                putExtra(MainActivity.EXTRA_NOTIFICATION_ID, display.eventId)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             })
             finish()
@@ -50,12 +53,13 @@ class AudibleShortcutActivity : AppCompatActivity() {
         val rule = RuleEngine.getRule(RuleRepository.builtInRuleIdAudible()) ?: run {
             finish(); return
         }
-        val dao = NotificationMasterApp.getInstance().database.notificationDao()
+        val dao = NotificationMasterApp.getInstance().database.notificationEventDao()
         lifecycleScope.launch {
             // Shortcut 短覽：rule 套上 limit 上限，避免內建 rule 無 limit 撈太多
-            dao.query(rule.toFilterSpec().copy(limit = 20)).collectLatest { notifications ->
-                adapter.submitList(notifications)
-                if (notifications.isEmpty()) {
+            dao.query(rule.toFilterSpec().copy(limit = 20)).collectLatest { events ->
+                val displays = withContext(Dispatchers.IO) { events.map(NotificationDisplay::from) }
+                adapter.submitList(displays)
+                if (displays.isEmpty()) {
                     binding.recyclerView.visibility = View.GONE
                     binding.textEmpty.visibility = View.VISIBLE
                     binding.textEmpty.setText(R.string.shortcut_empty_audible)

@@ -12,20 +12,25 @@ import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.notificationmaster.NotificationMasterApp
-import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.databinding.FragmentArchiveDetailBinding
+import com.notificationmaster.ui.common.NotificationDisplay
 import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import com.notificationmaster.ui.filter.SoundPickerLauncher
 import com.notificationmaster.ui.timeline.TimelineAdapter
 import com.notificationmaster.ui.timeline.TimelineItem
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 
 /**
  * 歸檔詳情 Fragment
  * 顯示特定 App 或 Channel 的通知列表
+ *
+ * Plan 2 Phase 9：資料源切到 notification_events（每個 notification_key 取最新 event 一筆），
+ * Adapter 共用 [TimelineAdapter] 吃 [NotificationDisplay]。
  */
 class ArchiveDetailFragment : Fragment() {
 
@@ -73,16 +78,17 @@ class ArchiveDetailFragment : Fragment() {
 
     private fun setupRecyclerView() {
         adapter = TimelineAdapter(
-            onItemClick = { notification ->
-                val action = ArchiveDetailFragmentDirections.actionArchiveSubDetailToArchiveNotificationDetail(notification.id)
+            onItemClick = { display ->
+                val action = ArchiveDetailFragmentDirections
+                    .actionArchiveSubDetailToArchiveNotificationDetail(display.eventId)
                 findNavController().navigate(action)
             },
-            onItemLongClick = { notification ->
+            onItemLongClick = { display ->
                 FilterRuleDialogHelper.showAddRuleDialog(
                     context = requireContext(),
                     actionType = null,
-                    prefillPackageName = notification.packageName,
-                    prefillChannelId = notification.channelId,
+                    prefillPackageName = display.packageName,
+                    prefillChannelId = display.channelId,
                     soundPicker = soundPicker,
                     calendarPicker = calendarPicker
                 )
@@ -94,24 +100,27 @@ class ArchiveDetailFragment : Fragment() {
 
     private fun loadNotifications() {
         val database = NotificationMasterApp.getInstance().database
-        val notificationDao = database.notificationDao()
+        val eventDao = database.notificationEventDao()
 
         val flow = if (args.channelId.isNotEmpty()) {
-            notificationDao.getLatestNotificationsByChannel(args.packageName, args.channelId)
+            eventDao.getLatestEventsByChannel(args.packageName, args.channelId)
         } else {
-            notificationDao.getLatestNotificationsByPackage(args.packageName)
+            eventDao.getLatestEventsByPackage(args.packageName)
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            flow.collectLatest { notifications ->
+            flow.collectLatest { events ->
                 val binding = _binding ?: return@collectLatest
-                if (notifications.isEmpty()) {
+                if (events.isEmpty()) {
                     binding.emptyState.visibility = View.VISIBLE
                     binding.recyclerView.visibility = View.GONE
                 } else {
                     binding.emptyState.visibility = View.GONE
                     binding.recyclerView.visibility = View.VISIBLE
-                    adapter.submitList(buildTimelineItems(notifications)) {
+                    val displays = withContext(Dispatchers.IO) {
+                        events.map(NotificationDisplay::from)
+                    }
+                    adapter.submitList(buildTimelineItems(displays)) {
                         pendingScrollRestore?.let {
                             binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
                             pendingScrollRestore = null
@@ -122,7 +131,7 @@ class ArchiveDetailFragment : Fragment() {
         }
     }
 
-    private fun buildTimelineItems(notifications: List<NotificationEntity>): List<TimelineItem> {
+    private fun buildTimelineItems(notifications: List<NotificationDisplay>): List<TimelineItem> {
         val items = mutableListOf<TimelineItem>()
         var lastDate: Long? = null
 

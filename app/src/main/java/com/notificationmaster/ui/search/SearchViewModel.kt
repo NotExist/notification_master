@@ -6,20 +6,26 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.notificationmaster.NotificationMasterApp
-import com.notificationmaster.data.db.entity.NotificationEntity
+import com.notificationmaster.ui.common.NotificationDisplay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * Search ViewModel
+ *
+ * Plan 2 Phase 9：搜尋接 notification_events 表（每個 key 取最新 event），呈現用
+ * [NotificationDisplay] 攤平 snapshot 後傳給 adapter。
+ */
 class SearchViewModel : ViewModel() {
 
     private val _query = MutableLiveData<String>("")
     val query: LiveData<String> = _query
 
-    private val _results = MutableLiveData<List<NotificationEntity>>(emptyList())
-    val results: LiveData<List<NotificationEntity>> = _results
+    private val _results = MutableLiveData<List<NotificationDisplay>>(emptyList())
+    val results: LiveData<List<NotificationDisplay>> = _results
 
     /**
      * RecyclerView LayoutManager.onSaveInstanceState() 結果；view 重建（含從 Detail 返回）後還原。
@@ -42,7 +48,7 @@ class SearchViewModel : ViewModel() {
             delay(300)
             val database = NotificationMasterApp.getInstance().database
             val results = withContext(Dispatchers.IO) {
-                database.notificationDao().searchNotifications(query, 100)
+                database.notificationEventDao().searchEvents(query, 100).map(NotificationDisplay::from)
             }
             _results.value = results
         }
