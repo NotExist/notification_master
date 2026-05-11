@@ -11,7 +11,8 @@ import org.json.JSONObject
  */
 object NotificationSnapshotParser {
 
-    private const val TAG = "NotificationSnapshotParser"
+    // Android Log tag 上限 23 chars（minSdk 21 起 lint 強制）
+    private const val TAG = "NotifSnapshotParser"
 
     /**
      * 解析 eventRawJson 為 NotificationSnapshot。
