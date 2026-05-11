@@ -32,12 +32,14 @@ class DeviceStateCapture(private val context: Context) {
     /**
      * 擷取當前裝置狀態快照
      *
-     * @param notificationId 關聯的通知記錄 ID
+     * Plan 2：FK 已 rename 為 event_id，呼叫端傳事件 id。
+     *
+     * @param eventId 關聯的事件 ID（NotificationEventEntity.id）
      * @param captureTime 擷取時間
      */
-    fun capture(notificationId: Long, captureTime: Long): DeviceStateEntity {
+    fun capture(eventId: Long, captureTime: Long): DeviceStateEntity {
         return DeviceStateEntity(
-            notificationId = notificationId,
+            eventId = eventId,
             captureTime = captureTime,
             ringerMode = captureRingerMode(),
             isScreenOn = captureScreenState(),

@@ -255,7 +255,7 @@ class MediaExtractor(private val context: Context) {
      * 提取通知中的所有媒體附件
      *
      * @param notification 通知物件
-     * @param notificationId 通知記錄 ID
+     * @param eventId 通知記錄 ID
      * @param captureTime 擷取時間
      * @param packageName 來源 App 的 package name（用於檔名索引）
      * @return 媒體附件清單
@@ -263,7 +263,7 @@ class MediaExtractor(private val context: Context) {
     @Suppress("DEPRECATION")
     fun extractMedia(
         notification: Notification,
-        notificationId: Long,
+        eventId: Long,
         captureTime: Long,
         packageName: String = ""
     ): List<MediaAttachmentEntity> {
@@ -272,21 +272,21 @@ class MediaExtractor(private val context: Context) {
 
         // 1. EXTRA_LARGE_ICON
         extractBitmapFromExtras(extras, Notification.EXTRA_LARGE_ICON)?.let { bitmap ->
-            saveBitmap(bitmap, notificationId, packageName, MediaType.LARGE_ICON, captureTime)?.let {
+            saveBitmap(bitmap, eventId, packageName, MediaType.LARGE_ICON, captureTime)?.let {
                 attachments.add(it)
             }
         }
 
         // 2. EXTRA_PICTURE (BigPictureStyle)
         extractBitmapFromExtras(extras, Notification.EXTRA_PICTURE)?.let { bitmap ->
-            saveBitmap(bitmap, notificationId, packageName, MediaType.PICTURE, captureTime)?.let {
+            saveBitmap(bitmap, eventId, packageName, MediaType.PICTURE, captureTime)?.let {
                 attachments.add(it)
             }
         }
 
         // 3. EXTRA_LARGE_ICON_BIG (BigPictureStyle 大圖示)
         extractBitmapFromExtras(extras, Notification.EXTRA_LARGE_ICON_BIG)?.let { bitmap ->
-            saveBitmap(bitmap, notificationId, packageName, MediaType.LARGE_ICON_BIG, captureTime)?.let {
+            saveBitmap(bitmap, eventId, packageName, MediaType.LARGE_ICON_BIG, captureTime)?.let {
                 attachments.add(it)
             }
         }
@@ -294,7 +294,7 @@ class MediaExtractor(private val context: Context) {
         // 4. Small Icon (API 23+ 使用 Icon 類別)
         if (Build.VERSION.SDK_INT >= 23) {
             notification.smallIcon?.let { icon ->
-                saveIcon(icon, notificationId, packageName, MediaType.SMALL_ICON, captureTime)?.let {
+                saveIcon(icon, eventId, packageName, MediaType.SMALL_ICON, captureTime)?.let {
                     attachments.add(it)
                 }
             }
@@ -302,12 +302,12 @@ class MediaExtractor(private val context: Context) {
 
         // 5. MessagingStyle 對話頭像 (API 28+)
         if (Build.VERSION.SDK_INT >= 28) {
-            extractMessagingAvatars(extras, notificationId, packageName, captureTime, attachments)
+            extractMessagingAvatars(extras, eventId, packageName, captureTime, attachments)
         }
 
         // 6. MessagingStyle 訊息中的媒體 (API 24+)
         if (Build.VERSION.SDK_INT >= 24) {
-            extractMessagingMedia(extras, notificationId, packageName, captureTime, attachments)
+            extractMessagingMedia(extras, eventId, packageName, captureTime, attachments)
         }
 
         return attachments
@@ -320,7 +320,7 @@ class MediaExtractor(private val context: Context) {
     @Suppress("DEPRECATION")
     private fun extractMessagingAvatars(
         extras: Bundle,
-        notificationId: Long,
+        eventId: Long,
         packageName: String,
         captureTime: Long,
         attachments: MutableList<MediaAttachmentEntity>
@@ -337,7 +337,7 @@ class MediaExtractor(private val context: Context) {
                 Notification.EXTRA_MESSAGING_PERSON
             )
             messagingPerson?.icon?.let { icon ->
-                saveIconDedup(icon, notificationId, packageName, captureTime, processedHashes, attachments)
+                saveIconDedup(icon, eventId, packageName, captureTime, processedHashes, attachments)
             }
 
             // EXTRA_MESSAGES：每條訊息的 sender_person 頭像
@@ -346,7 +346,7 @@ class MediaExtractor(private val context: Context) {
                 val bundle = msg as? Bundle ?: return@forEach
                 val senderPerson = bundle.getParcelable<android.app.Person>("sender_person")
                 senderPerson?.icon?.let { icon ->
-                    saveIconDedup(icon, notificationId, packageName, captureTime, processedHashes, attachments)
+                    saveIconDedup(icon, eventId, packageName, captureTime, processedHashes, attachments)
                 }
             }
         } catch (e: Exception) {
@@ -363,7 +363,7 @@ class MediaExtractor(private val context: Context) {
     @Suppress("DEPRECATION")
     private fun extractMessagingMedia(
         extras: Bundle,
-        notificationId: Long,
+        eventId: Long,
         packageName: String,
         captureTime: Long,
         attachments: MutableList<MediaAttachmentEntity>
@@ -383,13 +383,13 @@ class MediaExtractor(private val context: Context) {
             if (!mimeType.startsWith("image/")) continue
 
             try {
-                val saved = saveFromUri(uri, mimeType, notificationId, packageName, captureTime, processedHashes)
+                val saved = saveFromUri(uri, mimeType, eventId, packageName, captureTime, processedHashes)
                 if (saved != null) {
                     attachments.add(saved)
                 } else {
                     // URI 無法讀取（權限過期等），記錄為不可用附件
                     attachments.add(MediaAttachmentEntity(
-                        notificationId = notificationId,
+                        eventId = eventId,
                         mediaType = MediaType.MESSAGE_MEDIA,
                         filePath = "",
                         mimeType = mimeType,
@@ -404,7 +404,7 @@ class MediaExtractor(private val context: Context) {
                 Log.w(TAG, "Failed to extract messaging media: $uri", e)
                 // 例外時同樣記錄為不可用附件
                 attachments.add(MediaAttachmentEntity(
-                    notificationId = notificationId,
+                    eventId = eventId,
                     mediaType = MediaType.MESSAGE_MEDIA,
                     filePath = "",
                     mimeType = mimeType,
@@ -425,7 +425,7 @@ class MediaExtractor(private val context: Context) {
     private fun saveFromUri(
         uri: Uri,
         mimeType: String,
-        notificationId: Long,
+        eventId: Long,
         packageName: String,
         captureTime: Long,
         processedHashes: MutableSet<String>
@@ -446,7 +446,7 @@ class MediaExtractor(private val context: Context) {
         val uriString = uri.toString()
 
         if (useCustomDir) {
-            saveBytesToCustomDir(bytes, hash, ext, mimeType, notificationId, packageName,
+            saveBytesToCustomDir(bytes, hash, ext, mimeType, eventId, packageName,
                 MediaType.MESSAGE_MEDIA, captureTime,
                 bounds.outWidth, bounds.outHeight)?.let {
                 return it.copy(sourceUri = uriString)
@@ -454,7 +454,7 @@ class MediaExtractor(private val context: Context) {
             Log.w(TAG, "Custom dir write failed for URI media, falling back")
         }
 
-        return saveBytesToDefaultDir(bytes, hash, ext, mimeType, notificationId, packageName,
+        return saveBytesToDefaultDir(bytes, hash, ext, mimeType, eventId, packageName,
             MediaType.MESSAGE_MEDIA, captureTime,
             bounds.outWidth, bounds.outHeight)?.copy(sourceUri = uriString)
     }
@@ -480,7 +480,7 @@ class MediaExtractor(private val context: Context) {
      */
     private fun saveBytesToDefaultDir(
         bytes: ByteArray, hash: String, ext: String, mimeType: String,
-        notificationId: Long, packageName: String,
+        eventId: Long, packageName: String,
         mediaType: MediaType, captureTime: Long, width: Int, height: Int
     ): MediaAttachmentEntity? {
         return try {
@@ -490,7 +490,7 @@ class MediaExtractor(private val context: Context) {
                 FileOutputStream(file).use { it.write(bytes) }
             }
             MediaAttachmentEntity(
-                notificationId = notificationId,
+                eventId = eventId,
                 mediaType = mediaType,
                 filePath = fileName,
                 mimeType = mimeType,
@@ -510,7 +510,7 @@ class MediaExtractor(private val context: Context) {
      */
     private fun saveBytesToCustomDir(
         bytes: ByteArray, hash: String, ext: String, mimeType: String,
-        notificationId: Long, packageName: String,
+        eventId: Long, packageName: String,
         mediaType: MediaType, captureTime: Long, width: Int, height: Int
     ): MediaAttachmentEntity? {
         val docDir = customMediaDocDir ?: return null
@@ -528,7 +528,7 @@ class MediaExtractor(private val context: Context) {
                     ?: return null
             }
             MediaAttachmentEntity(
-                notificationId = notificationId,
+                eventId = eventId,
                 mediaType = mediaType,
                 filePath = fileName,
                 mimeType = mimeType,
@@ -548,7 +548,7 @@ class MediaExtractor(private val context: Context) {
      */
     private fun saveIconDedup(
         icon: Icon,
-        notificationId: Long,
+        eventId: Long,
         packageName: String,
         captureTime: Long,
         processedHashes: MutableSet<String>,
@@ -571,7 +571,7 @@ class MediaExtractor(private val context: Context) {
             if (hash in processedHashes) return
             processedHashes.add(hash)
 
-            saveBitmap(bitmap, notificationId, packageName, MediaType.MESSAGING_AVATAR, captureTime)?.let {
+            saveBitmap(bitmap, eventId, packageName, MediaType.MESSAGING_AVATAR, captureTime)?.let {
                 attachments.add(it)
             }
         } catch (e: Exception) {
@@ -610,7 +610,7 @@ class MediaExtractor(private val context: Context) {
      */
     private fun saveBitmap(
         bitmap: Bitmap,
-        notificationId: Long,
+        eventId: Long,
         packageName: String,
         mediaType: MediaType,
         captureTime: Long
@@ -618,14 +618,14 @@ class MediaExtractor(private val context: Context) {
         val hash = bitmapHash(bitmap)
 
         if (useCustomDir) {
-            saveBitmapToCustomDir(bitmap, hash, notificationId, packageName, mediaType, captureTime)?.let {
+            saveBitmapToCustomDir(bitmap, hash, eventId, packageName, mediaType, captureTime)?.let {
                 return it
             }
             // fallback 到預設目錄
             Log.w(TAG, "Custom dir write failed, falling back to default dir")
         }
 
-        return saveBitmapToDefaultDir(bitmap, hash, notificationId, packageName, mediaType, captureTime)
+        return saveBitmapToDefaultDir(bitmap, hash, eventId, packageName, mediaType, captureTime)
     }
 
     /**
@@ -634,7 +634,7 @@ class MediaExtractor(private val context: Context) {
     private fun saveBitmapToCustomDir(
         bitmap: Bitmap,
         hash: String,
-        notificationId: Long,
+        eventId: Long,
         packageName: String,
         mediaType: MediaType,
         captureTime: Long
@@ -659,7 +659,7 @@ class MediaExtractor(private val context: Context) {
             }
 
             MediaAttachmentEntity(
-                notificationId = notificationId,
+                eventId = eventId,
                 mediaType = mediaType,
                 filePath = fileName,
                 mimeType = "image/png",
@@ -681,7 +681,7 @@ class MediaExtractor(private val context: Context) {
     private fun saveBitmapToDefaultDir(
         bitmap: Bitmap,
         hash: String,
-        notificationId: Long,
+        eventId: Long,
         packageName: String,
         mediaType: MediaType,
         captureTime: Long
@@ -697,7 +697,7 @@ class MediaExtractor(private val context: Context) {
             }
 
             MediaAttachmentEntity(
-                notificationId = notificationId,
+                eventId = eventId,
                 mediaType = mediaType,
                 filePath = fileName,
                 mimeType = "image/png",
@@ -718,7 +718,7 @@ class MediaExtractor(private val context: Context) {
      */
     private fun saveIcon(
         icon: Icon,
-        notificationId: Long,
+        eventId: Long,
         packageName: String,
         mediaType: MediaType,
         captureTime: Long
@@ -736,7 +736,7 @@ class MediaExtractor(private val context: Context) {
             drawable.setBounds(0, 0, canvas.width, canvas.height)
             drawable.draw(canvas)
 
-            saveBitmap(bitmap, notificationId, packageName, mediaType, captureTime)
+            saveBitmap(bitmap, eventId, packageName, mediaType, captureTime)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to save icon", e)
             null
