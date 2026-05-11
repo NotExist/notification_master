@@ -24,18 +24,18 @@ interface MediaAttachmentDao {
 
     // === 查詢 ===
 
-    @Query("SELECT * FROM media_attachments WHERE notification_id = :notificationId")
-    fun getAttachmentsByNotificationId(notificationId: Long): Flow<List<MediaAttachmentEntity>>
+    @Query("SELECT * FROM media_attachments WHERE event_id = :eventId")
+    fun getAttachmentsByEventId(eventId: Long): Flow<List<MediaAttachmentEntity>>
 
-    @Query("SELECT * FROM media_attachments WHERE notification_id = :notificationId")
-    suspend fun getAttachmentsByNotificationIdSync(notificationId: Long): List<MediaAttachmentEntity>
+    @Query("SELECT * FROM media_attachments WHERE event_id = :eventId")
+    suspend fun getAttachmentsByEventIdSync(eventId: Long): List<MediaAttachmentEntity>
 
     @Query("""
         SELECT * FROM media_attachments
-        WHERE notification_id = :notificationId AND media_type = :mediaType
+        WHERE event_id = :eventId AND media_type = :mediaType
         LIMIT 1
     """)
-    suspend fun getAttachmentByType(notificationId: Long, mediaType: MediaType): MediaAttachmentEntity?
+    suspend fun getAttachmentByType(eventId: Long, mediaType: MediaType): MediaAttachmentEntity?
 
     @Query("SELECT * FROM media_attachments WHERE content_hash = :hash LIMIT 1")
     suspend fun getByHash(hash: String): MediaAttachmentEntity?
@@ -50,8 +50,8 @@ interface MediaAttachmentDao {
 
     // === 刪除 ===
 
-    @Query("DELETE FROM media_attachments WHERE notification_id = :notificationId")
-    suspend fun deleteByNotificationId(notificationId: Long)
+    @Query("DELETE FROM media_attachments WHERE event_id = :eventId")
+    suspend fun deleteByEventId(eventId: Long)
 
     @Query("DELETE FROM media_attachments WHERE capture_time < :beforeTime")
     suspend fun deleteBeforeTime(beforeTime: Long): Int

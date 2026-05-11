@@ -13,6 +13,9 @@ import com.notificationmaster.data.db.dao.DeviceStateDao
 import com.notificationmaster.data.db.dao.MediaAttachmentDao
 import com.notificationmaster.data.db.dao.NotificationDao
 import com.notificationmaster.data.db.dao.NotificationEventDao
+import com.notificationmaster.data.db.dao.NotificationRecordDao
+import com.notificationmaster.data.db.dao.RankingObservationDao
+import com.notificationmaster.data.db.dao.RankingSnapshotDao
 import com.notificationmaster.data.db.entity.ActionEntity
 import com.notificationmaster.data.db.entity.AppSourceEntity
 import com.notificationmaster.data.db.entity.ChannelEntity
@@ -56,6 +59,9 @@ abstract class NotificationDatabase : RoomDatabase() {
 
     abstract fun notificationDao(): NotificationDao
     abstract fun notificationEventDao(): NotificationEventDao
+    abstract fun notificationRecordDao(): NotificationRecordDao
+    abstract fun rankingSnapshotDao(): RankingSnapshotDao
+    abstract fun rankingObservationDao(): RankingObservationDao
     abstract fun mediaAttachmentDao(): MediaAttachmentDao
     abstract fun actionDao(): ActionDao
     abstract fun appSourceDao(): AppSourceDao

@@ -15,8 +15,8 @@ interface DeviceStateDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(state: DeviceStateEntity): Long
 
-    @Query("SELECT * FROM device_states WHERE notification_id = :notificationId LIMIT 1")
-    suspend fun getByNotificationId(notificationId: Long): DeviceStateEntity?
+    @Query("SELECT * FROM device_states WHERE event_id = :eventId LIMIT 1")
+    suspend fun getByEventId(eventId: Long): DeviceStateEntity?
 
     @Query("SELECT * FROM device_states WHERE capture_time BETWEEN :startTime AND :endTime ORDER BY capture_time DESC")
     suspend fun getByTimeRange(startTime: Long, endTime: Long): List<DeviceStateEntity>

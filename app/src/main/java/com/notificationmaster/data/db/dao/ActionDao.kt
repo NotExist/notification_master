@@ -23,14 +23,14 @@ interface ActionDao {
 
     // === 查詢 ===
 
-    @Query("SELECT * FROM actions WHERE notification_id = :notificationId ORDER BY action_index ASC")
-    fun getActionsByNotificationId(notificationId: Long): Flow<List<ActionEntity>>
+    @Query("SELECT * FROM actions WHERE event_id = :eventId ORDER BY action_index ASC")
+    fun getActionsByEventId(eventId: Long): Flow<List<ActionEntity>>
 
-    @Query("SELECT * FROM actions WHERE notification_id = :notificationId ORDER BY action_index ASC")
-    suspend fun getActionsByNotificationIdSync(notificationId: Long): List<ActionEntity>
+    @Query("SELECT * FROM actions WHERE event_id = :eventId ORDER BY action_index ASC")
+    suspend fun getActionsByEventIdSync(eventId: Long): List<ActionEntity>
 
-    @Query("SELECT * FROM actions WHERE notification_id = :notificationId AND is_reply_action = 1 LIMIT 1")
-    suspend fun getReplyAction(notificationId: Long): ActionEntity?
+    @Query("SELECT * FROM actions WHERE event_id = :eventId AND is_reply_action = 1 LIMIT 1")
+    suspend fun getReplyAction(eventId: Long): ActionEntity?
 
     // === 統計 ===
 
@@ -39,8 +39,8 @@ interface ActionDao {
 
     // === 刪除 ===
 
-    @Query("DELETE FROM actions WHERE notification_id = :notificationId")
-    suspend fun deleteByNotificationId(notificationId: Long)
+    @Query("DELETE FROM actions WHERE event_id = :eventId")
+    suspend fun deleteByEventId(eventId: Long)
 
     @Query("DELETE FROM actions WHERE capture_time < :beforeTime")
     suspend fun deleteBeforeTime(beforeTime: Long): Int
