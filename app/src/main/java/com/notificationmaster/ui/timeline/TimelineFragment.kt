@@ -3,6 +3,7 @@ package com.notificationmaster.ui.timeline
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
+import android.os.Parcelable
 import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
@@ -11,6 +12,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -28,10 +30,7 @@ import com.notificationmaster.core.filter.RuleAction
 import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.data.filter.EventFilterSpec
-import com.notificationmaster.data.filter.coreFilterSpecOf
 import com.notificationmaster.data.filter.toFilterSpec
-import com.notificationmaster.data.db.dao.count
-import com.notificationmaster.data.db.dao.query
 import com.notificationmaster.databinding.FragmentTimelineBinding
 import com.notificationmaster.service.NotificationCaptureService
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
@@ -39,9 +38,8 @@ import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import com.notificationmaster.ui.filter.SoundPickerLauncher
 import com.notificationmaster.ui.main.MainActivity
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -52,54 +50,37 @@ import java.util.Locale
 /**
  * 時間軸 Fragment
  *
- * 以 [EventFilterSpec] 統一篩選：
- * - 核心 4 chip（去重／有聲／彈出／已移除）多選 AND
- * - Preset chip 單選套用整套 spec
- * - + chip 開啟自訂篩選 BottomSheet
- * - spec 為「全部」或「僅去重」時走天分頁漸進載入；其餘走全域 spec 查詢
+ * Plan 2 §J 抖動修復後：所有篩選與載入狀態移到 [TimelineViewModel]，view 重建時直接 collect 既有
+ * StateFlow，counter 不會閃 0、列表立即還原。scroll position 由 ViewModel 持久化（透過 SavedStateHandle）。
+ *
+ * 篩選：
+ * - 核心 chip：「去重」boolean（chip_deduplicated）
+ * - LIST_FILTER rule chips：單選套用整套 spec；長按開選單（rename / delete / 建立 widget）
+ * - + chip 開啟 BottomSheet 自訂篩選
+ *
+ * spec 為「全部」或「僅去重」時走天分頁漸進載入（ViewModel.loadNextDay），其餘走全域 spec 查詢。
  */
 class TimelineFragment : Fragment() {
 
     private var _binding: FragmentTimelineBinding? = null
     private val binding get() = _binding!!
 
-    // 系統原生鈴聲選擇器（field initializer 確保在 Fragment STARTED 前完成註冊）
     private val soundPicker = SoundPickerLauncher(this)
     private val calendarPicker = CalendarPickerLauncher(this)
 
+    private val viewModel: TimelineViewModel by viewModels()
+
     private var adapter: TimelineAdapter? = null
 
-    // === 篩選狀態 ===
-    /** 當前核心 spec（由 chip 狀態組合而成；若 LIST_FILTER rule 啟用則為 rule.toFilterSpec()） */
-    private var coreSpec: EventFilterSpec = EventFilterSpec.Deduplicated
-    /** 當前選中的 LIST_FILTER rule id，null 表示未套用任何 rule（走核心 chip） */
-    private var activeRuleId: String? = null
+    /** view 剛建立時要還原一次 scroll 位置；submitList 完成後消費掉 */
+    private var pendingScrollRestore: Parcelable? = null
+
     /** 是否正由程式調整 chip 狀態（避免 listener re-entrancy） */
     private var suppressChipListener = false
-    /** 套 rule 前 user 自選的去重狀態，rule 取消後還原 */
-    private var userDedupBeforeRule: Boolean? = null
-    /** 切換篩選後，主資料 Flow 第一筆 emission 尚未到達；期間抑制其他 flow 觸發的 UI 更新 */
-    private var awaitingInitialData: Boolean = false
 
-    private var currentFilterText = ""
-    private var allNotifications: List<NotificationEntity> = emptyList()
-    private var loadJob: Job? = null
-    /** 目前模式對應的資料庫總數（由 count Flow 更新） */
-    private var totalCount: Int = 0
     private val dateFormat = SimpleDateFormat("yyyy年M月d日 EEEE", Locale.getDefault())
     private var bubbleHideRunnable: Runnable? = null
     private var wasPermissionGranted = false
-
-    // === 天分頁漸進載入 ===
-    private var todayNotifications: List<NotificationEntity> = emptyList()
-    private val historicalDays = mutableListOf<Pair<Long, List<NotificationEntity>>>()
-    private var nextDayToLoad: Long = 0L
-    private var isLoadingMore = false
-    private var hasReachedEnd = false
-    private var earliestPostTime: Long? = null
-    // Plan 2：notification_events 改回 notification_key 關聯（無 notification_id Long），
-    //         此處同步改為 key 集合；對比 NotificationEntity.notificationKey
-    private var removedIds: Set<String> = emptySet()
 
     private companion object {
         private const val TAG = "TimelineFragment"
@@ -117,7 +98,6 @@ class TimelineFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        // 確保 RuleEngine 已載入（含內建 LIST_FILTER rules）
         RuleRepository.load(requireContext())
 
         setupRecyclerView()
@@ -133,12 +113,13 @@ class TimelineFragment : Fragment() {
         updateEmptyStateForPermission()
         setupRankingBannerObserver()
 
-        // 優先套用 Intent 帶入的 spec / preset
-        val handled = handleIncomingIntent()
-        if (!handled) {
-            rebuildSpecFromChips()
-            loadNotifications()
-        }
+        // 同步 chip 視覺狀態到 ViewModel 持久化的選擇
+        applyChipStateFromViewModel()
+        // view 剛建立時準備一次 scroll 還原（submitList callback 內消費）
+        pendingScrollRestore = viewModel.scrollState
+
+        observeViewModel()
+        handleIncomingIntent()
     }
 
     override fun onResume() {
@@ -149,14 +130,18 @@ class TimelineFragment : Fragment() {
         if (isGranted != wasPermissionGranted) {
             wasPermissionGranted = isGranted
             updateEmptyStateForPermission()
-            if (isGranted) loadNotifications()
+            if (isGranted) viewModel.loadNotifications()
         }
         // onResume 可能因 MainActivity.onNewIntent 而觸發，重新檢查 Intent
-        if (handleIncomingIntent()) return
+        handleIncomingIntent()
     }
 
     override fun onPause() {
         super.onPause()
+        // 進入 Detail / 切到其他 tab 前先保留 scroll state，回來時還原到原位
+        binding.recyclerView.layoutManager?.onSaveInstanceState()?.let {
+            viewModel.scrollState = it
+        }
         bubbleHideRunnable?.let { _binding?.timeBubble?.removeCallbacks(it) }
         _binding?.timeBubble?.visibility = View.GONE
         (activity as? MainActivity)?.setToolbarCount(null)
@@ -193,13 +178,15 @@ class TimelineFragment : Fragment() {
                 updateTimeBubble()
                 showAndScheduleHideBubble()
 
-                // 天分頁模式才有「接近底部載入下一天」
-                if (usesDayPaging()) {
+                if (viewModel.usesDayPaging()) {
                     val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return
                     val totalItemCount = layoutManager.itemCount
                     val lastVisible = layoutManager.findLastVisibleItemPosition()
-                    if (totalItemCount - lastVisible <= 5 && !isLoadingMore && !hasReachedEnd) {
-                        loadNextDay()
+                    if (totalItemCount - lastVisible <= 5 &&
+                        !viewModel.isLoadingMore.value &&
+                        !viewModel.hasReachedEnd.value
+                    ) {
+                        viewModel.loadNextDay()
                     }
                 }
             }
@@ -207,30 +194,27 @@ class TimelineFragment : Fragment() {
     }
 
     private fun setupFilterInput() {
+        binding.editFilter.setText(viewModel.filterText.value)
         binding.editFilter.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
-                currentFilterText = s?.toString()?.trim() ?: ""
-                applyFilterAndDisplay()
+                viewModel.setFilterText(s?.toString().orEmpty())
             }
         })
     }
 
     private fun setupFilterChips() {
-        // 「去重」獨立 boolean 切換器；rule 啟用時會被 disable
         binding.chipDeduplicated.setOnClickListener {
             if (suppressChipListener) return@setOnClickListener
             // disabled 狀態下不會觸發；rule 模式由 rule chip 點擊取消
-            rebuildSpecFromChips()
+            viewModel.setDedupChecked(binding.chipDeduplicated.isChecked)
             binding.swipeRefresh.isRefreshing = true
-            loadNotifications()
         }
     }
 
     private fun setupRuleChips() {
         viewLifecycleOwner.lifecycleScope.launch {
-            // RuleEngine 內容變動時 triggerFlow tick；沒收到也在 onResume 重 render
             RuleEngine.triggerFlow.collectLatest {
                 if (_binding == null) return@collectLatest
                 renderRuleChips()
@@ -238,7 +222,6 @@ class TimelineFragment : Fragment() {
         }
         renderRuleChips()
         binding.chipAddPreset.setOnClickListener {
-            // 「+ 自訂篩選」永遠是空白起點，不受當前 active rule / 去重 chip 影響
             openListFilterEditor(initial = EventFilterSpec.All, editingRuleId = null)
         }
     }
@@ -253,14 +236,13 @@ class TimelineFragment : Fragment() {
         }
         toRemove.forEach { group.removeView(it) }
 
-        // 內建 rule 排前面，user-defined 排後面（穩定順序）
         val rules = RuleEngine.getListFilterRules()
             .sortedWith(compareByDescending<Rule> { it.isBuiltIn }.thenBy { it.createdAt })
         val inflater = LayoutInflater.from(requireContext())
         val chipSpacing = (8 * resources.displayMetrics.density).toInt()
+        val activeRuleId = viewModel.activeRuleId.value
         for ((i, rule) in rules.withIndex()) {
             val chip = inflater.inflate(R.layout.chip_preset, group, false) as Chip
-            // 第一個 chip 緊貼分隔線（不加左 margin），其餘 8dp
             (chip.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.marginStart =
                 if (i == 0) 0 else chipSpacing
             chip.text = ruleDisplayName(rule)
@@ -269,11 +251,11 @@ class TimelineFragment : Fragment() {
             chip.setOnClickListener {
                 if (suppressChipListener) return@setOnClickListener
                 if (chip.isChecked) {
-                    applyRule(rule)
-                } else {
-                    deactivateRule()
+                    viewModel.applyRule(rule)
                     binding.swipeRefresh.isRefreshing = true
-                    loadNotifications()
+                } else {
+                    viewModel.deactivateRule()
+                    binding.swipeRefresh.isRefreshing = true
                 }
             }
             chip.setOnLongClickListener {
@@ -284,6 +266,8 @@ class TimelineFragment : Fragment() {
         }
         group.removeView(addChip)
         group.addView(addChip)
+        // 重 render 後同步勾選狀態與 dedup chip enabled
+        applyChipStateFromViewModel()
     }
 
     /** 顯示名：內建 rule 用 strings 對照；user-defined 用 rule.name；fallback id */
@@ -294,45 +278,27 @@ class TimelineFragment : Fragment() {
         else -> rule.name ?: rule.id.take(8)
     }
 
-    private fun clearRuleSelection() {
-        val group = binding.chipGroupPresets
-        for (i in 0 until group.childCount) {
-            val c = group.getChildAt(i) as? Chip ?: continue
-            if (c.id != R.id.chip_add_preset) c.isChecked = false
+    /**
+     * 從 ViewModel 狀態同步 chip 視覺：activeRuleId 對應的 chip checked；dedup chip 在 rule
+     * 模式下顯示 spec 的 dedup 值並 disable。
+     */
+    private fun applyChipStateFromViewModel() {
+        suppressChipListener = true
+        try {
+            val group = binding.chipGroupPresets
+            val activeRuleId = viewModel.activeRuleId.value
+            for (i in 0 until group.childCount) {
+                val c = group.getChildAt(i) as? Chip ?: continue
+                if (c.id == R.id.chip_add_preset) continue
+                c.isChecked = (c.tag == activeRuleId)
+            }
+            binding.chipDeduplicated.isChecked = viewModel.dedupChecked.value
+            val ruleMode = activeRuleId != null
+            binding.chipDeduplicated.isEnabled = !ruleMode
+            binding.chipDeduplicated.alpha = if (ruleMode) 0.4f else 1f
+        } finally {
+            suppressChipListener = false
         }
-    }
-
-    private fun applyRule(rule: Rule) {
-        // 第一次進 rule 模式時記下 user dedup；切換 rule 之間不重複記
-        if (activeRuleId == null) userDedupBeforeRule = binding.chipDeduplicated.isChecked
-        activeRuleId = rule.id
-        coreSpec = rule.toFilterSpec()
-        // 去重 chip 顯示 rule 的 dedup 狀態並 disable
-        suppressChipListener = true
-        try { binding.chipDeduplicated.isChecked = coreSpec.deduplicate }
-        finally { suppressChipListener = false }
-        setDedupChipEnabled(false)
-        syncRuleChipSelection()
-        binding.swipeRefresh.isRefreshing = true
-        loadNotifications()
-    }
-
-    /** 取消當前 rule，回到 chip 模式並還原 user 之前的去重設定 */
-    private fun deactivateRule() {
-        activeRuleId = null
-        clearRuleSelection()
-        setDedupChipEnabled(true)
-        suppressChipListener = true
-        try { binding.chipDeduplicated.isChecked = userDedupBeforeRule ?: true }
-        finally { suppressChipListener = false }
-        userDedupBeforeRule = null
-        rebuildSpecFromChips()
-    }
-
-    /** 去重 chip enabled 狀態（rule 模式時 disable，rule 自帶 dedup 設定） */
-    private fun setDedupChipEnabled(enabled: Boolean) {
-        binding.chipDeduplicated.isEnabled = enabled
-        binding.chipDeduplicated.alpha = if (enabled) 1f else 0.4f
     }
 
     private fun showRuleMenu(rule: Rule) {
@@ -398,9 +364,8 @@ class TimelineFragment : Fragment() {
             .setMessage(getString(R.string.preset_delete_confirm_message, rule.name ?: rule.id))
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 RuleRepository.removeRule(requireContext(), rule.id)
-                if (activeRuleId == rule.id) {
-                    deactivateRule()
-                    loadNotifications()
+                if (viewModel.activeRuleId.value == rule.id) {
+                    viewModel.deactivateRule()
                 }
                 renderRuleChips()
                 com.google.android.material.snackbar.Snackbar.make(
@@ -417,12 +382,6 @@ class TimelineFragment : Fragment() {
         com.notificationmaster.ui.widget.WidgetPinner.requestPin(requireContext(), ruleId)
     }
 
-    /**
-     * 開啟 LIST_FILTER rule 編輯器（統一用 FilterRuleDialogHelper widgetMode）
-     *
-     * editingRuleId == null：新增 rule，完成後彈出命名輸入；
-     * editingRuleId != null：更新既有 rule 的 matchers
-     */
     private fun openListFilterEditor(initial: EventFilterSpec, editingRuleId: String?) {
         val existingListFilter = editingRuleId?.let {
             (RuleEngine.getRule(it)?.action as? RuleAction.ListFilter)
@@ -436,14 +395,13 @@ class TimelineFragment : Fragment() {
             widgetMode = true,
             existingWidgetMatchers = initial.matchers,
             existingWidgetListFilter = existingListFilter,
-            existingWidgetLabel = null, // Timeline 不使用 widget label 欄位
+            existingWidgetLabel = null,
             onListFilterReady = { matchers, listFilter, _ ->
-                // _ = widgetLabel（Timeline 不需要）
                 if (editingRuleId != null) {
                     val existing = RuleEngine.getRule(editingRuleId) ?: return@showAddRuleDialog
                     val updated = existing.copy(matchers = matchers, action = listFilter)
                     RuleRepository.updateRule(requireContext(), updated)
-                    if (activeRuleId == editingRuleId) applyRule(updated)
+                    if (viewModel.activeRuleId.value == editingRuleId) viewModel.applyRule(updated)
                     renderRuleChips()
                 } else {
                     promptNewRuleName(matchers, listFilter)
@@ -473,36 +431,11 @@ class TimelineFragment : Fragment() {
                 val rule = Rule(name = name, matchers = matchers, action = listFilter)
                 RuleRepository.addRule(requireContext(), rule)
                 renderRuleChips()
-                applyRule(rule)
+                viewModel.applyRule(rule)
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
-
-    private fun rebuildSpecFromChips() {
-        coreSpec = coreFilterSpecOf(deduplicate = binding.chipDeduplicated.isChecked)
-    }
-
-    /** 同步 Layer 2 rule chip 勾選（不動核心 chip，避免互斥模式混淆） */
-    private fun syncRuleChipSelection() {
-        suppressChipListener = true
-        try {
-            val group = binding.chipGroupPresets
-            for (i in 0 until group.childCount) {
-                val c = group.getChildAt(i) as? Chip ?: continue
-                if (c.id == R.id.chip_add_preset) continue
-                c.isChecked = (c.tag == activeRuleId)
-            }
-        } finally {
-            suppressChipListener = false
-        }
-    }
-
-    /** 是否走天分頁漸進載入：全部 / 純去重，其餘皆走全域 spec 查詢 */
-    private fun usesDayPaging(): Boolean =
-        coreSpec.matchers.isEmpty() &&
-            coreSpec.timeFrom == null && coreSpec.timeTo == null &&
-            coreSpec.limit == null
 
     private fun handleIncomingIntent(): Boolean {
         val act = activity ?: return false
@@ -517,7 +450,7 @@ class TimelineFragment : Fragment() {
 
         val rule = RuleEngine.getRule(ruleId) ?: return false
         if (rule.action.actionType != ActionType.LIST_FILTER) return false
-        applyRule(rule)
+        viewModel.applyRule(rule)
         return true
     }
 
@@ -540,203 +473,131 @@ class TimelineFragment : Fragment() {
                     )
                 }
             }
-            loadNotifications()
+            viewModel.loadNotifications()
         }
     }
 
-    private fun loadNotifications() {
-        loadJob?.cancel()
-
-        awaitingInitialData = true
-        todayNotifications = emptyList()
-        historicalDays.clear()
-        allNotifications = emptyList()
-        isLoadingMore = false
-        hasReachedEnd = false
-        removedIds = emptySet()
-
-        binding.swipeRefresh.isRefreshing = true
-        binding.progressLoading.visibility = View.VISIBLE
-
-        val database = NotificationMasterApp.getInstance().database
-        val dao = database.notificationDao()
-
-        totalCount = 0
-
-        loadJob = viewLifecycleOwner.lifecycleScope.launch {
-            // 總數 Flow：統一走 count(spec)
-            launch {
-                dao.count(coreSpec).collectLatest { total ->
-                    if (_binding == null) return@collectLatest
-                    totalCount = total
-                    refreshCountText()
-                }
-            }
-
-            // 已移除 id 集合（除非 spec 本身就是 removed 專屬）
-            val showRemovedOverlay = coreSpec.isRemoved != true
-            if (showRemovedOverlay) {
-                launch {
-                    dao.getRemovedNotificationKeysFlow().collectLatest { ids ->
-                        if (_binding == null) return@collectLatest
-                        val newSet = ids.toSet()
-                        if (removedIds != newSet) {
-                            removedIds = newSet
-                            // 主資料 Flow 第一筆未到時不要先 trigger UI（會用舊 allNotifications）
-                            if (!awaitingInitialData) applyFilterAndDisplay()
-                        }
-                    }
-                }
-            } else {
-                removedIds = emptySet()
-            }
-
-            if (usesDayPaging()) {
-                // 全部 / 純去重 → 天分頁漸進載入
-                val todayStart = getStartOfDay(System.currentTimeMillis())
-                val yesterdayStart = todayStart - ONE_DAY_MS
-                nextDayToLoad = yesterdayStart - ONE_DAY_MS
-
-                earliestPostTime = withContext(Dispatchers.IO) { dao.getEarliestPostTime() }
-
-                // 昨天：一次 suspend 查詢（取首個 emission）
-                val yesterdaySpec = coreSpec.copy(timeFrom = yesterdayStart, timeTo = todayStart)
-                val yesterdayData = withContext(Dispatchers.IO) {
-                    dao.query(yesterdaySpec).first()
-                }
-                if (yesterdayData.isNotEmpty()) {
-                    historicalDays.add(yesterdayStart to yesterdayData)
-                }
-                checkReachedEnd()
-
-                val todaySpec = coreSpec.copy(timeFrom = todayStart, timeTo = Long.MAX_VALUE)
-                dao.query(todaySpec).collectLatest { liveNotifications ->
-                    if (_binding == null) return@collectLatest
-                    _binding?.swipeRefresh?.isRefreshing = false
-                    _binding?.progressLoading?.visibility = View.GONE
-                    todayNotifications = liveNotifications
-                    awaitingInitialData = false
-                    combineAndDisplay()
-                }
-            } else {
-                // 全域 spec 查詢
-                dao.query(coreSpec).collectLatest { notifications ->
-                    if (_binding == null) return@collectLatest
-                    _binding?.swipeRefresh?.isRefreshing = false
-                    _binding?.progressLoading?.visibility = View.GONE
-                    allNotifications = notifications
-                    awaitingInitialData = false
-                    applyFilterAndDisplay()
-                }
-            }
-        }
-    }
-
-    private fun loadNextDay() {
-        if (isLoadingMore || hasReachedEnd || !usesDayPaging()) return
-        isLoadingMore = true
-        updateFooterInList()
-
-        val dao = NotificationMasterApp.getInstance().database.notificationDao()
-
+    private fun observeViewModel() {
+        // 主資料流：allNotifications + removedIds + filterText 任一變動 → 重 render
         viewLifecycleOwner.lifecycleScope.launch {
-            val dayStart = nextDayToLoad
-            val dayEnd = dayStart + ONE_DAY_MS
-            val spec = coreSpec.copy(timeFrom = dayStart, timeTo = dayEnd)
-
-            val data = withContext(Dispatchers.IO) {
-                dao.query(spec).first()
+            combine(
+                viewModel.allNotifications,
+                viewModel.removedIds,
+                viewModel.filterText,
+                viewModel.coreSpec,
+                viewModel.awaitingInitialData
+            ) { allList, removed, filterText, spec, awaiting ->
+                ListRenderInput(allList, removed, filterText, spec, awaiting)
+            }.collectLatest { input ->
+                if (_binding == null) return@collectLatest
+                renderList(input)
             }
+        }
 
-            if (data.isNotEmpty()) {
-                historicalDays.add(dayStart to data)
+        // counter：totalCount / awaitingInitialData / 當前篩選後筆數
+        viewLifecycleOwner.lifecycleScope.launch {
+            combine(
+                viewModel.allNotifications,
+                viewModel.totalCount,
+                viewModel.filterText,
+                viewModel.coreSpec,
+                viewModel.awaitingInitialData
+            ) { all, total, text, spec, awaiting ->
+                CounterInput(all, total, text, spec, awaiting)
+            }.collectLatest { input ->
+                if (_binding == null) return@collectLatest
+                renderCounter(input)
             }
+        }
 
-            nextDayToLoad = dayStart - ONE_DAY_MS
-            checkReachedEnd()
-            isLoadingMore = false
-            combineAndDisplay()
+        // swipe refresh 結束時機：第一筆主資料抵達後關閉 spinner
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.awaitingInitialData.collectLatest { awaiting ->
+                if (_binding == null) return@collectLatest
+                if (!awaiting) {
+                    _binding?.swipeRefresh?.isRefreshing = false
+                    _binding?.progressLoading?.visibility = View.GONE
+                } else {
+                    _binding?.progressLoading?.visibility = View.VISIBLE
+                }
+            }
         }
     }
 
-    private fun checkReachedEnd() {
-        val earliest = earliestPostTime ?: run {
-            hasReachedEnd = true
-            return
-        }
-        if (nextDayToLoad + ONE_DAY_MS <= earliest) {
-            hasReachedEnd = true
-        }
-    }
+    private data class ListRenderInput(
+        val allNotifications: List<NotificationEntity>,
+        val removedIds: Set<String>,
+        val filterText: String,
+        val spec: EventFilterSpec,
+        val awaiting: Boolean
+    )
 
-    private fun combineAndDisplay() {
-        allNotifications = todayNotifications + historicalDays.flatMap { it.second }
-        applyFilterAndDisplay()
-    }
+    private data class CounterInput(
+        val allNotifications: List<NotificationEntity>,
+        val totalCount: Int,
+        val filterText: String,
+        val spec: EventFilterSpec,
+        val awaiting: Boolean
+    )
 
-    private fun updateFooterInList() {
-        val currentList = adapter?.currentList ?: return
-        val withoutFooter = currentList.filter {
-            it !is TimelineItem.LoadingMore && it !is TimelineItem.EndOfTimeline
-        }
-        adapter?.submitList(withoutFooter + TimelineItem.LoadingMore)
-    }
-
-    private fun applyFilterAndDisplay() {
+    private fun renderList(input: ListRenderInput) {
         val binding = _binding ?: return
-        val filtered = filterNotifications(allNotifications, currentFilterText)
+        val filtered = filterNotifications(input.allNotifications, input.filterText)
         if (filtered.isEmpty()) {
+            // 載入中（首筆主資料未到）保留現狀，不切到 emptyState 避免閃爍
+            if (input.awaiting) return
             binding.emptyState.visibility = View.VISIBLE
             binding.recyclerView.visibility = View.GONE
-            refreshCountText(loadedOverride = filtered)
             updateEmptyStateForPermission()
-        } else {
-            binding.emptyState.visibility = View.GONE
-            binding.recyclerView.visibility = View.VISIBLE
-            val database = NotificationMasterApp.getInstance().database
-            val notificationDao = database.notificationDao()
+            adapter?.submitList(emptyList())
+            return
+        }
+        binding.emptyState.visibility = View.GONE
+        binding.recyclerView.visibility = View.VISIBLE
 
-            viewLifecycleOwner.lifecycleScope.launch {
-                var timelineItems: List<TimelineItem> = if (coreSpec.deduplicate) {
-                    buildTimelineItemsWithSimilarCount(filtered, notificationDao)
-                } else {
-                    buildTimelineItems(filtered)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val dao = NotificationMasterApp.getInstance().database.notificationDao()
+            var timelineItems: List<TimelineItem> = if (input.spec.deduplicate) {
+                buildTimelineItemsWithSimilarCount(filtered, input.removedIds, dao)
+            } else {
+                buildTimelineItems(filtered, input.removedIds)
+            }
+            if (viewModel.usesDayPaging()) {
+                val footer = when {
+                    viewModel.isLoadingMore.value -> TimelineItem.LoadingMore
+                    viewModel.hasReachedEnd.value -> TimelineItem.EndOfTimeline
+                    else -> null
                 }
-
-                if (usesDayPaging()) {
-                    val footer = when {
-                        isLoadingMore -> TimelineItem.LoadingMore
-                        hasReachedEnd -> TimelineItem.EndOfTimeline
-                        else -> null
-                    }
-                    if (footer != null) timelineItems = timelineItems + footer
+                if (footer != null) timelineItems = timelineItems + footer
+            }
+            adapter?.submitList(timelineItems) {
+                pendingScrollRestore?.let {
+                    binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
+                    pendingScrollRestore = null
                 }
-
-                adapter?.submitList(timelineItems)
-                refreshCountText(loadedOverride = filtered)
             }
         }
     }
 
-    private fun loadedCountForCounter(filtered: List<NotificationEntity>): Int {
-        // 統一按 count(spec) 一致的單位：
-        // - deduplicate=true → count by notification_key（spec SQL 用 GROUP BY notification_key）
-        // - deduplicate=false → DISTINCT id，即 filtered.size
-        return if (coreSpec.deduplicate) filtered.distinctBy { it.notificationKey }.size else filtered.size
-    }
-
-    private fun refreshCountText(loadedOverride: List<NotificationEntity>? = null) {
-        val source = loadedOverride
-            ?: filterNotifications(allNotifications, currentFilterText)
-        // 載入期間（資料 flow 第一筆未到）loaded 顯示「…」，避免顯示 0 誤導
-        val loadedDisplay: String = if (awaitingInitialData) {
+    private fun renderCounter(input: CounterInput) {
+        val filtered = filterNotifications(input.allNotifications, input.filterText)
+        val loadedDisplay: String = if (input.awaiting) {
             getString(R.string.timeline_count_loading_placeholder)
         } else {
-            loadedCountForCounter(source).toString()
+            loadedCountForCounter(filtered, input.spec).toString()
         }
-        val text = getString(R.string.timeline_count_format_loaded_total, loadedDisplay, totalCount)
+        val text = getString(
+            R.string.timeline_count_format_loaded_total,
+            loadedDisplay,
+            input.totalCount
+        )
         (activity as? MainActivity)?.setToolbarCount(text)
     }
+
+    private fun loadedCountForCounter(
+        filtered: List<NotificationEntity>,
+        spec: EventFilterSpec
+    ): Int = if (spec.deduplicate) filtered.distinctBy { it.notificationKey }.size else filtered.size
 
     private fun filterNotifications(
         notifications: List<NotificationEntity>,
@@ -758,55 +619,50 @@ class TimelineFragment : Fragment() {
         return AppLabelCache.getLabel(ctx, packageName)
     }
 
-    private fun buildTimelineItems(notifications: List<NotificationEntity>): List<TimelineItem> {
+    private fun buildTimelineItems(
+        notifications: List<NotificationEntity>,
+        removedIds: Set<String>
+    ): List<TimelineItem> {
         val items = mutableListOf<TimelineItem>()
         var lastDate: Long? = null
-
         for (notification in notifications) {
             val notificationDate = getStartOfDay(notification.postTime)
-
             if (lastDate != notificationDate) {
                 items.add(TimelineItem.DateHeader(notificationDate))
                 lastDate = notificationDate
             }
-
             items.add(TimelineItem.NotificationItem(
                 notification = notification,
                 isRemoved = removedIds.contains(notification.notificationKey)
             ))
         }
-
         return items
     }
 
     private suspend fun buildTimelineItemsWithSimilarCount(
         notifications: List<NotificationEntity>,
+        removedIds: Set<String>,
         dao: com.notificationmaster.data.db.dao.NotificationDao
     ): List<TimelineItem> {
         val items = mutableListOf<TimelineItem>()
         var lastDate: Long? = null
-
         for (notification in notifications) {
             val notificationDate = getStartOfDay(notification.postTime)
-
             if (lastDate != notificationDate) {
                 items.add(TimelineItem.DateHeader(notificationDate))
                 lastDate = notificationDate
             }
-
             val dayStart = notificationDate
             val dayEnd = dayStart + ONE_DAY_MS
             val similarCount = withContext(Dispatchers.IO) {
                 dao.getDeduplicatedCount(notification.contentHash, dayStart, dayEnd)
             }
-
             items.add(TimelineItem.NotificationItem(
                 notification = notification,
                 similarCount = similarCount,
                 isRemoved = removedIds.contains(notification.notificationKey)
             ))
         }
-
         return items
     }
 
