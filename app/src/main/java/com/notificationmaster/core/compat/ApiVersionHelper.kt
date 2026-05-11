@@ -87,6 +87,12 @@ object ApiVersionHelper {
     /** REASON_ASSISTANT_CANCEL (API 33+) */
     const val REASON_ASSISTANT_CANCEL_INT = 22
 
+    /**
+     * App 自訂：INITIAL reconciliation 補登錄漏接的 REMOVED（Plan 2 §K）
+     * 負值避開 Android REASON_* 1-22。
+     */
+    const val REASON_RECONCILED_AFTER_FACT = -100
+
     // === 功能檢查 ===
 
     fun supportsNotificationKey(): Boolean = true  // minSdk 21 >= API_NOTIFICATION_KEY (21)
@@ -153,6 +159,9 @@ object ApiVersionHelper {
             NotificationListenerService.REASON_TIMEOUT -> "TIMEOUT"                          // 19
             REASON_CHANNEL_REMOVED_INT -> "CHANNEL_REMOVED"                                  // 20
 
+            // App 自訂負值（Plan 2 §K）
+            REASON_RECONCILED_AFTER_FACT -> "RECONCILED_AFTER_FACT"
+
             else -> "OTHER"
         }
     }
@@ -184,6 +193,7 @@ object ApiVersionHelper {
             REASON_CHANNEL_REMOVED_INT -> "Channel 已移除"
             REASON_CLEAR_DATA_INT -> "使用者清除 App 資料"
             REASON_ASSISTANT_CANCEL_INT -> "數位助理取消"
+            REASON_RECONCILED_AFTER_FACT -> "事後發現（INITIAL reconciliation 補登錄）"
             else -> "未知 (#$reason)"
         }
     }
