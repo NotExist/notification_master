@@ -1,5 +1,6 @@
 package com.notificationmaster.ui.search
 
+import android.os.Parcelable
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -19,6 +20,12 @@ class SearchViewModel : ViewModel() {
 
     private val _results = MutableLiveData<List<NotificationEntity>>(emptyList())
     val results: LiveData<List<NotificationEntity>> = _results
+
+    /**
+     * RecyclerView LayoutManager.onSaveInstanceState() 結果；view 重建（含從 Detail 返回）後還原。
+     * 純 in-memory，process death 不保留（搜尋結果本身也不保留，重啟後行為一致）。
+     */
+    var scrollState: Parcelable? = null
 
     private var searchJob: Job? = null
 

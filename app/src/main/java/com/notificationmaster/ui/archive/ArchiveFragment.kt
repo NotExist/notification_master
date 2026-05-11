@@ -1,10 +1,12 @@
 package com.notificationmaster.ui.archive
 
 import android.os.Bundle
+import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -16,12 +18,15 @@ import com.notificationmaster.databinding.FragmentArchiveBinding
 import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import com.notificationmaster.ui.filter.SoundPickerLauncher
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
  * 歸檔頁面 Fragment
- * 按 App 或 Channel 分類顯示通知
+ *
+ * 按 App 或 Channel 分類顯示通知。currentTab 與 scroll 位置都在 [ArchiveViewModel]，跨 view 重建
+ * 保留（含從 Detail 返回時直接回原位）。
  */
 class ArchiveFragment : Fragment() {
 
@@ -31,22 +36,22 @@ class ArchiveFragment : Fragment() {
     private val soundPicker = SoundPickerLauncher(this)
     private val calendarPicker = CalendarPickerLauncher(this)
 
+    private val viewModel: ArchiveViewModel by viewModels()
+
     private lateinit var appSourceAdapter: AppSourceAdapter
     private lateinit var channelAdapter: ChannelAdapter
-    private var currentTab = Tab.BY_APP
+
+    /** view 剛建立時要還原一次當前 tab 的 scroll 位置；submitList 完成後消費掉 */
+    private var pendingScrollRestore: Parcelable? = null
+
+    /** 目前 tab 的資料 collect job，切 tab 時取消舊的 */
+    private var dataJob: Job? = null
 
     /** Channel 功能是否可用 (API 26+) */
     private val isChannelSupported: Boolean
         get() = ApiVersionHelper.supportsNotificationChannel()
 
     enum class Tab { BY_APP, BY_CHANNEL }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        if (savedInstanceState != null) {
-            currentTab = Tab.values()[savedInstanceState.getInt(KEY_CURRENT_TAB, 0)]
-        }
-    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -63,23 +68,28 @@ class ArchiveFragment : Fragment() {
         setupRecyclerView()
         setupTabs()
 
-        // 恢復 tab 選中狀態（view 重建後 TabLayout 預設選 tab 0）
-        val tabIndex = if (currentTab == Tab.BY_CHANNEL) 1 else 0
+        // 從 ViewModel 還原當前 tab；TabLayout 預設選 tab 0，selectTab 會觸發 listener 啟動 loadData()
+        val tabIndex = if (viewModel.currentTab == Tab.BY_CHANNEL) 1 else 0
         if (binding.tabLayout.selectedTabPosition != tabIndex) {
             binding.tabLayout.selectTab(binding.tabLayout.getTabAt(tabIndex))
-            // listener 會觸發 loadData()
         } else {
             loadData()
         }
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putInt(KEY_CURRENT_TAB, currentTab.ordinal)
+    override fun onPause() {
+        super.onPause()
+        // 進 Detail / 切離 tab 前先把當前 tab 的 scroll state 收進 ViewModel
+        val state = binding.recyclerView.layoutManager?.onSaveInstanceState() ?: return
+        when (viewModel.currentTab) {
+            Tab.BY_APP -> viewModel.appTabScrollState = state
+            Tab.BY_CHANNEL -> viewModel.channelTabScrollState = state
+        }
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
+        dataJob = null
         _binding = null
     }
 
@@ -146,18 +156,25 @@ class ArchiveFragment : Fragment() {
                     else -> Tab.BY_APP
                 }
 
-                // 如果選擇了 Channel tab 但不支援，顯示提示並切回 App tab
                 if (selectedTab == Tab.BY_CHANNEL && !isChannelSupported) {
                     showChannelNotSupportedMessage()
                     binding.tabLayout.selectTab(binding.tabLayout.getTabAt(0))
                     return
                 }
 
-                currentTab = selectedTab
+                viewModel.currentTab = selectedTab
                 loadData()
             }
 
-            override fun onTabUnselected(tab: TabLayout.Tab?) {}
+            override fun onTabUnselected(tab: TabLayout.Tab?) {
+                // tab 切換前保留該 tab 的 scroll state
+                val state = _binding?.recyclerView?.layoutManager?.onSaveInstanceState() ?: return
+                when (tab?.position) {
+                    0 -> viewModel.appTabScrollState = state
+                    1 -> viewModel.channelTabScrollState = state
+                }
+            }
+
             override fun onTabReselected(tab: TabLayout.Tab?) {}
         })
     }
@@ -169,15 +186,28 @@ class ArchiveFragment : Fragment() {
 
     private fun loadData() {
         val database = NotificationMasterApp.getInstance().database
+        dataJob?.cancel()
 
-        viewLifecycleOwner.lifecycleScope.launch {
-            when (currentTab) {
+        // 切到該 tab 對應的 scroll state；下一次 submitList 完成後還原
+        pendingScrollRestore = when (viewModel.currentTab) {
+            Tab.BY_APP -> viewModel.appTabScrollState
+            Tab.BY_CHANNEL -> viewModel.channelTabScrollState
+        }
+
+        dataJob = viewLifecycleOwner.lifecycleScope.launch {
+            when (viewModel.currentTab) {
                 Tab.BY_APP -> {
                     binding.recyclerView.adapter = appSourceAdapter
                     database.appSourceDao().getAllAppSources().collectLatest { apps ->
-                        appSourceAdapter.submitList(apps)
-                        _binding?.textEmpty?.text = getString(R.string.timeline_empty)
-                        _binding?.textEmpty?.visibility = if (apps.isEmpty()) View.VISIBLE else View.GONE
+                        val binding = _binding ?: return@collectLatest
+                        appSourceAdapter.submitList(apps) {
+                            pendingScrollRestore?.let {
+                                binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
+                                pendingScrollRestore = null
+                            }
+                        }
+                        binding.textEmpty.text = getString(R.string.timeline_empty)
+                        binding.textEmpty.visibility = if (apps.isEmpty()) View.VISIBLE else View.GONE
                     }
                 }
                 Tab.BY_CHANNEL -> {
@@ -185,19 +215,20 @@ class ArchiveFragment : Fragment() {
                         showChannelNotSupportedMessage()
                         return@launch
                     }
-
                     binding.recyclerView.adapter = channelAdapter
                     database.channelDao().getAllChannels().collectLatest { channels ->
-                        channelAdapter.submitList(channels)
-                        _binding?.textEmpty?.text = getString(R.string.timeline_empty)
-                        _binding?.textEmpty?.visibility = if (channels.isEmpty()) View.VISIBLE else View.GONE
+                        val binding = _binding ?: return@collectLatest
+                        channelAdapter.submitList(channels) {
+                            pendingScrollRestore?.let {
+                                binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
+                                pendingScrollRestore = null
+                            }
+                        }
+                        binding.textEmpty.text = getString(R.string.timeline_empty)
+                        binding.textEmpty.visibility = if (channels.isEmpty()) View.VISIBLE else View.GONE
                     }
                 }
             }
         }
-    }
-
-    companion object {
-        private const val KEY_CURRENT_TAB = "current_tab"
     }
 }

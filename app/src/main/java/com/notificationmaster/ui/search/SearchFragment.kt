@@ -1,6 +1,7 @@
 package com.notificationmaster.ui.search
 
 import android.os.Bundle
+import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -28,6 +29,9 @@ class SearchFragment : Fragment() {
     private val viewModel: SearchViewModel by viewModels()
     private lateinit var notificationAdapter: NotificationAdapter
 
+    /** view 剛建立時要還原一次 scroll 位置；submitList 完成後消費掉 */
+    private var pendingScrollRestore: Parcelable? = null
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -42,6 +46,8 @@ class SearchFragment : Fragment() {
 
         setupRecyclerView()
         setupSearchInput()
+        // view 剛建立時準備 scroll 還原（observeResults 內 submitList callback 消費）
+        pendingScrollRestore = viewModel.scrollState
         observeResults()
 
         // 首次進入：接收外部帶入的 query
@@ -54,6 +60,14 @@ class SearchFragment : Fragment() {
         } else {
             // 返回時還原查詢文字
             binding.editSearch.setText(viewModel.query.value)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // 進入 Detail / 切到其他 tab 前保留 scroll state，回來時還原到原位
+        binding.recyclerView.layoutManager?.onSaveInstanceState()?.let {
+            viewModel.scrollState = it
         }
     }
 
@@ -99,9 +113,14 @@ class SearchFragment : Fragment() {
 
     private fun observeResults() {
         viewModel.results.observe(viewLifecycleOwner) { results ->
-            val _binding = _binding ?: return@observe
-            notificationAdapter.submitList(results)
-            _binding.textEmpty.visibility =
+            val binding = _binding ?: return@observe
+            notificationAdapter.submitList(results) {
+                pendingScrollRestore?.let {
+                    binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
+                    pendingScrollRestore = null
+                }
+            }
+            binding.textEmpty.visibility =
                 if (results.isEmpty() && !viewModel.query.value.isNullOrBlank()) View.VISIBLE
                 else View.GONE
         }

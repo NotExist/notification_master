@@ -1,10 +1,12 @@
 package com.notificationmaster.ui.archive
 
 import android.os.Bundle
+import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
@@ -34,7 +36,11 @@ class ArchiveDetailFragment : Fragment() {
     private val calendarPicker = CalendarPickerLauncher(this)
 
     private val args: ArchiveDetailFragmentArgs by navArgs()
+    private val viewModel: ArchiveDetailViewModel by viewModels()
     private lateinit var adapter: TimelineAdapter
+
+    /** view 剛建立時要還原一次 scroll 位置；submitList 完成後消費掉 */
+    private var pendingScrollRestore: Parcelable? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -49,7 +55,15 @@ class ArchiveDetailFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         setupRecyclerView()
+        pendingScrollRestore = viewModel.scrollState
         loadNotifications()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        binding.recyclerView.layoutManager?.onSaveInstanceState()?.let {
+            viewModel.scrollState = it
+        }
     }
 
     override fun onDestroyView() {
@@ -90,13 +104,19 @@ class ArchiveDetailFragment : Fragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             flow.collectLatest { notifications ->
+                val binding = _binding ?: return@collectLatest
                 if (notifications.isEmpty()) {
                     binding.emptyState.visibility = View.VISIBLE
                     binding.recyclerView.visibility = View.GONE
                 } else {
                     binding.emptyState.visibility = View.GONE
                     binding.recyclerView.visibility = View.VISIBLE
-                    adapter.submitList(buildTimelineItems(notifications))
+                    adapter.submitList(buildTimelineItems(notifications)) {
+                        pendingScrollRestore?.let {
+                            binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
+                            pendingScrollRestore = null
+                        }
+                    }
                 }
             }
         }
