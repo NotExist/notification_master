@@ -27,28 +27,30 @@ object SemanticAction {
 /**
  * 動作按鈕 Entity
  * 記錄通知的 Action 按鈕資訊
+ *
+ * Plan 2：FK 改指 NotificationEventEntity（per-event 子物件，每個事件各自的 actions snapshot）
  */
 @Entity(
     tableName = "actions",
     foreignKeys = [
         ForeignKey(
-            entity = NotificationEntity::class,
+            entity = NotificationEventEntity::class,
             parentColumns = ["id"],
-            childColumns = ["notification_id"],
+            childColumns = ["event_id"],
             onDelete = ForeignKey.CASCADE
         )
     ],
     indices = [
-        Index(value = ["notification_id"])
+        Index(value = ["event_id"])
     ]
 )
 data class ActionEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
 
-    /** 關聯的通知記錄 ID */
-    @ColumnInfo(name = "notification_id")
-    val notificationId: Long,
+    /** 關聯的事件 ID（NotificationEventEntity.id） */
+    @ColumnInfo(name = "event_id")
+    val eventId: Long,
 
     /** 動作在陣列中的索引 */
     @ColumnInfo(name = "action_index")

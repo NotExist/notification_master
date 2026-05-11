@@ -8,21 +8,21 @@ import androidx.room.PrimaryKey
 
 /**
  * 裝置狀態快照 Entity
- * 獨立表格，與 NotificationEntity 以 FK 關聯
+ * 獨立表格，與 NotificationEventEntity 以 FK 關聯（Plan 2：per-event）
  * 記錄通知到達時的裝置執行狀態（非 Notification API 資料）
  */
 @Entity(
     tableName = "device_states",
     foreignKeys = [
         ForeignKey(
-            entity = NotificationEntity::class,
+            entity = NotificationEventEntity::class,
             parentColumns = ["id"],
-            childColumns = ["notification_id"],
+            childColumns = ["event_id"],
             onDelete = ForeignKey.CASCADE
         )
     ],
     indices = [
-        Index(value = ["notification_id"], unique = true),
+        Index(value = ["event_id"], unique = true),
         Index(value = ["capture_time"])
     ]
 )
@@ -30,9 +30,9 @@ data class DeviceStateEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
 
-    /** 關聯的通知記錄 ID */
-    @ColumnInfo(name = "notification_id")
-    val notificationId: Long,
+    /** 關聯的事件 ID（NotificationEventEntity.id） */
+    @ColumnInfo(name = "event_id")
+    val eventId: Long,
 
     /** 擷取時間 */
     @ColumnInfo(name = "capture_time")

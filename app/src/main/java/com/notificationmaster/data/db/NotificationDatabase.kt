@@ -20,21 +20,33 @@ import com.notificationmaster.data.db.entity.DeviceStateEntity
 import com.notificationmaster.data.db.entity.MediaAttachmentEntity
 import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.NotificationEventEntity
+import com.notificationmaster.data.db.entity.NotificationRecordEntity
+import com.notificationmaster.data.db.entity.RankingObservationEntity
+import com.notificationmaster.data.db.entity.RankingSnapshotEntity
 
 /**
  * Room 資料庫
+ *
+ * Plan 2 版本：v1 → v2 schema 翻轉（events 為主、record 聚合錨點、ranking 獨立軌道）。
+ * NotificationEntity / NotificationDao 仍暫存於 entities 列表，待 Phase 5 service rewrite 完成後拆除。
+ *
+ * Migration 策略：fallbackToDestructiveMigration（架構級重構，無法線性 migrate；
+ * 使用者升級前可透過「資料管理 → 匯出 JSON」備份）。
  */
 @Database(
     entities = [
         NotificationEntity::class,
         NotificationEventEntity::class,
+        NotificationRecordEntity::class,
+        RankingSnapshotEntity::class,
+        RankingObservationEntity::class,
         MediaAttachmentEntity::class,
         ActionEntity::class,
         AppSourceEntity::class,
         ChannelEntity::class,
         DeviceStateEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -68,6 +80,8 @@ abstract class NotificationDatabase : RoomDatabase() {
                 NotificationDatabase::class.java,
                 DATABASE_NAME
             )
+            // Plan 2 schema 翻轉，無法線性 migrate；舊資料丟失，使用者應先匯出備份
+            .fallbackToDestructiveMigration()
             .build()
         }
 

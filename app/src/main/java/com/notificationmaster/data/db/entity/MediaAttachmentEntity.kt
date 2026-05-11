@@ -29,19 +29,21 @@ enum class MediaType {
 /**
  * 媒體附件 Entity
  * 儲存通知中的圖片等媒體資源
+ *
+ * Plan 2：FK 改指 NotificationEventEntity（per-event 子物件）
  */
 @Entity(
     tableName = "media_attachments",
     foreignKeys = [
         ForeignKey(
-            entity = NotificationEntity::class,
+            entity = NotificationEventEntity::class,
             parentColumns = ["id"],
-            childColumns = ["notification_id"],
+            childColumns = ["event_id"],
             onDelete = ForeignKey.CASCADE
         )
     ],
     indices = [
-        Index(value = ["notification_id"]),
+        Index(value = ["event_id"]),
         Index(value = ["media_type"]),
         Index(value = ["content_hash"])
     ]
@@ -50,9 +52,9 @@ data class MediaAttachmentEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
 
-    /** 關聯的通知記錄 ID */
-    @ColumnInfo(name = "notification_id")
-    val notificationId: Long,
+    /** 關聯的事件 ID（NotificationEventEntity.id） */
+    @ColumnInfo(name = "event_id")
+    val eventId: Long,
 
     /** 媒體類型 */
     @ColumnInfo(name = "media_type")
