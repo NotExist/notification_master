@@ -40,9 +40,19 @@ object MatcherSqlTranslator {
 
     private const val LIKE_ESCAPE = '\\'
 
-    /** 當前裝置 SQLite 是否支援 json_extract（API 27+） */
-    val supportsJsonExtract: Boolean
-        get() = Build.VERSION.SDK_INT >= MIN_JSON_EXTRACT_API
+    /**
+     * 當前裝置 SQLite 是否支援 json_extract（API 27+）。
+     *
+     * 包 try-catch 因為 unit test JVM 環境讀 [Build.VERSION] 會拋 RuntimeException("Stub!")；
+     * test 環境視為 API <27（走退化路徑）。
+     */
+    val supportsJsonExtract: Boolean by lazy {
+        try {
+            Build.VERSION.SDK_INT >= MIN_JSON_EXTRACT_API
+        } catch (_: RuntimeException) {
+            false
+        }
+    }
 
     /**
      * UI 預檢用：matcher 是否需要 json_extract 才能完整 SQL 化。

@@ -52,6 +52,12 @@ android {
     lint {
         textReport = true
     }
+
+    testOptions {
+        // 單元測試讀取 android.* 類別時回傳 default 值（Log.w 變 no-op、Build.VERSION.SDK_INT = 0）
+        // 而非 throw RuntimeException("Stub!")。讓單測能不依賴 Robolectric 跑通。
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
