@@ -443,7 +443,9 @@
     <string name="filter_keyword_field_big_text">展開內容</string>
     <string name="filter_keyword_field_sub_text">副標題</string>
     <string name="filter_keyword_field_required">請至少選擇一個搜尋欄位</string>
+    <string name="filter_keyword_field_unsupported_below_api27">%1$s（需 Android 8.1+）</string>
     <string name="filter_keyword_display">%1$s (%2$s)</string>
+    <string name="filter_flags_hint_below_api27">⚠ 旗標條件在 Android 8.1 以下無法於列表/Widget 預覽中過濾；Service 即時觸發不受影響</string>
 
     <!-- 規則預覽 -->
     <string name="filter_preview_match">預覽匹配結果</string>

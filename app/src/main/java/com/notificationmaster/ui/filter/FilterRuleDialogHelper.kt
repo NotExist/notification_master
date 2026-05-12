@@ -240,6 +240,21 @@ object FilterRuleDialogHelper {
             return toggleGroup
         }
 
+        // Phase 12：API <27 顯示提示 — Flags 仍可保存且 Service 即時觸發有效，
+        // 但列表/Widget 預覽會走 ALWAYS_TRUE 退化（json_extract 不可用）
+        if (!com.notificationmaster.data.filter.MatcherSqlTranslator.supportsJsonExtract) {
+            val density = context.resources.displayMetrics.density
+            val hint = TextView(context).apply {
+                text = context.getString(R.string.filter_flags_hint_below_api27)
+                textSize = 11f
+                setPadding(0, (4 * density).toInt(), 0, (8 * density).toInt())
+                setTextColor(com.google.android.material.color.MaterialColors.getColor(
+                    context, android.R.attr.textColorSecondary, 0
+                ))
+            }
+            containerFlags.addView(hint)
+        }
+
         // 建立 7 個 bit flag 列
         val flagToggleGroups = mutableMapOf<com.notificationmaster.core.filter.NotificationFlag, com.google.android.material.button.MaterialButtonToggleGroup>()
         for (flag in com.notificationmaster.core.filter.NotificationFlag.entries) {
@@ -351,11 +366,21 @@ object FilterRuleDialogHelper {
         val keywordFieldCheckBoxes = mutableMapOf<KeywordField, MaterialCheckBox>()
         val row1 = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
         val row2 = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+        // Phase 12：BIG_TEXT / SUB_TEXT 需 json_extract（API 27+ 才支援）；低於 27 disable
+        val jsonExtractAvailable =
+            com.notificationmaster.data.filter.MatcherSqlTranslator.supportsJsonExtract
         for ((i, pair) in keywordFieldLabels.withIndex()) {
             val (field, label) = pair
+            val needsJsonExtract = field == KeywordField.BIG_TEXT || field == KeywordField.SUB_TEXT
             val cb = MaterialCheckBox(context).apply {
-                text = label
+                text = if (needsJsonExtract && !jsonExtractAvailable) {
+                    context.getString(R.string.filter_keyword_field_unsupported_below_api27, label)
+                } else label
                 isChecked = field == KeywordField.TITLE || field == KeywordField.TEXT
+                if (needsJsonExtract && !jsonExtractAvailable) {
+                    isEnabled = false
+                    isChecked = false
+                }
             }
             keywordFieldCheckBoxes[field] = cb
             val params = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)

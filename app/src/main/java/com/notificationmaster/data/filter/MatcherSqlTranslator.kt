@@ -1,5 +1,6 @@
 package com.notificationmaster.data.filter
 
+import android.os.Build
 import android.util.Log
 import com.notificationmaster.core.filter.FieldOp
 import com.notificationmaster.core.filter.FieldWhitelist
@@ -12,18 +13,22 @@ import com.notificationmaster.core.filter.Matcher
  * 設計理念：列表篩選（Timeline / Widget）與 RuleEngine 的即時匹配共用同一套
  * Matcher model；in-memory 路徑由 [Matcher.matches] 處理，SQL 路徑由本類別處理。
  *
- * Plan 2：target table = `notification_events`（alias `e`）。Matcher 中
- * `notification_events` 沒有對應 column 的部份（flags / importance / big_text /
- * sub_text / channel group / FieldWhitelist 內 events 缺欄的項目）一律
- * **退化 ALWAYS_TRUE 並 log warning**（Plan §F silent fail 決策的延伸），
- * 不再 throw UnsupportedMatcherException。
- *
- * Keyword 的 regex 模式仍無法 SQL 化，會 throw（in-memory 路徑可處理；
- * 列表呈現要支援需另外做 read-time 過濾）。
+ * Plan 2 / Phase 12：target table = `notification_events`（alias `e`）。
+ * - **`Matcher.Package` / `Channel` / `EventTypes` / `DerivedProperty`**：events 表已投影，純 column 比較
+ * - **`Matcher.ChannelProperty`**：events 表無 channel meta，但用 correlated subquery 走 `channels` 表（API 21+）
+ * - **`Matcher.Flags`**：events 表無 flags column。API 27+ 用 `json_extract` 從 `event_raw_json` 取；
+ *   API <27 退化 ALWAYS_TRUE（SQLite 3.18+ 才支援 json_extract，對應 Android API 27+；
+ *   呼叫端應透過 [requiresJsonExtract] 預先檢查並在 UI disable）
+ * - **`Matcher.Keyword(BIG_TEXT/SUB_TEXT)`**：同 Flags，API 27+ 用 json_extract，API <27 退化
+ * - **`Matcher.Field`**：未投影欄位退化 ALWAYS_TRUE（FieldWhitelist 已限制到 events 表有的 column）
+ * - **Keyword regex**：仍無法 SQL 化（SQLite 無 REGEXP），呼叫端走 in-memory 路徑
  */
 object MatcherSqlTranslator {
 
     private const val TAG = "MatcherSqlTranslator"
+
+    /** SQLite 3.18+（Android API 27+）才支援 json_extract */
+    private const val MIN_JSON_EXTRACT_API = 27
 
     data class Fragment(val sql: String, val args: List<Any?>) {
         companion object {
@@ -34,6 +39,22 @@ object MatcherSqlTranslator {
     class UnsupportedMatcherException(msg: String) : IllegalArgumentException(msg)
 
     private const val LIKE_ESCAPE = '\\'
+
+    /** 當前裝置 SQLite 是否支援 json_extract（API 27+） */
+    val supportsJsonExtract: Boolean
+        get() = Build.VERSION.SDK_INT >= MIN_JSON_EXTRACT_API
+
+    /**
+     * UI 預檢用：matcher 是否需要 json_extract 才能完整 SQL 化。
+     * 若 [supportsJsonExtract] 為 false 且本回傳 true，呼叫端應在 UI disable 該條件。
+     */
+    fun requiresJsonExtract(matcher: Matcher): Boolean = when (matcher) {
+        is Matcher.Flags -> matcher.requiredFlags != 0 || matcher.excludedFlags != 0
+        is Matcher.Keyword -> matcher.fields.any {
+            it == KeywordField.BIG_TEXT || it == KeywordField.SUB_TEXT
+        }
+        else -> false
+    }
 
     /** 多個 matcher 以 AND 串接成單一 fragment（args 順序對齊 ?） */
     fun toFragment(matchers: List<Matcher>): Fragment {
@@ -74,50 +95,14 @@ object MatcherSqlTranslator {
             else Fragment(parts.joinToString(" AND "), args)
         }
 
-        is Matcher.Flags -> {
-            // notification_events 不投影 flags column（flags 為 sbn 層級的屬性，read-time
-            // 從 eventRawJson 解析）。SQL 路徑退化 ALWAYS_TRUE，呼叫端若需 flags 篩選
-            // 應走 in-memory 路徑或補 NotificationSnapshot parse 後過濾。
-            Log.w(TAG, "Flags matcher unsupported on events schema, falling back to ALWAYS_TRUE")
-            Fragment.ALWAYS_TRUE
-        }
+        is Matcher.Flags -> translateFlags(matcher)
 
-        is Matcher.Keyword -> {
-            if (matcher.isRegex) {
-                throw UnsupportedMatcherException("Keyword regex 無法 SQL 化（SQLite 無 REGEXP）")
-            }
-            val cols = matcher.fields.mapNotNull {
-                when (it) {
-                    KeywordField.TITLE -> "e.title"
-                    KeywordField.TEXT -> "e.text"
-                    KeywordField.BIG_TEXT, KeywordField.SUB_TEXT -> {
-                        // notification_events 只投影 title/text；big_text/sub_text 需要走 snapshot
-                        Log.w(TAG, "Keyword field $it unsupported on events schema, ignored in SQL")
-                        null
-                    }
-                }
-            }
-            if (cols.isEmpty()) Fragment.ALWAYS_TRUE
-            else {
-                val pattern = "%" + escapeLike(matcher.pattern) + "%"
-                val sql = cols.joinToString(" OR ") { "$it LIKE ? ESCAPE '\\'" }
-                Fragment(sql, List(cols.size) { pattern })
-            }
-        }
+        is Matcher.Keyword -> translateKeyword(matcher)
 
-        is Matcher.ChannelProperty -> {
-            // events 不投影 importance / channel groupId（這兩個是 channel meta，非 event 屬性）
-            if (matcher.minImportance != null) {
-                Log.w(TAG, "ChannelProperty.minImportance unsupported on events schema, ignored")
-            }
-            if (matcher.groupId != null) {
-                Log.w(TAG, "ChannelProperty.groupId unsupported on events schema, ignored")
-            }
-            Fragment.ALWAYS_TRUE
-        }
+        is Matcher.ChannelProperty -> translateChannelProperty(matcher)
 
         is Matcher.EventTypes -> {
-            // Plan 2：events 表本身有 event_type，直接 IN clause，不再需要 EXISTS subquery
+            // Plan 2：events 表本身有 event_type，直接 IN clause
             if (matcher.types.isEmpty()) Fragment.ALWAYS_TRUE
             else {
                 val placeholders = List(matcher.types.size) { "?" }.joinToString(",")
@@ -146,6 +131,92 @@ object MatcherSqlTranslator {
                 FieldOp.GTE -> Fragment("$col >= ?", listOf(coerceValue(def.type, matcher.value)))
             }
         }
+    }
+
+    /**
+     * Flags matcher：API 27+ 用 json_extract 從 `$.sbn.notification.flags` 取出 bitmask；
+     * API <27 退化 ALWAYS_TRUE（UI 端應 disable 防止建到無效規則）。
+     */
+    private fun translateFlags(matcher: Matcher.Flags): Fragment {
+        if (matcher.requiredFlags == 0 && matcher.excludedFlags == 0) return Fragment.ALWAYS_TRUE
+        if (!supportsJsonExtract) {
+            Log.w(TAG, "Flags matcher requires json_extract (API 27+), falling back to ALWAYS_TRUE on API ${Build.VERSION.SDK_INT}")
+            return Fragment.ALWAYS_TRUE
+        }
+        val parts = mutableListOf<String>()
+        val args = mutableListOf<Any?>()
+        val flagsExpr = "CAST(json_extract(e.event_raw_json, '$.sbn.notification.flags') AS INTEGER)"
+        if (matcher.requiredFlags != 0) {
+            // required flags 中的每個 bit 都必須被設定
+            parts += "($flagsExpr & ?) = ?"
+            args += matcher.requiredFlags
+            args += matcher.requiredFlags
+        }
+        if (matcher.excludedFlags != 0) {
+            // excluded flags 中的任一 bit 都不可被設定
+            parts += "($flagsExpr & ?) = 0"
+            args += matcher.excludedFlags
+        }
+        return Fragment(parts.joinToString(" AND "), args)
+    }
+
+    /**
+     * Keyword matcher：TITLE/TEXT 走投影 column，BIG_TEXT/SUB_TEXT 在 API 27+ 走 json_extract、
+     * API <27 從 SQL 過濾條件中忽略（UI 端應 disable 對應 checkbox）。
+     */
+    private fun translateKeyword(matcher: Matcher.Keyword): Fragment {
+        if (matcher.isRegex) {
+            throw UnsupportedMatcherException("Keyword regex 無法 SQL 化（SQLite 無 REGEXP）")
+        }
+        data class FieldExpr(val expr: String)
+        val exprs = matcher.fields.mapNotNull { field ->
+            when (field) {
+                KeywordField.TITLE -> FieldExpr("e.title")
+                KeywordField.TEXT -> FieldExpr("e.text")
+                KeywordField.BIG_TEXT -> {
+                    if (supportsJsonExtract) {
+                        FieldExpr("json_extract(e.event_raw_json, '$.sbn.notification.extras.\"android.bigText\"')")
+                    } else {
+                        Log.w(TAG, "Keyword field BIG_TEXT requires json_extract (API 27+), ignored on API ${Build.VERSION.SDK_INT}")
+                        null
+                    }
+                }
+                KeywordField.SUB_TEXT -> {
+                    if (supportsJsonExtract) {
+                        FieldExpr("json_extract(e.event_raw_json, '$.sbn.notification.extras.\"android.subText\"')")
+                    } else {
+                        Log.w(TAG, "Keyword field SUB_TEXT requires json_extract (API 27+), ignored on API ${Build.VERSION.SDK_INT}")
+                        null
+                    }
+                }
+            }
+        }
+        if (exprs.isEmpty()) return Fragment.ALWAYS_TRUE
+        val pattern = "%" + escapeLike(matcher.pattern) + "%"
+        val sql = exprs.joinToString(" OR ") { "${it.expr} LIKE ? ESCAPE '\\'" }
+        return Fragment(sql, List(exprs.size) { pattern })
+    }
+
+    /**
+     * ChannelProperty matcher：channels 表有 importance / group_id column，用 correlated subquery
+     * 從 events 對應 (package_name, channel_id) 查 channels 表。API 21+ 全支援。
+     *
+     * 注意：events.channel_id IS NULL 或 channels 表無對應 row 時，subquery 回傳 NULL，
+     * 比較永遠為 false → 自然過濾掉 pre-API-26 通知或 channel meta 尚未補齊的 row。
+     */
+    private fun translateChannelProperty(matcher: Matcher.ChannelProperty): Fragment {
+        val parts = mutableListOf<String>()
+        val args = mutableListOf<Any?>()
+        if (matcher.minImportance != null) {
+            parts += "(SELECT importance FROM channels WHERE package_name = e.package_name AND channel_id = e.channel_id) >= ?"
+            args += matcher.minImportance
+        }
+        if (matcher.groupId != null) {
+            parts += "(SELECT group_id FROM channels WHERE package_name = e.package_name AND channel_id = e.channel_id) = ?"
+            args += matcher.groupId
+        }
+        return if (parts.isEmpty()) Fragment.ALWAYS_TRUE
+        else Fragment(parts.joinToString(" AND "), args)
     }
 
     /**

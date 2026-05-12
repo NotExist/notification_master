@@ -167,4 +167,118 @@ class EventFilterSqlBuilderTest {
         assertTrue(sql.contains("SELECT COUNT(*) FROM"))
         assertTrue(sql.contains("GROUP BY e.notification_key"))
     }
+
+    // ===== Phase 12：ChannelProperty correlated subquery =====
+
+    @Test
+    fun `ChannelProperty minImportance uses correlated subquery to channels table`() {
+        val spec = EventFilterSpec(
+            matchers = listOf(Matcher.ChannelProperty(minImportance = 3))
+        )
+        val q = EventFilterSqlBuilder.build(spec)
+        assertTrue(
+            "expected correlated subquery: ${q.sql}",
+            q.sql.contains("SELECT importance FROM channels WHERE package_name = e.package_name AND channel_id = e.channel_id")
+        )
+        assertTrue(q.sql.contains(">= ?"))
+        assertEquals(1, q.argCount)
+    }
+
+    @Test
+    fun `ChannelProperty groupId uses correlated subquery to channels table`() {
+        val spec = EventFilterSpec(
+            matchers = listOf(Matcher.ChannelProperty(groupId = "social"))
+        )
+        val q = EventFilterSqlBuilder.build(spec)
+        assertTrue(
+            "expected correlated subquery: ${q.sql}",
+            q.sql.contains("SELECT group_id FROM channels WHERE package_name = e.package_name AND channel_id = e.channel_id")
+        )
+        assertEquals(1, q.argCount)
+    }
+
+    // ===== Phase 12：API <27 退化（test env SDK_INT==0） =====
+
+    @Test
+    fun `Flags matcher falls back to ALWAYS_TRUE on test env (API below 27)`() {
+        val spec = EventFilterSpec(
+            matchers = listOf(Matcher.Flags(requiredFlags = 0x02))
+        )
+        val sql = sqlOf(spec)
+        // 退化後 SQL 內不應包含 flag 條件，整體 where 等同 1=1
+        assertFalse("should not contain json_extract on test env: $sql", sql.contains("json_extract"))
+    }
+
+    @Test
+    fun `Keyword BIG_TEXT only falls back when json_extract unavailable`() {
+        val spec = EventFilterSpec(
+            matchers = listOf(Matcher.Keyword(
+                pattern = "abc",
+                fields = setOf(com.notificationmaster.core.filter.KeywordField.BIG_TEXT)
+            ))
+        )
+        val sql = sqlOf(spec)
+        // test env 走退化（單 BIG_TEXT 無其他 column → 整個 Keyword 退化 ALWAYS_TRUE）
+        assertFalse(sql.contains("json_extract"))
+    }
+
+    @Test
+    fun `Keyword TITLE plus BIG_TEXT keeps TITLE column on test env`() {
+        val spec = EventFilterSpec(
+            matchers = listOf(Matcher.Keyword(
+                pattern = "abc",
+                fields = setOf(
+                    com.notificationmaster.core.filter.KeywordField.TITLE,
+                    com.notificationmaster.core.filter.KeywordField.BIG_TEXT
+                )
+            ))
+        )
+        val q = EventFilterSqlBuilder.build(spec)
+        // TITLE 仍應產生 LIKE；BIG_TEXT 在 test env 被忽略
+        assertTrue(q.sql.contains("e.title LIKE"))
+        assertFalse(q.sql.contains("json_extract"))
+        assertEquals(1, q.argCount)
+    }
+
+    // ===== Phase 12：requiresJsonExtract 預檢 =====
+
+    @Test
+    fun `requiresJsonExtract returns true for non-empty Flags matcher`() {
+        val matcher = Matcher.Flags(requiredFlags = 0x02)
+        assertTrue(com.notificationmaster.data.filter.MatcherSqlTranslator.requiresJsonExtract(matcher))
+    }
+
+    @Test
+    fun `requiresJsonExtract returns false for empty Flags matcher`() {
+        val matcher = Matcher.Flags()
+        assertFalse(com.notificationmaster.data.filter.MatcherSqlTranslator.requiresJsonExtract(matcher))
+    }
+
+    @Test
+    fun `requiresJsonExtract returns true for Keyword with BIG_TEXT field`() {
+        val matcher = Matcher.Keyword(
+            pattern = "x",
+            fields = setOf(com.notificationmaster.core.filter.KeywordField.BIG_TEXT)
+        )
+        assertTrue(com.notificationmaster.data.filter.MatcherSqlTranslator.requiresJsonExtract(matcher))
+    }
+
+    @Test
+    fun `requiresJsonExtract returns false for Keyword limited to TITLE TEXT`() {
+        val matcher = Matcher.Keyword(
+            pattern = "x",
+            fields = setOf(
+                com.notificationmaster.core.filter.KeywordField.TITLE,
+                com.notificationmaster.core.filter.KeywordField.TEXT
+            )
+        )
+        assertFalse(com.notificationmaster.data.filter.MatcherSqlTranslator.requiresJsonExtract(matcher))
+    }
+
+    @Test
+    fun `requiresJsonExtract returns false for ChannelProperty matcher`() {
+        // ChannelProperty 走 correlated subquery 不需 json_extract
+        val matcher = Matcher.ChannelProperty(minImportance = 3)
+        assertFalse(com.notificationmaster.data.filter.MatcherSqlTranslator.requiresJsonExtract(matcher))
+    }
 }
