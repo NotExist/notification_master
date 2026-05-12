@@ -784,7 +784,10 @@ class TimelineFragment : Fragment() {
     }
 
     private fun navigateToDetail(display: NotificationDisplay) {
-        val action = TimelineFragmentDirections.actionTimelineHomeToTimelineDetail(display.eventId)
+        val action = TimelineFragmentDirections.actionTimelineHomeToTimelineDetail(
+            notificationKey = display.notificationKey,
+            anchorEventId = display.eventId
+        )
         findNavController().navigate(action)
     }
 }

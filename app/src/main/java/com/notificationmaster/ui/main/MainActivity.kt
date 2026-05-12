@@ -87,12 +87,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleShortcutIntent(intent: Intent?) {
         if (intent?.action == ACTION_SHOW_DETAIL) {
-            val notificationId = intent.getLongExtra(EXTRA_NOTIFICATION_ID, -1L)
-            if (notificationId != -1L) {
+            val notificationKey = intent.getStringExtra(EXTRA_NOTIFICATION_KEY)
+            val anchorEventId = intent.getLongExtra(EXTRA_ANCHOR_EVENT_ID, -1L)
+            if (!notificationKey.isNullOrEmpty()) {
                 val navHostFragment = supportFragmentManager
                     .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
                 val navController = navHostFragment.navController
-                val args = NotificationDetailFragmentArgs(notificationId).toBundle()
+                val args = NotificationDetailFragmentArgs(notificationKey, anchorEventId).toBundle()
                 navController.navigate(R.id.timeline_detail, args)
             }
             intent.action = null
@@ -121,7 +122,10 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val ACTION_SHOW_DETAIL = "com.notificationmaster.action.SHOW_DETAIL"
-        const val EXTRA_NOTIFICATION_ID = "notification_id"
+        /** 進 Detail 的通知 key（Plan 2 Phase 7b：取代舊 EXTRA_NOTIFICATION_ID(Long)）*/
+        const val EXTRA_NOTIFICATION_KEY = "notification_key"
+        /** Detail 進入時要 focus 的 event id（選填，預設 -1L = 用最新 event）*/
+        const val EXTRA_ANCHOR_EVENT_ID = "anchor_event_id"
 
         /** 由 Widget / Shortcut 帶入 LIST_FILTER rule id，切到 Timeline 並套用 */
         const val ACTION_SHOW_FILTERED_TIMELINE = "com.notificationmaster.action.SHOW_FILTERED_TIMELINE"

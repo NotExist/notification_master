@@ -80,7 +80,10 @@ class ArchiveDetailFragment : Fragment() {
         adapter = TimelineAdapter(
             onItemClick = { display ->
                 val action = ArchiveDetailFragmentDirections
-                    .actionArchiveSubDetailToArchiveNotificationDetail(display.eventId)
+                    .actionArchiveSubDetailToArchiveNotificationDetail(
+                        notificationKey = display.notificationKey,
+                        anchorEventId = display.eventId
+                    )
                 findNavController().navigate(action)
             },
             onItemLongClick = { display ->

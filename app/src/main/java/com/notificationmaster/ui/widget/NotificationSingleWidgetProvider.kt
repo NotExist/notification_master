@@ -101,7 +101,8 @@ class NotificationSingleWidgetProvider : AppWidgetProvider() {
 
                     val detailIntent = Intent(appContext, MainActivity::class.java).apply {
                         action = MainActivity.ACTION_SHOW_DETAIL
-                        putExtra(MainActivity.EXTRA_NOTIFICATION_ID, event.id)
+                        putExtra(MainActivity.EXTRA_NOTIFICATION_KEY, event.notificationKey)
+                        putExtra(MainActivity.EXTRA_ANCHOR_EVENT_ID, event.id)
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     }
                     val pendingIntent = PendingIntent.getActivity(

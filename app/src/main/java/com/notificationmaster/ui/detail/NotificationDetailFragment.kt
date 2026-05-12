@@ -25,7 +25,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.navArgs
-import androidx.viewpager2.widget.ViewPager2
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.notificationmaster.NotificationMasterApp
@@ -76,7 +76,7 @@ class NotificationDetailFragment : Fragment() {
     }
     private val preciseTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
 
-    private lateinit var pagerAdapter: EventGroupPagerAdapter
+    private lateinit var eventAdapter: NotificationEventAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -91,7 +91,7 @@ class NotificationDetailFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         setupEventsHelp()
-        setupEventPager()
+        setupEventList()
         loadNotificationDetail()
     }
 
@@ -110,34 +110,23 @@ class NotificationDetailFragment : Fragment() {
         }
     }
 
-    private fun setupEventPager() {
-        val database = NotificationMasterApp.getInstance().database
-        val eventDao = database.notificationEventDao()
-
-        pagerAdapter = EventGroupPagerAdapter(
-            eventDao = eventDao,
-            lifecycleScope = viewLifecycleOwner.lifecycleScope,
-            onEventClick = { event -> showEventDetail(event) }
+    private fun setupEventList() {
+        eventAdapter = NotificationEventAdapter(
+            onItemClick = { event -> showEventDetail(event) }
         )
-        binding.pagerEvents.adapter = pagerAdapter
-
-        // 頁面切換時更新分頁指示器
-        binding.pagerEvents.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
-            override fun onPageSelected(position: Int) {
-                updatePagerIndicator(position)
-            }
-        })
+        binding.recyclerEvents.apply {
+            adapter = eventAdapter
+            layoutManager = LinearLayoutManager(context)
+        }
     }
 
-    private fun updatePagerIndicator(position: Int) {
-        val binding = _binding ?: return
-        val total = pagerAdapter.itemCount
-        if (total <= 1) {
-            binding.textEventPagerIndicator.visibility = View.GONE
+    private fun updateEventCount(count: Int) {
+        val b = _binding ?: return
+        if (count <= 0) {
+            b.textEventCount.visibility = View.GONE
         } else {
-            binding.textEventPagerIndicator.visibility = View.VISIBLE
-            binding.textEventPagerIndicator.text =
-                getString(R.string.event_pager_indicator, position + 1, total)
+            b.textEventCount.visibility = View.VISIBLE
+            b.textEventCount.text = count.toString()
         }
     }
 
@@ -148,16 +137,24 @@ class NotificationDetailFragment : Fragment() {
         val mediaDao = database.mediaAttachmentDao()
 
         viewLifecycleOwner.lifecycleScope.launch {
-            // Plan 2 Phase 9：args.notificationId 語義改為 event id（events PK）。
-            // 透過 event 反查最新的 NotificationEntity 作為 Detail 渲染來源；
-            // Phase 7b Detail 重寫後將直接吃 event + RankingSnapshotMerger，本反查路徑可移除。
-            val event = withContext(Dispatchers.IO) {
-                eventDao.getById(args.notificationId)
+            // Plan 2 Phase 7b：Detail 入口以 notificationKey 為主，anchorEventId（選填）指向
+            // 進入時點擊的事件；後者影響 actions / media / deviceState 等以 event_id FK 的子物件查詢。
+            //
+            // 摘要 / chips / details 區塊在 7b-A 階段仍以 NotificationEntity 渲染（透過 key 反查
+            // getLatestByKey），7b-B 階段切到 NotificationSnapshot + RankingSnapshotMerger。
+            val notificationKey = args.notificationKey
+            val notification = withContext(Dispatchers.IO) {
+                notificationDao.getLatestByKey(notificationKey)
             }
-            val notification = event?.let {
-                withContext(Dispatchers.IO) {
-                    notificationDao.getLatestByKey(it.notificationKey)
-                }
+            val sameKeyEvents = withContext(Dispatchers.IO) {
+                eventDao.getEventsByKeySync(notificationKey)
+            }
+            // anchor event：args 帶入優先；fallback 為最新一筆 event（依 event_time）；
+            // 仍無 events（極少 race）退化為 -1L → 子物件查詢得空結果，不影響主畫面
+            val anchorEventId = when {
+                args.anchorEventId > 0 -> args.anchorEventId
+                sameKeyEvents.isNotEmpty() -> sameKeyEvents.maxBy { it.eventTime }.id
+                else -> -1L
             }
 
             if (notification != null) {
@@ -168,16 +165,16 @@ class NotificationDetailFragment : Fragment() {
                 }
                 displayNotification(notification, channelEntity)
 
-                // 載入動作按鈕與 Intent 資訊（FK 為 event_id）
+                // 載入動作按鈕與 Intent 資訊（FK 為 event_id，用 anchor event 查）
                 val actionDao = database.actionDao()
                 val actions = withContext(Dispatchers.IO) {
-                    actionDao.getActionsByEventIdSync(args.notificationId)
+                    actionDao.getActionsByEventIdSync(anchorEventId)
                 }
                 displayIntents(actions, notification)
 
                 // 載入媒體附件（FK 為 event_id）
                 val attachments = withContext(Dispatchers.IO) {
-                    mediaDao.getAttachmentsByEventIdSync(args.notificationId)
+                    mediaDao.getAttachmentsByEventIdSync(anchorEventId)
                 }
                 displayMediaAttachments(attachments)
 
@@ -192,28 +189,24 @@ class NotificationDetailFragment : Fragment() {
                 displayRanking(notification)
 
                 val deviceState = withContext(Dispatchers.IO) {
-                    database.deviceStateDao().getByEventId(args.notificationId)
+                    database.deviceStateDao().getByEventId(anchorEventId)
                 }
                 displayDeviceState(deviceState)
-
-                // 取得同 key 的所有 NotificationEntity ID（Phase 7b 重寫前 pager 仍走舊路徑）
-                val entityIds = withContext(Dispatchers.IO) {
-                    notificationDao.getEntityIdsByKey(notification.notificationKey)
-                }
-
-                // 提交給 pager adapter
-                pagerAdapter.submitEntityIds(entityIds)
-
-                // 定位到當前瀏覽的 entity（用 notification.id，因 args.notificationId 是 event id）
-                val currentIndex = entityIds.indexOf(notification.id)
-                if (currentIndex >= 0) {
-                    binding.pagerEvents.setCurrentItem(currentIndex, false)
-                }
-                updatePagerIndicator(if (currentIndex >= 0) currentIndex else 0)
 
                 // 顯示自訂 View 資訊
                 displayRemoteViewsInfo(notification)
             }
+
+            // 同 key 所有事件直接交給 RecyclerView 呈現（Phase 7b：拿掉 ViewPager 多頁切換）
+            eventAdapter.submitList(sameKeyEvents) {
+                // 滾到 anchor event 對應的 row（若有）
+                val idx = sameKeyEvents.indexOfFirst { it.id == anchorEventId }
+                if (idx >= 0) {
+                    (binding.recyclerEvents.layoutManager as? LinearLayoutManager)
+                        ?.scrollToPositionWithOffset(idx, 0)
+                }
+            }
+            updateEventCount(sameKeyEvents.size)
         }
     }
 

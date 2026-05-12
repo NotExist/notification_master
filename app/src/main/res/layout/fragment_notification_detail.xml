@@ -661,7 +661,7 @@
                         android:textStyle="bold" />
 
                     <TextView
-                        android:id="@+id/text_event_pager_indicator"
+                        android:id="@+id/text_event_count"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:textAppearance="?attr/textAppearanceBodySmall"
@@ -669,12 +669,14 @@
 
                 </LinearLayout>
 
-                <!-- 固定高度 ViewPager2，水平滑動 -->
-                <androidx.viewpager2.widget.ViewPager2
-                    android:id="@+id/pager_events"
+                <!-- 固定高度 RecyclerView，內部 scroll（同 key 所有 events） -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recycler_events"
                     android:layout_width="match_parent"
                     android:layout_height="320dp"
-                    android:layout_marginTop="8dp" />
+                    android:layout_marginTop="8dp"
+                    android:overScrollMode="ifContentScrolls"
+                    android:clipToPadding="false" />
 
             </LinearLayout>
 

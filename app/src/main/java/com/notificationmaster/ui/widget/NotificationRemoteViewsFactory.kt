@@ -81,7 +81,8 @@ class NotificationRemoteViewsFactory(
             setTextViewText(R.id.widget_item_content, event.text ?: "")
 
             val fillInIntent = Intent().apply {
-                putExtra(MainActivity.EXTRA_NOTIFICATION_ID, event.id)
+                putExtra(MainActivity.EXTRA_NOTIFICATION_KEY, event.notificationKey)
+                putExtra(MainActivity.EXTRA_ANCHOR_EVENT_ID, event.id)
             }
             setOnClickFillInIntent(R.id.widget_item_root, fillInIntent)
         }

@@ -79,7 +79,10 @@ class SearchFragment : Fragment() {
     private fun setupRecyclerView() {
         notificationAdapter = NotificationAdapter(
             onItemClick = { display ->
-                val action = SearchFragmentDirections.actionSearchHomeToSearchDetail(display.eventId)
+                val action = SearchFragmentDirections.actionSearchHomeToSearchDetail(
+                    notificationKey = display.notificationKey,
+                    anchorEventId = display.eventId
+                )
                 findNavController().navigate(action)
             },
             onItemLongClick = { display ->

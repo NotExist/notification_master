@@ -29,8 +29,13 @@
             tools:layout="@layout/fragment_notification_detail">
 
             <argument
-                android:name="notificationId"
-                app:argType="long" />
+                android:name="notificationKey"
+                app:argType="string" />
+
+            <argument
+                android:name="anchorEventId"
+                app:argType="long"
+                android:defaultValue="-1L" />
 
         </fragment>
 
@@ -85,8 +90,13 @@
             tools:layout="@layout/fragment_notification_detail">
 
             <argument
-                android:name="notificationId"
-                app:argType="long" />
+                android:name="notificationKey"
+                app:argType="string" />
+
+            <argument
+                android:name="anchorEventId"
+                app:argType="long"
+                android:defaultValue="-1L" />
 
         </fragment>
 
@@ -121,8 +131,13 @@
             tools:layout="@layout/fragment_notification_detail">
 
             <argument
-                android:name="notificationId"
-                app:argType="long" />
+                android:name="notificationKey"
+                app:argType="string" />
+
+            <argument
+                android:name="anchorEventId"
+                app:argType="long"
+                android:defaultValue="-1L" />
 
         </fragment>
 

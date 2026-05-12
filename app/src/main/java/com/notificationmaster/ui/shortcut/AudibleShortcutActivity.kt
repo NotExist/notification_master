@@ -41,7 +41,8 @@ class AudibleShortcutActivity : AppCompatActivity() {
         val adapter = NotificationAdapter(onItemClick = { display ->
             startActivity(Intent(MainActivity.ACTION_SHOW_DETAIL).apply {
                 setClass(this@AudibleShortcutActivity, MainActivity::class.java)
-                putExtra(MainActivity.EXTRA_NOTIFICATION_ID, display.eventId)
+                putExtra(MainActivity.EXTRA_NOTIFICATION_KEY, display.notificationKey)
+                putExtra(MainActivity.EXTRA_ANCHOR_EVENT_ID, display.eventId)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             })
             finish()
