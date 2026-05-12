@@ -290,7 +290,7 @@ class NotificationCaptureService : NotificationListenerService() {
         notifications: List<StatusBarNotification>,
         rankingMap: RankingMap?,
         caller: String
-    ) = initialProcessingMutex.withLock {
+    ): Unit = initialProcessingMutex.withLock {
         var newCount = 0
         var skipCount = 0
         val initialKeys = mutableSetOf<String>()
