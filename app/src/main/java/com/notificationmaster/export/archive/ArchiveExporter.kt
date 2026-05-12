@@ -1,13 +1,14 @@
 package com.notificationmaster.export.archive
 
 import android.content.Context
-import android.os.Build
 import android.util.Base64
 import com.notificationmaster.BuildConfig
 import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.data.db.NotificationDatabase
-import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.NotificationEventEntity
+import com.notificationmaster.data.db.entity.NotificationRecordEntity
+import com.notificationmaster.data.db.entity.RankingObservationEntity
+import com.notificationmaster.data.db.entity.RankingSnapshotEntity
 import com.notificationmaster.data.model.EnvironmentInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,14 +21,20 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * JSON 封存匯出器
- * 將通知記錄和事件歷程匯出為結構化 JSON
- * 包含環境資訊、完整通知記錄、事件歷程、媒體索引
+ * JSON 封存匯出器（Plan 2 Phase 8 重寫）
+ *
+ * 匯出格式 v2：以 NotificationEventEntity 為主體 + NotificationRecordEntity 聚合錨點 +
+ * RankingSnapshotEntity / RankingObservationEntity 獨立軌道 + 媒體索引。
+ * 對應 Plan 2 重構後的資料模型，舊 v1 格式不再支援。
  */
 class ArchiveExporter(
     private val context: Context,
     private val database: NotificationDatabase
 ) {
+
+    companion object {
+        const val EXPORT_VERSION = "2.0"
+    }
 
     private val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
         timeZone = TimeZone.getTimeZone("UTC")
@@ -36,8 +43,8 @@ class ArchiveExporter(
     /**
      * 匯出指定時間範圍的資料
      *
-     * @param startTime 起始時間（毫秒）
-     * @param endTime 結束時間（毫秒）
+     * @param startTime 起始時間（毫秒，比對 event_time）
+     * @param endTime 結束時間（毫秒，比對 event_time）
      * @param outputStream 輸出串流
      * @param includeMediaBase64 是否內嵌媒體 Base64（小型檔案用）
      */
@@ -47,24 +54,23 @@ class ArchiveExporter(
         outputStream: OutputStream,
         includeMediaBase64: Boolean = false
     ): ArchiveStats = withContext(Dispatchers.IO) {
-        val notifications = database.notificationDao()
-            .getNotificationsByTimeRangePaged(startTime, endTime, Int.MAX_VALUE, 0)
+        // 1. 時間範圍內的所有 events
+        val events = database.notificationEventDao()
+            .getEventsByTimeRangeSync(startTime, endTime)
 
-        val allEvents = mutableListOf<NotificationEventEntity>()
+        // 2. 收集 events 涉及的 notification_key → records
+        val keys = events.map { it.notificationKey }.toSet()
+        val records = keys.mapNotNull { database.notificationRecordDao().getByKey(it) }
+
+        // 3. 媒體索引：依 events.id 撈 attachments
         val mediaIndex = JSONArray()
-
-        for (notification in notifications) {
-            // Plan 2：events 改以 notification_key 關聯；DAO method 已 rename
-            val events = database.notificationEventDao()
-                .getEventsByKeySync(notification.notificationKey)
-            allEvents.addAll(events)
-
-            // 媒體索引：FK 改 event_id，過渡期以 notifications.id 查回空 list（待 Phase 7 重設計）
+        for (event in events) {
             val attachments = database.mediaAttachmentDao()
-                .getAttachmentsByEventIdSync(notification.id)
+                .getAttachmentsByEventIdSync(event.id)
             for (attachment in attachments) {
                 val mediaJson = JSONObject().apply {
-                    put("notificationId", notification.id)
+                    put("eventId", event.id)
+                    put("notificationKey", event.notificationKey)
                     put("mediaType", attachment.mediaType.name)
                     put("filePath", attachment.filePath)
                     put("mimeType", attachment.mimeType)
@@ -72,6 +78,8 @@ class ArchiveExporter(
                     put("width", attachment.width)
                     put("height", attachment.height)
                     put("contentHash", attachment.contentHash)
+                    put("captureTime", attachment.captureTime)
+                    attachment.sourceUri?.let { put("sourceUri", it) }
 
                     if (includeMediaBase64) {
                         val bytes = MediaExtractor.readMediaBytes(context, attachment.filePath)
@@ -84,17 +92,28 @@ class ArchiveExporter(
             }
         }
 
+        // 4. ranking observations：keys 對應 observation，限制在時間範圍
+        val observations = keys.flatMap {
+            database.rankingObservationDao().getByKeySync(it)
+        }.filter { it.observedAt in startTime..endTime }
+
+        // 5. ranking snapshots：observations 涉及的 snapshotId
+        val snapshotIds = observations.map { it.rankingSnapshotId }.toSet()
+        val snapshots = snapshotIds.mapNotNull { database.rankingSnapshotDao().getById(it) }
+
         val archive = buildArchiveJson(
             startTime, endTime,
-            notifications, allEvents, mediaIndex
+            records, events, observations, snapshots, mediaIndex
         )
 
         outputStream.write(archive.toString(2).toByteArray(Charsets.UTF_8))
         outputStream.flush()
 
         ArchiveStats(
-            notificationCount = notifications.size,
-            eventCount = allEvents.size,
+            recordCount = records.size,
+            eventCount = events.size,
+            observationCount = observations.size,
+            snapshotCount = snapshots.size,
             mediaCount = mediaIndex.length()
         )
     }
@@ -102,8 +121,10 @@ class ArchiveExporter(
     private fun buildArchiveJson(
         startTime: Long,
         endTime: Long,
-        notifications: List<NotificationEntity>,
+        records: List<NotificationRecordEntity>,
         events: List<NotificationEventEntity>,
+        observations: List<RankingObservationEntity>,
+        snapshots: List<RankingSnapshotEntity>,
         mediaIndex: JSONArray
     ): JSONObject {
         val envInfo = EnvironmentInfo.create(
@@ -115,7 +136,7 @@ class ArchiveExporter(
             // 匯出資訊
             put("exportInfo", JSONObject().apply {
                 put("exportTime", isoFormat.format(Date()))
-                put("exportVersion", "1.0")
+                put("exportVersion", EXPORT_VERSION)
                 put("appVersion", envInfo.appVersion)
                 put("appVersionCode", envInfo.appVersionCode)
             })
@@ -142,22 +163,30 @@ class ArchiveExporter(
             put("archiveRange", JSONObject().apply {
                 put("startTime", isoFormat.format(Date(startTime)))
                 put("endTime", isoFormat.format(Date(endTime)))
-                put("notificationCount", notifications.size)
+                put("recordCount", records.size)
                 put("eventCount", events.size)
+                put("observationCount", observations.size)
+                put("snapshotCount", snapshots.size)
             })
 
-            // 通知資料
-            put("notifications", JSONArray().apply {
-                for (n in notifications) {
-                    put(notificationToJson(n))
-                }
+            // 通知聚合錨點
+            put("records", JSONArray().apply {
+                for (r in records) put(recordToJson(r))
             })
 
-            // 事件資料
+            // 事件
             put("events", JSONArray().apply {
-                for (e in events) {
-                    put(eventToJson(e))
-                }
+                for (e in events) put(eventToJson(e))
+            })
+
+            // Ranking observation
+            put("rankingObservations", JSONArray().apply {
+                for (o in observations) put(observationToJson(o))
+            })
+
+            // Ranking snapshot
+            put("rankingSnapshots", JSONArray().apply {
+                for (s in snapshots) put(snapshotToJson(s))
             })
 
             // 媒體索引
@@ -165,57 +194,20 @@ class ArchiveExporter(
         }
     }
 
-    private fun notificationToJson(n: NotificationEntity): JSONObject {
-        return JSONObject().apply {
-            put("id", n.id)
-            put("notificationKey", n.notificationKey)
-            put("packageName", n.packageName)
-            put("notificationId", n.notificationId)
-            put("tag", n.tag)
-            put("postTime", n.postTime)
-            put("captureTime", n.captureTime)
-            put("whenTime", n.whenTime)
-            put("title", n.title)
-            put("text", n.text)
-            put("subText", n.subText)
-            put("infoText", n.infoText)
-            put("summaryText", n.summaryText)
-            put("bigText", n.bigText)
-            put("bigTitle", n.bigTitle)
-            put("tickerText", n.tickerText)
-            put("flags", n.flags)
-            put("isOngoing", n.isOngoing)
-            put("isForegroundService", n.isForegroundService)
-            put("isAutoCancel", n.isAutoCancel)
-            put("isNoClear", n.isNoClear)
-            put("isGroupSummary", n.isGroupSummary)
-            put("priority", n.priority)
-            put("importance", n.importance)
-            put("likelyHeadsup", n.likelyHeadsup)
-            put("isAudible", n.isAudible)
-            put("visibility", n.visibility)
-            put("category", n.category)
-            put("groupKey", n.groupKey)
-            put("sortKey", n.sortKey)
-            put("channelId", n.channelId)
-            put("hasBubbleMetadata", n.hasBubbleMetadata)
-            put("color", n.color)
-            put("contentHash", n.contentHash)
-            put("actionCount", n.actionCount)
-            put("template", n.template)
-            put("isMessagingStyle", n.isMessagingStyle)
-            put("conversationTitle", n.conversationTitle)
-            put("isGroupConversation", n.isGroupConversation)
-            put("messages", n.messages)
-            put("extrasJson", n.extrasJson)
+    private fun recordToJson(r: NotificationRecordEntity): JSONObject =
+        JSONObject().apply {
+            put("notificationKey", r.notificationKey)
+            put("packageName", r.packageName)
+            put("channelId", r.channelId)
+            put("notificationId", r.notificationId)
+            put("tag", r.tag)
+            put("firstSeen", r.firstSeen)
+            put("lastSeen", r.lastSeen)
+            put("eventCount", r.eventCount)
         }
-    }
 
-    private fun eventToJson(e: NotificationEventEntity): JSONObject {
-        // Plan 2：NotificationEventEntity 重構，移除 notification_id / rankingRank / rankingImportance /
-        //         isAmbient / isSuspended / suppressedVisualEffects / contentDiff 欄位。
-        //         改為自包含 eventRawJson；ranking 在 RankingObservation 獨立軌道（Phase 7+ 匯出格式重設計）。
-        return JSONObject().apply {
+    private fun eventToJson(e: NotificationEventEntity): JSONObject =
+        JSONObject().apply {
             put("id", e.id)
             put("notificationKey", e.notificationKey)
             put("eventType", e.eventType.name)
@@ -233,11 +225,31 @@ class ArchiveExporter(
             put("likelyHeadsup", e.likelyHeadsup)
             put("eventRawJson", e.eventRawJson)
         }
-    }
+
+    private fun observationToJson(o: RankingObservationEntity): JSONObject =
+        JSONObject().apply {
+            put("id", o.id)
+            put("notificationKey", o.notificationKey)
+            put("observedAt", o.observedAt)
+            put("rankingSnapshotId", o.rankingSnapshotId)
+            put("source", o.source.name)
+            put("rank", o.rank)
+            put("lastAudiblyAlertedMillis", o.lastAudiblyAlertedMillis)
+        }
+
+    private fun snapshotToJson(s: RankingSnapshotEntity): JSONObject =
+        JSONObject().apply {
+            put("id", s.id)
+            put("contentHash", s.contentHash)
+            put("rankingJson", s.rankingJson)
+            put("firstSeen", s.firstSeen)
+        }
 }
 
 data class ArchiveStats(
-    val notificationCount: Int,
+    val recordCount: Int,
     val eventCount: Int,
+    val observationCount: Int,
+    val snapshotCount: Int,
     val mediaCount: Int
 )

@@ -5,8 +5,11 @@ import android.util.Base64
 import android.util.Log
 import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.data.db.entity.EventType
-import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.NotificationEventEntity
+import com.notificationmaster.data.db.entity.NotificationRecordEntity
+import com.notificationmaster.data.db.entity.ObservationSource
+import com.notificationmaster.data.db.entity.RankingObservationEntity
+import com.notificationmaster.data.db.entity.RankingSnapshotEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -14,52 +17,44 @@ import java.io.File
 import java.io.InputStream
 
 /**
- * JSON 封存匯入器
- * 解析 JSON 封存檔並載入為唯讀資料
+ * JSON 封存匯入器（Plan 2 Phase 8 重寫）
+ *
+ * 僅支援匯出格式 v2.0：records / events / rankingObservations / rankingSnapshots / mediaIndex。
+ * 舊 v1.0 格式（NotificationEntity 為主體）不再支援。
  */
 class ArchiveImporter(private val context: Context) {
 
     companion object {
         private const val TAG = "ArchiveImporter"
+        private const val SUPPORTED_VERSION_PREFIX = "2."
     }
 
     /**
      * 解析封存檔案
      *
      * @param inputStream 輸入串流
-     * @return 解析後的封存資料
+     * @return 解析後的封存資料；不支援版本時 throws
      */
     suspend fun import(inputStream: InputStream): ArchiveData = withContext(Dispatchers.IO) {
         val jsonStr = inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         val json = JSONObject(jsonStr)
 
         val exportInfo = parseExportInfo(json.getJSONObject("exportInfo"))
+        require(exportInfo.exportVersion.startsWith(SUPPORTED_VERSION_PREFIX)) {
+            "不支援的匯出版本：${exportInfo.exportVersion}（需 $SUPPORTED_VERSION_PREFIX*）"
+        }
+
         val environment = parseEnvironment(json.optJSONObject("environment"))
         val archiveRange = parseArchiveRange(json.optJSONObject("archiveRange"))
 
-        val notifications = mutableListOf<NotificationEntity>()
-        val notificationsArray = json.optJSONArray("notifications")
-        if (notificationsArray != null) {
-            for (i in 0 until notificationsArray.length()) {
-                try {
-                    notifications.add(parseNotification(notificationsArray.getJSONObject(i)))
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to parse notification at index $i", e)
-                }
-            }
-        }
-
-        val events = mutableListOf<NotificationEventEntity>()
-        val eventsArray = json.optJSONArray("events")
-        if (eventsArray != null) {
-            for (i in 0 until eventsArray.length()) {
-                try {
-                    events.add(parseEvent(eventsArray.getJSONObject(i)))
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to parse event at index $i", e)
-                }
-            }
-        }
+        val records = parseArray(json.optJSONArray("records"), "record", ::parseRecord)
+        val events = parseArray(json.optJSONArray("events"), "event", ::parseEvent)
+        val observations = parseArray(
+            json.optJSONArray("rankingObservations"), "rankingObservation", ::parseObservation
+        )
+        val snapshots = parseArray(
+            json.optJSONArray("rankingSnapshots"), "rankingSnapshot", ::parseSnapshot
+        )
 
         // 提取內嵌的 Base64 媒體
         val mediaArray = json.optJSONArray("mediaIndex")
@@ -85,9 +80,28 @@ class ArchiveImporter(private val context: Context) {
             exportInfo = exportInfo,
             environment = environment,
             archiveRange = archiveRange,
-            notifications = notifications,
-            events = events
+            records = records,
+            events = events,
+            observations = observations,
+            snapshots = snapshots
         )
+    }
+
+    private fun <T> parseArray(
+        array: org.json.JSONArray?,
+        kind: String,
+        parser: (JSONObject) -> T
+    ): MutableList<T> {
+        val out = mutableListOf<T>()
+        if (array == null) return out
+        for (i in 0 until array.length()) {
+            try {
+                out.add(parser(array.getJSONObject(i)))
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to parse $kind at index $i", e)
+            }
+        }
+        return out
     }
 
     private fun parseExportInfo(json: JSONObject): ExportInfo {
@@ -114,101 +128,35 @@ class ArchiveImporter(private val context: Context) {
         return ArchiveRange(
             startTime = json.optString("startTime", ""),
             endTime = json.optString("endTime", ""),
-            notificationCount = json.optInt("notificationCount", 0),
+            recordCount = json.optInt("recordCount", 0),
+            eventCount = json.optInt("eventCount", 0),
+            observationCount = json.optInt("observationCount", 0),
+            snapshotCount = json.optInt("snapshotCount", 0)
+        )
+    }
+
+    private fun parseRecord(json: JSONObject): NotificationRecordEntity {
+        val notificationKey = json.getString("notificationKey")
+        val packageName = json.getString("packageName")
+        require(notificationKey.isNotBlank()) { "Record notificationKey must not be blank" }
+        require(packageName.isNotBlank()) { "Record packageName must not be blank" }
+        return NotificationRecordEntity(
+            notificationKey = notificationKey,
+            packageName = packageName,
+            channelId = json.optStringOrNull("channelId"),
+            notificationId = json.optInt("notificationId", 0),
+            tag = json.optStringOrNull("tag"),
+            firstSeen = json.getLong("firstSeen"),
+            lastSeen = json.getLong("lastSeen"),
             eventCount = json.optInt("eventCount", 0)
         )
     }
 
-    private fun parseNotification(json: JSONObject): NotificationEntity {
-        val packageName = json.getString("packageName")
-        val notificationKey = json.getString("notificationKey")
-        require(packageName.isNotBlank()) { "packageName must not be blank" }
-        require(notificationKey.isNotBlank()) { "notificationKey must not be blank" }
-        require(packageName.matches(Regex("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)*$"))) {
-            "Invalid packageName format: $packageName"
-        }
-
-        return NotificationEntity(
-            id = json.optLong("id", 0),
-            notificationKey = notificationKey,
-            packageName = packageName,
-            notificationId = json.optInt("notificationId", 0),
-            tag = json.optString("tag").takeIf { it != "null" && it.isNotEmpty() },
-            postTime = json.getLong("postTime"),
-            captureTime = json.getLong("captureTime"),
-            whenTime = json.optLong("whenTime", 0),
-            title = json.optString("title").takeIf { it != "null" && it.isNotEmpty() },
-            text = json.optString("text").takeIf { it != "null" && it.isNotEmpty() },
-            subText = json.optString("subText").takeIf { it != "null" && it.isNotEmpty() },
-            infoText = json.optString("infoText").takeIf { it != "null" && it.isNotEmpty() },
-            summaryText = json.optString("summaryText").takeIf { it != "null" && it.isNotEmpty() },
-            bigText = json.optString("bigText").takeIf { it != "null" && it.isNotEmpty() },
-            bigTitle = json.optString("bigTitle").takeIf { it != "null" && it.isNotEmpty() },
-            tickerText = json.optString("tickerText").takeIf { it != "null" && it.isNotEmpty() },
-            flags = json.optInt("flags", 0),
-            isOngoing = json.optBoolean("isOngoing", false),
-            isForegroundService = json.optBoolean("isForegroundService", false),
-            isAutoCancel = json.optBoolean("isAutoCancel", false),
-            isNoClear = json.optBoolean("isNoClear", false),
-            isHighPriority = json.optBoolean("isHighPriority", false),
-            isLocalOnly = json.optBoolean("isLocalOnly", false),
-            isGroupSummary = json.optBoolean("isGroupSummary", false),
-            priority = json.optInt("priority", 0),
-            importance = json.optInt("importance", -1),
-            likelyHeadsup = json.optBoolean("likelyHeadsup", false),
-            isAudible = json.optBoolean("isAudible", false),
-            visibility = json.optInt("visibility", 0),
-            category = json.optString("category").takeIf { it != "null" && it.isNotEmpty() },
-            groupKey = json.optString("groupKey").takeIf { it != "null" && it.isNotEmpty() },
-            overrideGroupKey = json.optString("overrideGroupKey").takeIf { it != "null" && it.isNotEmpty() },
-            sortKey = json.optString("sortKey").takeIf { it != "null" && it.isNotEmpty() },
-            channelId = json.optString("channelId").takeIf { it != "null" && it.isNotEmpty() },
-            hasBubbleMetadata = json.optBoolean("hasBubbleMetadata", false),
-            color = json.optInt("color", 0),
-            soundUri = null,
-            vibratePattern = null,
-            ledArgb = 0,
-            ledOnMs = 0,
-            ledOffMs = 0,
-            progress = json.optInt("progress", 0),
-            progressMax = json.optInt("progressMax", 0),
-            progressIndeterminate = json.optBoolean("progressIndeterminate", false),
-            showChronometer = json.optBoolean("showChronometer", false),
-            chronometerCountDown = json.optBoolean("chronometerCountDown", false),
-            showWhen = json.optBoolean("showWhen", true),
-            people = null,
-            isMessagingStyle = json.optBoolean("isMessagingStyle", false),
-            conversationTitle = json.optString("conversationTitle").takeIf { it != "null" && it.isNotEmpty() },
-            isGroupConversation = json.optBoolean("isGroupConversation", false),
-            messages = json.optString("messages").takeIf { it != "null" && it.isNotEmpty() },
-            template = json.optString("template").takeIf { it != "null" && it.isNotEmpty() },
-            hasCustomContentView = false,
-            hasCustomBigContentView = false,
-            hasCustomHeadsUpContentView = false,
-            extrasJson = json.optString("extrasJson").takeIf { it != "null" && it.isNotEmpty() },
-            rawDataJson = json.optString("rawDataJson").takeIf { it != "null" && it.isNotEmpty() },
-            contentHash = json.optString("contentHash", ""),
-            actionCount = json.optInt("actionCount", 0),
-            userId = 0,
-            rankingRank = json.optInt("rankingRank", -1),
-            isAmbient = json.optBoolean("isAmbient", false),
-            isSuspended = json.optBoolean("isSuspended", false),
-            suppressedVisualEffects = json.optInt("suppressedVisualEffects", 0),
-            hasContentIntent = json.optBoolean("hasContentIntent", false),
-            hasDeleteIntent = json.optBoolean("hasDeleteIntent", false),
-            hasFullScreenIntent = json.optBoolean("hasFullScreenIntent", false),
-            contentIntentCreatorPackage = json.optString("contentIntentCreatorPackage").takeIf { it != "null" && it.isNotEmpty() }
-        )
-    }
-
     private fun parseEvent(json: JSONObject): NotificationEventEntity {
-        // Plan 2：NotificationEventEntity 重構，移除舊欄位，新增 captureTime / packageName /
-        //         channelId / postTime / contentHash / title / text / isAudible / likelyHeadsup /
-        //         eventRawJson。舊匯出檔的相容性留 Phase 7+ 匯出格式重設計時處理。
         val notificationKey = json.getString("notificationKey")
         require(notificationKey.isNotBlank()) { "Event notificationKey must not be blank" }
 
-        // Plan 2 reason 編碼擴充：允許 0 與負值（如 -100 = RECONCILED_AFTER_FACT）
+        // 允許 0 與負值 reason（如 -100 = RECONCILED_AFTER_FACT）
         val rawReason = if (json.has("removalReason")) json.optInt("removalReason", Int.MIN_VALUE) else Int.MIN_VALUE
         val removalReason = if (rawReason == Int.MIN_VALUE) null else rawReason
 
@@ -219,18 +167,49 @@ class ArchiveImporter(private val context: Context) {
             eventTime = json.getLong("eventTime"),
             captureTime = json.optLong("captureTime", json.getLong("eventTime")),
             packageName = json.optString("packageName", ""),
-            channelId = json.optString("channelId").takeIf { it != "null" && it.isNotEmpty() },
+            channelId = json.optStringOrNull("channelId"),
             postTime = json.optLong("postTime", json.getLong("eventTime")),
             contentHash = json.optString("contentHash", ""),
-            title = json.optString("title").takeIf { it != "null" && it.isNotEmpty() },
-            text = json.optString("text").takeIf { it != "null" && it.isNotEmpty() },
+            title = json.optStringOrNull("title"),
+            text = json.optStringOrNull("text"),
             removalReason = removalReason,
-            removalReasonCategory = json.optString("removalReasonCategory").takeIf { it != "null" && it.isNotEmpty() },
+            removalReasonCategory = json.optStringOrNull("removalReasonCategory"),
             isAudible = json.optBoolean("isAudible", false),
             likelyHeadsup = json.optBoolean("likelyHeadsup", false),
             eventRawJson = json.optString("eventRawJson", "")
         )
     }
+
+    private fun parseObservation(json: JSONObject): RankingObservationEntity {
+        val notificationKey = json.getString("notificationKey")
+        require(notificationKey.isNotBlank()) { "Observation notificationKey must not be blank" }
+        val rankRaw = if (json.has("rank")) json.optInt("rank", Int.MIN_VALUE) else Int.MIN_VALUE
+        val lastAudiblyRaw = if (json.has("lastAudiblyAlertedMillis"))
+            json.optLong("lastAudiblyAlertedMillis", Long.MIN_VALUE) else Long.MIN_VALUE
+        return RankingObservationEntity(
+            id = json.optLong("id", 0),
+            notificationKey = notificationKey,
+            observedAt = json.getLong("observedAt"),
+            rankingSnapshotId = json.getLong("rankingSnapshotId"),
+            source = ObservationSource.valueOf(json.getString("source")),
+            rank = if (rankRaw == Int.MIN_VALUE) null else rankRaw,
+            lastAudiblyAlertedMillis = if (lastAudiblyRaw == Long.MIN_VALUE) null else lastAudiblyRaw
+        )
+    }
+
+    private fun parseSnapshot(json: JSONObject): RankingSnapshotEntity {
+        val contentHash = json.getString("contentHash")
+        require(contentHash.isNotBlank()) { "Snapshot contentHash must not be blank" }
+        return RankingSnapshotEntity(
+            id = json.optLong("id", 0),
+            contentHash = contentHash,
+            rankingJson = json.optString("rankingJson", "{}"),
+            firstSeen = json.getLong("firstSeen")
+        )
+    }
+
+    private fun JSONObject.optStringOrNull(key: String): String? =
+        if (has(key) && !isNull(key)) optString(key).takeIf { it.isNotEmpty() } else null
 }
 
 /**
@@ -240,8 +219,10 @@ data class ArchiveData(
     val exportInfo: ExportInfo,
     val environment: ArchiveEnvironment?,
     val archiveRange: ArchiveRange?,
-    val notifications: List<NotificationEntity>,
-    val events: List<NotificationEventEntity>
+    val records: List<NotificationRecordEntity>,
+    val events: List<NotificationEventEntity>,
+    val observations: List<RankingObservationEntity>,
+    val snapshots: List<RankingSnapshotEntity>
 )
 
 data class ExportInfo(
@@ -261,6 +242,8 @@ data class ArchiveEnvironment(
 data class ArchiveRange(
     val startTime: String,
     val endTime: String,
-    val notificationCount: Int,
-    val eventCount: Int
+    val recordCount: Int,
+    val eventCount: Int,
+    val observationCount: Int,
+    val snapshotCount: Int
 )

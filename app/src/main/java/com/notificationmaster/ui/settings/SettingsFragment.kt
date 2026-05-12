@@ -954,8 +954,10 @@ class SettingsFragment : Fragment() {
                 showResultDialog(
                     "封存匯出完成",
                     buildString {
-                        append("通知：${stats.notificationCount} 筆")
+                        append("通知：${stats.recordCount} 筆")
                         append("\n事件：${stats.eventCount} 筆")
+                        if (stats.observationCount > 0) append("\nRanking 觀察：${stats.observationCount} 筆")
+                        if (stats.snapshotCount > 0) append("\nRanking 快照：${stats.snapshotCount} 筆")
                         if (stats.mediaCount > 0) append("\n媒體：${stats.mediaCount} 筆")
                     }
                 )
@@ -983,21 +985,43 @@ class SettingsFragment : Fragment() {
                 inputStream.close()
 
                 // 將匯入的資料存入資料庫
+                // 寫入順序遵循 FK：records → snapshots → events → observations
                 val database = NotificationMasterApp.getInstance().database
                 withContext(Dispatchers.IO) {
-                    // 使用 ID=0 讓 Room 自動產生新 ID
-                    val notifications = data.notifications.map { it.copy(id = 0) }
-                    database.notificationDao().insertAll(notifications)
-
+                    // records（自然主鍵 = notificationKey）：保留原狀
+                    for (record in data.records) {
+                        database.notificationRecordDao().insertIfAbsent(record)
+                    }
+                    // snapshots：依 contentHash 去重，ID 重新分配；保留 old→new 映射供 observation FK 用
+                    val oldToNewSnapshotId = mutableMapOf<Long, Long>()
+                    for (snap in data.snapshots) {
+                        val existing = database.rankingSnapshotDao().getByHash(snap.contentHash)
+                        val newId = if (existing != null) {
+                            existing.id
+                        } else {
+                            database.rankingSnapshotDao().insertIfAbsent(snap.copy(id = 0))
+                        }
+                        oldToNewSnapshotId[snap.id] = newId
+                    }
+                    // events：ID=0 自動產生新 ID（FK 由 notificationKey 維繫）
                     val events = data.events.map { it.copy(id = 0) }
                     database.notificationEventDao().insertAll(events)
+                    // observations：FK rankingSnapshotId 重映射；ID=0 自動產生
+                    for (obs in data.observations) {
+                        val mappedSnapId = oldToNewSnapshotId[obs.rankingSnapshotId] ?: continue
+                        database.rankingObservationDao().insert(
+                            obs.copy(id = 0, rankingSnapshotId = mappedSnapId)
+                        )
+                    }
                 }
 
                 showResultDialog(
                     "封存匯入完成",
                     buildString {
-                        append("通知：${data.notifications.size} 筆")
+                        append("通知：${data.records.size} 筆")
                         append("\n事件：${data.events.size} 筆")
+                        if (data.observations.isNotEmpty()) append("\nRanking 觀察：${data.observations.size} 筆")
+                        if (data.snapshots.isNotEmpty()) append("\nRanking 快照：${data.snapshots.size} 筆")
                         data.environment?.let {
                             append("\n\n來源裝置：${it.deviceManufacturer} ${it.deviceModel}")
                             append("\nAPI：${it.apiLevel}")
@@ -1022,8 +1046,12 @@ class SettingsFragment : Fragment() {
             val database = NotificationMasterApp.getInstance().database
 
             withContext(Dispatchers.IO) {
-                database.notificationDao().deleteAll()
+                // 依 FK 順序：observations → events → records → snapshots（同時也清掉舊 notifications/媒體/children）
+                database.rankingObservationDao().deleteAll()
                 database.notificationEventDao().deleteAll()
+                database.notificationRecordDao().deleteAll()
+                database.rankingSnapshotDao().deleteAll()
+                database.notificationDao().deleteAll()  // 舊表，Phase 9-7 移除
                 database.mediaAttachmentDao().deleteAll()
                 database.actionDao().deleteAll()
                 database.appSourceDao().deleteAll()

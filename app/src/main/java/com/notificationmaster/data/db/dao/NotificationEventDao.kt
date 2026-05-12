@@ -75,6 +75,14 @@ interface NotificationEventDao {
     """)
     fun getEventsByTimeRange(startTime: Long, endTime: Long): Flow<List<NotificationEventEntity>>
 
+    /** ArchiveExporter 用：取時間範圍內所有 events（升冪，便於匯入後順序回放） */
+    @Query("""
+        SELECT * FROM notification_events
+        WHERE event_time BETWEEN :startTime AND :endTime
+        ORDER BY event_time ASC
+    """)
+    suspend fun getEventsByTimeRangeSync(startTime: Long, endTime: Long): List<NotificationEventEntity>
+
     @Query("""
         SELECT * FROM notification_events
         WHERE event_type = :eventType
