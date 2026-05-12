@@ -737,7 +737,7 @@ class NotificationDetailFragment : Fragment() {
     }
 
     /**
-     * 根據通知的 Style 類型，從 extrasJson 解析並顯示額外的樣式資訊
+     * 根據通知的 Style 類型，從 snapshot.extras 解析並顯示額外的樣式資訊
      */
     private fun displayStyleInfo(notification: NotificationDisplay) {
         val _binding = _binding ?: return
@@ -1223,7 +1223,7 @@ class NotificationDetailFragment : Fragment() {
     }
 
     /**
-     * 從 rawDataJson 中的 intent 元資料組裝描述文字
+     * 從 snapshot.notification.intents 中的元資料組裝描述文字
      */
     private fun buildIntentDescription(name: String, meta: JSONObject?, packageName: String): String {
         if (meta == null) return name
@@ -1284,8 +1284,8 @@ class NotificationDetailFragment : Fragment() {
     }
 
     /**
-     * 從 rawDataJson 中的 remoteViews 元資料組裝描述文字
-     * 優先顯示 layoutName，否則 layoutId (package)
+     * 從 snapshot.notification.{contentView, bigContentView, headsUpContentView}
+     * 元資料組裝描述文字。優先顯示 layoutName，否則 layoutId (package)
      */
     private fun buildRemoteViewDescription(name: String, meta: JSONObject?): String {
         if (meta == null) return name
