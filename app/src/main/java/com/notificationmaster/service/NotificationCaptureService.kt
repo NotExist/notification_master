@@ -459,8 +459,9 @@ class NotificationCaptureService : NotificationListenerService() {
             eventType = eventType,
             eventTime = captureTime,
             captureTime = captureTime,
-            isAudible = matchCtx.isAudible,
-            likelyHeadsup = matchCtx.likelyHeadsup,
+            // matchCtx 為 nullable Boolean；事件 entity column 必填，用 false fallback（沒推斷到 = 視為非有聲/非彈出）
+            isAudible = matchCtx.isAudible == true,
+            likelyHeadsup = matchCtx.likelyHeadsup == true,
             removalReason = null
         )
         val display = NotificationDisplay.from(eventEntity)
