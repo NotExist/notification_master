@@ -56,6 +56,20 @@
             android:textColor="?android:attr/textColorSecondary"
             tools:text="2026-01-29 12:34:56.789" />
 
+        <!-- Inline diff（相對前一事件的全欄位變化），Phase 7b-B 預設展開 -->
+        <TextView
+            android:id="@+id/text_event_diff"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:fontFamily="monospace"
+            android:textSize="11sp"
+            android:textColor="?android:attr/textColorSecondary"
+            android:textIsSelectable="true"
+            android:visibility="gone"
+            tools:visibility="visible"
+            tools:text="+ sbn.notification.extras.android.text: &quot;新訊息&quot;" />
+
     </LinearLayout>
 
 </LinearLayout>

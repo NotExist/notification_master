@@ -112,12 +112,32 @@ class NotificationDetailFragment : Fragment() {
 
     private fun setupEventList() {
         eventAdapter = NotificationEventAdapter(
-            onItemClick = { event -> showEventDetail(event) }
+            onEventClick = { event -> showEventDetail(event) },
+            onObservationClick = { obs -> showObservationDetail(obs) }
         )
         binding.recyclerEvents.apply {
             adapter = eventAdapter
             layoutManager = LinearLayoutManager(context)
         }
+    }
+
+    /** 點擊 ranking observation 行時顯示完整 merged ranking JSON */
+    private fun showObservationDetail(row: TimelineRow.Observation) {
+        val merged = com.notificationmaster.core.RankingSnapshotMerger.merge(row.snapshot, row.observation)
+        val text = merged?.toString(2) ?: row.snapshot.rankingJson
+        val textView = TextView(requireContext()).apply {
+            this.text = text
+            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = 12f
+            setPadding(48, 24, 48, 24)
+            setTextIsSelectable(true)
+        }
+        val scrollView = ScrollView(requireContext()).apply { addView(textView) }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("RANKING observation @ ${preciseTimeFormat.format(java.util.Date(row.observation.observedAt))}")
+            .setView(scrollView)
+            .setPositiveButton(R.string.ok, null)
+            .show()
     }
 
     private fun updateEventCount(count: Int) {
@@ -186,7 +206,16 @@ class NotificationDetailFragment : Fragment() {
 
                 // 通知效果、Ranking 快照、裝置狀態
                 displayEffects(notification)
-                displayRanking(notification)
+
+                // Ranking 區塊：從 RankingObservation + RankingSnapshot 合併還原
+                val rankingJson = withContext(Dispatchers.IO) {
+                    val obs = database.rankingObservationDao().getLatestByKey(notificationKey)
+                    val snap = obs?.let { database.rankingSnapshotDao().getById(it.rankingSnapshotId) }
+                    if (obs != null && snap != null) {
+                        com.notificationmaster.core.RankingSnapshotMerger.merge(snap, obs)
+                    } else null
+                }
+                displayRanking(rankingJson)
 
                 val deviceState = withContext(Dispatchers.IO) {
                     database.deviceStateDao().getByEventId(anchorEventId)
@@ -197,16 +226,28 @@ class NotificationDetailFragment : Fragment() {
                 displayRemoteViewsInfo(notification)
             }
 
-            // 同 key 所有事件直接交給 RecyclerView 呈現（Phase 7b：拿掉 ViewPager 多頁切換）
-            eventAdapter.submitList(sameKeyEvents) {
+            // Phase 7b-B-4：時間軸 = events ∪ ranking observations，按時間升冪排序
+            val rows = withContext(Dispatchers.IO) {
+                val observations = database.rankingObservationDao().getByKeySync(notificationKey)
+                val snapshotById = observations.map { it.rankingSnapshotId }.toSet()
+                    .mapNotNull { id -> database.rankingSnapshotDao().getById(id)?.let { id to it } }
+                    .toMap()
+                val eventRows = sameKeyEvents.map { TimelineRow.Event(it) }
+                val obsRows = observations.mapNotNull { obs ->
+                    snapshotById[obs.rankingSnapshotId]?.let { TimelineRow.Observation(obs, it) }
+                }
+                (eventRows + obsRows).sortedBy { it.time }
+            }
+            eventAdapter.setFocusedEventId(anchorEventId)
+            eventAdapter.submitList(rows) {
                 // 滾到 anchor event 對應的 row（若有）
-                val idx = sameKeyEvents.indexOfFirst { it.id == anchorEventId }
+                val idx = rows.indexOfFirst { it is TimelineRow.Event && it.event.id == anchorEventId }
                 if (idx >= 0) {
                     (binding.recyclerEvents.layoutManager as? LinearLayoutManager)
                         ?.scrollToPositionWithOffset(idx, 0)
                 }
             }
-            updateEventCount(sameKeyEvents.size)
+            updateEventCount(rows.size)
         }
     }
 
@@ -939,12 +980,35 @@ class NotificationDetailFragment : Fragment() {
         }
     }
 
-    private fun displayRanking(notification: NotificationEntity) {
+    /**
+     * Plan 2 Phase 7b-B：ranking 區塊資料來源切到 RankingObservation + RankingSnapshot
+     * 合併（[com.notificationmaster.core.RankingSnapshotMerger]）。完整 JSON 還原後，
+     * 列出所有非預設欄位。
+     */
+    private fun displayRanking(rankingJson: JSONObject?) {
         val _binding = _binding ?: return
-        val hasRanking = notification.suppressedVisualEffects != 0 ||
-                notification.lastAudiblyAlertedMillis > 0
+        if (rankingJson == null) {
+            _binding.cardRanking.visibility = View.GONE
+            return
+        }
 
-        if (!hasRanking) {
+        val rank = if (rankingJson.has("rank") && !rankingJson.isNull("rank")) rankingJson.optInt("rank") else null
+        val importance = if (rankingJson.has("importance") && !rankingJson.isNull("importance"))
+            rankingJson.optInt("importance") else null
+        val suppressed = rankingJson.optInt("suppressedVisualEffects", 0)
+        val lastAudibly = rankingJson.optLong("lastAudiblyAlertedMillis", 0L)
+        val isAmbient = rankingJson.optBoolean("isAmbient", false)
+        val isSuspended = rankingJson.optBoolean("isSuspended", false)
+        val isConversation = rankingJson.optBoolean("isConversation", false)
+        val canBubble = rankingJson.optBoolean("canBubble", false)
+        val canShowBadge = rankingJson.optBoolean("canShowBadge", false)
+        val overrideGroupKey = if (rankingJson.has("overrideGroupKey") && !rankingJson.isNull("overrideGroupKey"))
+            rankingJson.optString("overrideGroupKey") else null
+
+        val anyContent = rank != null || importance != null || suppressed != 0 ||
+            lastAudibly > 0 || isAmbient || isSuspended || isConversation ||
+            canBubble || canShowBadge || overrideGroupKey != null
+        if (!anyContent) {
             _binding.cardRanking.visibility = View.GONE
             return
         }
@@ -961,13 +1025,45 @@ class NotificationDetailFragment : Fragment() {
                 .show()
         }
 
-        if (notification.suppressedVisualEffects != 0) {
-            addStyleInfoLabel(container, "suppressedVisualEffects")
-            addStyleInfoText(container, String.format("0x%X", notification.suppressedVisualEffects))
+        if (rank != null) {
+            addStyleInfoLabel(container, "rank")
+            addStyleInfoText(container, rank.toString())
         }
-        if (notification.lastAudiblyAlertedMillis > 0) {
+        if (importance != null) {
+            addStyleInfoLabel(container, "importance")
+            addStyleInfoText(container, importance.toString())
+        }
+        if (suppressed != 0) {
+            addStyleInfoLabel(container, "suppressedVisualEffects")
+            addStyleInfoText(container, String.format("0x%X", suppressed))
+        }
+        if (lastAudibly > 0) {
             addStyleInfoLabel(container, "lastAudiblyAlertedMillis")
-            addStyleInfoText(container, formatTime(notification.lastAudiblyAlertedMillis))
+            addStyleInfoText(container, formatTime(lastAudibly))
+        }
+        if (isAmbient) {
+            addStyleInfoLabel(container, "isAmbient")
+            addStyleInfoText(container, "true")
+        }
+        if (isSuspended) {
+            addStyleInfoLabel(container, "isSuspended")
+            addStyleInfoText(container, "true")
+        }
+        if (isConversation) {
+            addStyleInfoLabel(container, "isConversation")
+            addStyleInfoText(container, "true")
+        }
+        if (canBubble) {
+            addStyleInfoLabel(container, "canBubble")
+            addStyleInfoText(container, "true")
+        }
+        if (canShowBadge) {
+            addStyleInfoLabel(container, "canShowBadge")
+            addStyleInfoText(container, "true")
+        }
+        if (overrideGroupKey != null) {
+            addStyleInfoLabel(container, "overrideGroupKey")
+            addStyleInfoText(container, overrideGroupKey)
         }
     }
 
