@@ -39,7 +39,7 @@ import com.notificationmaster.data.db.entity.ActionEntity
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.MediaAttachmentEntity
 import com.notificationmaster.data.db.entity.DeviceStateEntity
-import com.notificationmaster.data.db.entity.NotificationEntity
+import com.notificationmaster.ui.common.NotificationDisplay
 import com.notificationmaster.data.db.entity.SemanticAction
 import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.service.NotificationCaptureService
@@ -152,45 +152,39 @@ class NotificationDetailFragment : Fragment() {
 
     private fun loadNotificationDetail() {
         val database = NotificationMasterApp.getInstance().database
-        val notificationDao = database.notificationDao()
         val eventDao = database.notificationEventDao()
         val mediaDao = database.mediaAttachmentDao()
 
         viewLifecycleOwner.lifecycleScope.launch {
-            // Plan 2 Phase 7b：Detail 入口以 notificationKey 為主，anchorEventId（選填）指向
-            // 進入時點擊的事件；後者影響 actions / media / deviceState 等以 event_id FK 的子物件查詢。
-            //
-            // 摘要 / chips / details 區塊在 7b-A 階段仍以 NotificationEntity 渲染（透過 key 反查
-            // getLatestByKey），7b-B 階段切到 NotificationSnapshot + RankingSnapshotMerger。
+            // Plan 2 Phase 9-7：Detail 入口以 notificationKey 為主，摘要 / chips / details 全部以
+            // anchor event 的 NotificationDisplay（攤平 snapshot）渲染。
             val notificationKey = args.notificationKey
-            val notification = withContext(Dispatchers.IO) {
-                notificationDao.getLatestByKey(notificationKey)
-            }
             val sameKeyEvents = withContext(Dispatchers.IO) {
                 eventDao.getEventsByKeySync(notificationKey)
             }
             // anchor event：args 帶入優先；fallback 為最新一筆 event（依 event_time）；
-            // 仍無 events（極少 race）退化為 -1L → 子物件查詢得空結果，不影響主畫面
-            val anchorEventId = when {
-                args.anchorEventId > 0 -> args.anchorEventId
-                sameKeyEvents.isNotEmpty() -> sameKeyEvents.maxBy { it.eventTime }.id
-                else -> -1L
-            }
+            // 仍無 events（極少 race）退化為 null → 摘要區隱藏，時間軸仍可呈現空態
+            val anchorEvent = when {
+                args.anchorEventId > 0 -> sameKeyEvents.firstOrNull { it.id == args.anchorEventId }
+                else -> null
+            } ?: sameKeyEvents.maxByOrNull { it.eventTime }
+            val anchorEventId = anchorEvent?.id ?: -1L
 
-            if (notification != null) {
+            if (anchorEvent != null) {
+                val display = NotificationDisplay.from(anchorEvent)
                 val channelEntity = withContext(Dispatchers.IO) {
-                    notification.channelId?.let { chId ->
-                        database.channelDao().getByPackageAndChannelId(notification.packageName, chId)
+                    display.channelId?.let { chId ->
+                        database.channelDao().getByPackageAndChannelId(display.packageName, chId)
                     }
                 }
-                displayNotification(notification, channelEntity)
+                displayNotification(display, channelEntity)
 
                 // 載入動作按鈕與 Intent 資訊（FK 為 event_id，用 anchor event 查）
                 val actionDao = database.actionDao()
                 val actions = withContext(Dispatchers.IO) {
                     actionDao.getActionsByEventIdSync(anchorEventId)
                 }
-                displayIntents(actions, notification)
+                displayIntents(actions, display)
 
                 // 載入媒體附件（FK 為 event_id）
                 val attachments = withContext(Dispatchers.IO) {
@@ -199,13 +193,13 @@ class NotificationDetailFragment : Fragment() {
                 displayMediaAttachments(attachments)
 
                 // 顯示樣式資訊
-                displayStyleInfo(notification)
+                displayStyleInfo(display)
 
                 // 條件性區塊
-                displayConditionalBlocks(notification)
+                displayConditionalBlocks(display)
 
                 // 通知效果、Ranking 快照、裝置狀態
-                displayEffects(notification)
+                displayEffects(display)
 
                 // Ranking 區塊：從 RankingObservation + RankingSnapshot 合併還原
                 val rankingJson = withContext(Dispatchers.IO) {
@@ -223,7 +217,7 @@ class NotificationDetailFragment : Fragment() {
                 displayDeviceState(deviceState)
 
                 // 顯示自訂 View 資訊
-                displayRemoteViewsInfo(notification)
+                displayRemoteViewsInfo(display)
             }
 
             // Phase 7b-B-4：時間軸 = events ∪ ranking observations，按時間升冪排序
@@ -251,7 +245,7 @@ class NotificationDetailFragment : Fragment() {
         }
     }
 
-    private fun displayNotification(notification: NotificationEntity, channelEntity: ChannelEntity? = null) {
+    private fun displayNotification(notification: NotificationDisplay, channelEntity: ChannelEntity? = null) {
         val context = requireContext()
 
         // App 資訊
@@ -340,7 +334,8 @@ class NotificationDetailFragment : Fragment() {
         if (whenTime > 0) {
             binding.layoutWhenTime.visibility = View.VISIBLE
             val whenText = formatTime(whenTime)
-            binding.textWhenTime.text = if (notification.showWhen) whenText
+            val showWhen = notification.snapshot?.extras?.optBoolean("android.showWhen", true) ?: true
+            binding.textWhenTime.text = if (showWhen) whenText
                 else "$whenText ${getString(R.string.label_when_not_shown)}"
             binding.labelWhenTime.setOnClickListener {
                 MaterialAlertDialogBuilder(context)
@@ -472,7 +467,7 @@ class NotificationDetailFragment : Fragment() {
                 else getString(R.string.label_channel_name_unknown)
             binding.labelChannelName.setOnClickListener { showDescDialog(R.string.label_channel_name, R.string.desc_channel_name) }
 
-            // importance（優先 ChannelEntity，fallback NotificationEntity）
+            // importance（優先 ChannelEntity，fallback display.importance — 來自 ranking observation）
             val effectiveImportance = channelEntity?.importance?.takeIf { it >= 0 }
                 ?: notification.importance.takeIf { it >= 0 }
             if (effectiveImportance != null) {
@@ -500,9 +495,10 @@ class NotificationDetailFragment : Fragment() {
         binding.labelCategory.setOnClickListener { showDescDialog(R.string.label_category, R.string.desc_category) }
         binding.textGroup.text = notification.groupKey ?: "null"
         binding.labelGroup.setOnClickListener { showDescDialog(R.string.label_group, R.string.desc_group_key) }
-        if (notification.overrideGroupKey != null) {
+        val overrideGroupKey = notification.snapshot?.overrideGroupKey
+        if (overrideGroupKey != null) {
             binding.layoutOverrideGroupKey.visibility = View.VISIBLE
-            binding.textOverrideGroupKey.text = notification.overrideGroupKey
+            binding.textOverrideGroupKey.text = overrideGroupKey
             binding.labelOverrideGroupKey.setOnClickListener { showDescDialog(R.string.label_group_override, R.string.desc_override_group_key) }
         }
         binding.textSortKey.text = notification.sortKey ?: "null"
@@ -594,84 +590,51 @@ class NotificationDetailFragment : Fragment() {
     }
 
     private fun showEventDetail(event: NotificationEventEntity) {
-        viewLifecycleOwner.lifecycleScope.launch {
-            // Plan 2：event 不再持有 notification_id Long，改以 notificationKey 取最新通知快照
-            val notification = withContext(Dispatchers.IO) {
-                NotificationMasterApp.getInstance().database
-                    .notificationDao().getLatestByKey(event.notificationKey)
-            }
-            _binding ?: return@launch
+        val sb = StringBuilder()
 
-            val sb = StringBuilder()
+        // 基本資訊
+        sb.appendLine("notification_key: ${event.notificationKey}")
+        sb.appendLine("event_type: ${event.eventType.name}")
+        sb.appendLine("event_time: ${preciseTimeFormat.format(Date(event.eventTime))}")
+        sb.appendLine("event_time_raw: ${event.eventTime}")
 
-            // 基本資訊
-            sb.appendLine("notification_key: ${event.notificationKey}")
-            sb.appendLine("event_type: ${event.eventType.name}")
-            sb.appendLine("event_time: ${preciseTimeFormat.format(Date(event.eventTime))}")
-            sb.appendLine("event_time_raw: ${event.eventTime}")
-
-            // REMOVED 事件：移除原因
-            if (event.eventType == EventType.REMOVED && event.removalReason != null) {
-                sb.appendLine()
-                sb.appendLine("── 移除資訊 ──")
-                sb.appendLine("removal_reason: ${event.removalReason}")
-                sb.appendLine("removal_reason_category: ${event.removalReasonCategory}")
-                sb.appendLine("removal_reason_desc: ${ApiVersionHelper.getRemovalReasonDescription(event.removalReason)}")
-            }
-
-            // 變動內容（Plan 2：contentDiff column 已移除，改 read-time 由 EventDiffer 計算；
-            //          Phase 7 Detail 頁重寫前暫時不顯示 inline diff）
-            if (event.eventType == EventType.UPDATED) {
-                sb.appendLine()
-                sb.appendLine("── 變動內容 ──")
-                sb.appendLine("(Plan 2 重構中，inline diff 待 Phase 7 Detail 頁重寫)")
-            }
-
-            // 關聯通知記錄的完整資料
-            if (notification != null) {
-                // Raw Data JSON
-                if (!notification.rawDataJson.isNullOrEmpty()) {
-                    sb.appendLine()
-                    sb.appendLine("── Raw Data ──")
-                    try {
-                        val json = JSONObject(notification.rawDataJson)
-                        sb.appendLine(json.toString(2))
-                    } catch (_: Exception) {
-                        sb.appendLine(notification.rawDataJson)
-                    }
-                }
-
-                // Extras JSON
-                if (!notification.extrasJson.isNullOrEmpty()) {
-                    sb.appendLine()
-                    sb.appendLine("── Extras JSON ──")
-                    try {
-                        val json = JSONObject(notification.extrasJson)
-                        sb.appendLine(json.toString(2))
-                    } catch (_: Exception) {
-                        sb.appendLine(notification.extrasJson)
-                    }
-                }
-            }
-
-            // 用等寬字體的 TextView 顯示
-            val textView = TextView(requireContext()).apply {
-                text = sb.toString()
-                typeface = android.graphics.Typeface.MONOSPACE
-                textSize = 12f
-                setPadding(48, 24, 48, 24)
-                setTextIsSelectable(true)
-            }
-            val scrollView = ScrollView(requireContext()).apply {
-                addView(textView)
-            }
-
-            MaterialAlertDialogBuilder(requireContext())
-                .setTitle("${event.eventType.name} 事件詳情")
-                .setView(scrollView)
-                .setPositiveButton(R.string.ok, null)
-                .show()
+        // REMOVED 事件：移除原因
+        if (event.eventType == EventType.REMOVED && event.removalReason != null) {
+            sb.appendLine()
+            sb.appendLine("── 移除資訊 ──")
+            sb.appendLine("removal_reason: ${event.removalReason}")
+            sb.appendLine("removal_reason_category: ${event.removalReasonCategory}")
+            sb.appendLine("removal_reason_desc: ${ApiVersionHelper.getRemovalReasonDescription(event.removalReason)}")
         }
+
+        // 事件 raw JSON（callback 元資料 + sbn 完整序列化；不含 ranking）
+        if (event.eventRawJson.isNotEmpty()) {
+            sb.appendLine()
+            sb.appendLine("── Event Raw JSON ──")
+            try {
+                val json = JSONObject(event.eventRawJson)
+                sb.appendLine(json.toString(2))
+            } catch (_: Exception) {
+                sb.appendLine(event.eventRawJson)
+            }
+        }
+
+        val textView = TextView(requireContext()).apply {
+            text = sb.toString()
+            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = 12f
+            setPadding(48, 24, 48, 24)
+            setTextIsSelectable(true)
+        }
+        val scrollView = ScrollView(requireContext()).apply {
+            addView(textView)
+        }
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("${event.eventType.name} 事件詳情")
+            .setView(scrollView)
+            .setPositiveButton(R.string.ok, null)
+            .show()
     }
 
     private fun displayMediaAttachments(attachments: List<MediaAttachmentEntity>) {
@@ -776,15 +739,13 @@ class NotificationDetailFragment : Fragment() {
     /**
      * 根據通知的 Style 類型，從 extrasJson 解析並顯示額外的樣式資訊
      */
-    private fun displayStyleInfo(notification: NotificationEntity) {
+    private fun displayStyleInfo(notification: NotificationDisplay) {
         val _binding = _binding ?: return
         val style = notification.template ?: return
         val container = _binding.layoutStyleInfoContainer
         container.removeAllViews()
 
-        val extras = try {
-            if (!notification.extrasJson.isNullOrEmpty()) JSONObject(notification.extrasJson) else null
-        } catch (_: Exception) { null }
+        val extras = notification.snapshot?.extras
 
         var hasContent = false
 
@@ -884,14 +845,19 @@ class NotificationDetailFragment : Fragment() {
         _binding.cardStyleInfo.visibility = if (hasContent) View.VISIBLE else View.GONE
     }
 
-    private fun displayConditionalBlocks(notification: NotificationEntity) {
+    private fun displayConditionalBlocks(notification: NotificationDisplay) {
         val _binding = _binding ?: return
+        val extras = notification.snapshot?.extras
+        val notif = notification.snapshot?.notification
 
         // 進度條
-        if (notification.progress > 0 || notification.progressIndeterminate) {
+        val progress = extras?.optInt("android.progress", 0) ?: 0
+        val progressMax = extras?.optInt("android.progressMax", 0) ?: 0
+        val progressIndeterminate = extras?.optBoolean("android.progressIndeterminate", false) ?: false
+        if (progress > 0 || progressIndeterminate) {
             _binding.cardProgress.visibility = View.VISIBLE
-            _binding.textProgress.text = if (notification.progressIndeterminate) "不確定"
-                else "${notification.progress} / ${notification.progressMax}"
+            _binding.textProgress.text = if (progressIndeterminate) "不確定"
+                else "$progress / $progressMax"
         } else {
             _binding.cardProgress.visibility = View.GONE
         }
@@ -899,63 +865,70 @@ class NotificationDetailFragment : Fragment() {
         // 計時器
         if (notification.showChronometer) {
             _binding.cardChronometer.visibility = View.VISIBLE
-            _binding.textChronometer.text = if (notification.chronometerCountDown) "倒數計時" else "正計時"
+            val countDown = extras?.optBoolean("android.chronometerCountDown", false) ?: false
+            _binding.textChronometer.text = if (countDown) "倒數計時" else "正計時"
         } else {
             _binding.cardChronometer.visibility = View.GONE
         }
 
-        // 關聯聯絡人
-        if (!notification.people.isNullOrEmpty()) {
+        // 關聯聯絡人（extras.android.people 為 JSONArray 或字串陣列）
+        val people = extras?.optJSONArray("android.people")
+        if (people != null && people.length() > 0) {
             _binding.cardPeople.visibility = View.VISIBLE
-            _binding.textPeople.text = try {
-                val arr = JSONArray(notification.people)
-                (0 until arr.length()).joinToString("\n") { arr.optString(it, "") }
-            } catch (_: Exception) { notification.people }
+            _binding.textPeople.text = (0 until people.length())
+                .joinToString("\n") { people.optString(it, "") }
         } else {
             _binding.cardPeople.visibility = View.GONE
         }
 
-        // 訊息內容
-        if (!notification.messages.isNullOrEmpty()) {
+        // 訊息內容（MessagingStyle extras.android.messages）
+        val messages = extras?.optJSONArray("android.messages")
+        if (messages != null && messages.length() > 0) {
             _binding.cardMessages.visibility = View.VISIBLE
-            _binding.textMessages.text = try {
-                val arr = JSONArray(notification.messages)
-                (0 until arr.length()).joinToString("\n") { i ->
-                    val msg = arr.optJSONObject(i)
-                    val sender = msg?.optString("sender", "") ?: ""
-                    val text = msg?.optString("text", "") ?: ""
-                    if (sender.isNotEmpty()) "$sender: $text" else text
-                }
-            } catch (_: Exception) { notification.messages }
+            _binding.textMessages.text = (0 until messages.length()).joinToString("\n") { i ->
+                val msg = messages.optJSONObject(i)
+                val sender = msg?.optString("sender", "") ?: ""
+                val text = msg?.optString("text", "") ?: ""
+                if (sender.isNotEmpty()) "$sender: $text" else text
+            }
         } else {
             _binding.cardMessages.visibility = View.GONE
         }
 
-        // Bubble 詳情
-        if (notification.hasBubbleMetadata) {
+        // Bubble 詳情（snapshot.notification.bubbleMetadata）
+        val bubble = notif?.optJSONObject("bubbleMetadata")
+        if (bubble != null) {
             _binding.cardBubble.visibility = View.VISIBLE
             val container = _binding.layoutBubbleContainer
             container.removeAllViews()
             addStyleInfoLabel(container, "desiredHeight")
-            addStyleInfoText(container, "${notification.bubbleDesiredHeight} dp")
-            if (notification.bubbleDesiredHeightResId != 0) {
+            addStyleInfoText(container, "${bubble.optInt("desiredHeight", 0)} dp")
+            val heightRes = bubble.optInt("desiredHeightResId", 0)
+            if (heightRes != 0) {
                 addStyleInfoLabel(container, "desiredHeightResId")
-                addStyleInfoText(container, notification.bubbleDesiredHeightResId.toString())
+                addStyleInfoText(container, heightRes.toString())
             }
             addStyleInfoLabel(container, "autoExpand")
-            addStyleInfoText(container, notification.bubbleAutoExpand.toString())
+            addStyleInfoText(container, bubble.optBoolean("autoExpand", false).toString())
             addStyleInfoLabel(container, "suppressNotification")
-            addStyleInfoText(container, notification.bubbleSuppressNotification.toString())
+            addStyleInfoText(container, bubble.optBoolean("suppressNotification", false).toString())
         } else {
             _binding.cardBubble.visibility = View.GONE
         }
     }
 
-    private fun displayEffects(notification: NotificationEntity) {
+    private fun displayEffects(notification: NotificationDisplay) {
         val _binding = _binding ?: return
-        val hasEffects = notification.soundUri != null ||
-                notification.vibratePattern != null ||
-                notification.ledArgb != 0
+        val notif = notification.snapshot?.notification
+        val soundUri = notif?.let {
+            if (it.has("sound") && !it.isNull("sound")) it.optString("sound").takeIf { s -> s.isNotEmpty() } else null
+        }
+        val vibratePattern = notif?.optJSONArray("vibrate")?.takeIf { it.length() > 0 }?.toString()
+        val ledArgb = notif?.optInt("ledARGB", 0) ?: 0
+        val ledOnMs = notif?.optInt("ledOnMs", 0) ?: 0
+        val ledOffMs = notif?.optInt("ledOffMs", 0) ?: 0
+
+        val hasEffects = soundUri != null || vibratePattern != null || ledArgb != 0
 
         if (!hasEffects) {
             _binding.cardEffects.visibility = View.GONE
@@ -966,17 +939,17 @@ class NotificationDetailFragment : Fragment() {
         val container = _binding.layoutEffectsContainer
         container.removeAllViews()
 
-        if (notification.soundUri != null) {
+        if (soundUri != null) {
             addStyleInfoLabel(container, "soundUri")
-            addStyleInfoText(container, notification.soundUri)
+            addStyleInfoText(container, soundUri)
         }
-        if (notification.vibratePattern != null) {
+        if (vibratePattern != null) {
             addStyleInfoLabel(container, "vibratePattern")
-            addStyleInfoText(container, notification.vibratePattern)
+            addStyleInfoText(container, vibratePattern)
         }
-        if (notification.ledArgb != 0) {
+        if (ledArgb != 0) {
             addStyleInfoLabel(container, "LED")
-            addStyleInfoText(container, "色彩: ${String.format("#%06X", 0xFFFFFF and notification.ledArgb)} · 亮: ${notification.ledOnMs}ms · 暗: ${notification.ledOffMs}ms")
+            addStyleInfoText(container, "色彩: ${String.format("#%06X", 0xFFFFFF and ledArgb)} · 亮: ${ledOnMs}ms · 暗: ${ledOffMs}ms")
         }
     }
 
@@ -1151,7 +1124,7 @@ class NotificationDetailFragment : Fragment() {
     /**
      * 顯示動作按鈕與 Intent 資訊（合併至同一張 Card）
      */
-    private fun displayIntents(actions: List<ActionEntity>, notification: NotificationEntity) {
+    private fun displayIntents(actions: List<ActionEntity>, notification: NotificationDisplay) {
         val _binding = _binding ?: return
         val hasAnyIntent = notification.hasContentIntent || notification.hasDeleteIntent || notification.hasFullScreenIntent
 
@@ -1232,11 +1205,7 @@ class NotificationDetailFragment : Fragment() {
             }
             intentsContainer.visibility = View.VISIBLE
 
-            val intentMeta = try {
-                notification.rawDataJson?.let { raw ->
-                    JSONObject(raw).optJSONObject("notification")?.optJSONObject("intents")
-                }
-            } catch (_: Exception) { null }
+            val intentMeta = notification.snapshot?.notification?.optJSONObject("intents")
 
             if (notification.hasContentIntent) {
                 val desc = buildIntentDescription("contentIntent", intentMeta?.optJSONObject("contentIntent"), notification.packageName)
@@ -1281,7 +1250,7 @@ class NotificationDetailFragment : Fragment() {
     /**
      * 顯示自訂 View (RemoteViews) 資訊區塊
      */
-    private fun displayRemoteViewsInfo(notification: NotificationEntity) {
+    private fun displayRemoteViewsInfo(notification: NotificationDisplay) {
         val _binding = _binding ?: return
         if (!notification.hasCustomContentView && !notification.hasCustomBigContentView && !notification.hasCustomHeadsUpContentView) {
             _binding.layoutRemoteViews.visibility = View.GONE
@@ -1292,12 +1261,13 @@ class NotificationDetailFragment : Fragment() {
         val container = _binding.layoutRemoteViewsContainer
         container.removeAllViews()
 
-        // 從 rawDataJson 解析 remoteViews 元資料
-        val remoteViewsMeta = try {
-            notification.rawDataJson?.let { raw ->
-                JSONObject(raw).optJSONObject("notification")?.optJSONObject("remoteViews")
-            }
-        } catch (_: Exception) { null }
+        // 從 snapshot 取 remoteViews 元資料（contentView / bigContentView / headsUpContentView 內含 layoutId / layoutName）
+        val notif = notification.snapshot?.notification
+        val remoteViewsMeta = JSONObject().apply {
+            notif?.optJSONObject("contentView")?.let { put("contentView", it) }
+            notif?.optJSONObject("bigContentView")?.let { put("bigContentView", it) }
+            notif?.optJSONObject("headsUpContentView")?.let { put("headsUpContentView", it) }
+        }.takeIf { it.length() > 0 }
 
         if (notification.hasCustomContentView) {
             val desc = buildRemoteViewDescription("contentView", remoteViewsMeta?.optJSONObject("contentView"))

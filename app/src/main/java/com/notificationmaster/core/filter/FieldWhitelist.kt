@@ -1,12 +1,16 @@
 package com.notificationmaster.core.filter
 
 /**
- * Matcher.Field 可使用的 NotificationEntity column 白名單。
+ * Matcher.Field 可使用的 column 白名單（Plan 2 Phase 9-7：對齊 notification_events 表投影）。
  *
- * 每個項目對應 `notifications` 表的一個 column；型別決定可用的 [FieldOp]
+ * 每個項目對應 `notification_events` 表的一個實際 column；型別決定可用的 [FieldOp]
  * 與比對時的 value coercion（IsNull/IsNotNull 不需 value）。
  *
  * UI 顯示名 = `field_<key>` string 資源（fallback = key 本身）。
+ *
+ * 註：priority / importance / visibility / category / has_* 等舊欄位已不在 events 表投影
+ * （改由 eventRawJson 內 snapshot 解析），目前 SqlBuilder 對 SQL 路徑直接退化 ALWAYS_TRUE，
+ * 因此這裡只列出 events 表實際存在的 column。Phase 10 視需要再用 read-time filter 補強。
  */
 object FieldWhitelist {
 
@@ -15,25 +19,10 @@ object FieldWhitelist {
     data class Def(val column: String, val type: Type)
 
     val fields: Map<String, Def> = linkedMapOf(
-        // 優先級 / 重要性
-        "priority" to Def("priority", Type.INT),
-        "importance" to Def("importance", Type.INT),
-        "visibility" to Def("visibility", Type.INT),
-        "category" to Def("category", Type.TEXT),
-
-        // Bubble / intent（無對應 NotificationFlag）
-        "has_bubble_metadata" to Def("has_bubble_metadata", Type.BOOL),
-        "has_full_screen_intent" to Def("has_full_screen_intent", Type.BOOL),
-        "has_content_intent" to Def("has_content_intent", Type.BOOL),
-
-        // 時間
+        // 時間（events 表投影）
         "post_time" to Def("post_time", Type.LONG),
         "capture_time" to Def("capture_time", Type.LONG),
-        "when_time" to Def("when_time", Type.LONG)
-
-        // 註：is_ongoing / is_foreground_service / is_high_priority /
-        // is_local_only / is_group_summary 已被「通知旗標」三態選擇器覆蓋，
-        // 不在此白名單重複提供。
+        "event_time" to Def("event_time", Type.LONG)
     )
 
     fun contains(field: String): Boolean = fields.containsKey(field)

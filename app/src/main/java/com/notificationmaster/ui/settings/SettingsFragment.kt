@@ -1046,12 +1046,11 @@ class SettingsFragment : Fragment() {
             val database = NotificationMasterApp.getInstance().database
 
             withContext(Dispatchers.IO) {
-                // 依 FK 順序：observations → events → records → snapshots（同時也清掉舊 notifications/媒體/children）
+                // 依 FK 順序：observations → events → records → snapshots
                 database.rankingObservationDao().deleteAll()
                 database.notificationEventDao().deleteAll()
                 database.notificationRecordDao().deleteAll()
                 database.rankingSnapshotDao().deleteAll()
-                database.notificationDao().deleteAll()  // 舊表，Phase 9-7 移除
                 database.mediaAttachmentDao().deleteAll()
                 database.actionDao().deleteAll()
                 database.appSourceDao().deleteAll()

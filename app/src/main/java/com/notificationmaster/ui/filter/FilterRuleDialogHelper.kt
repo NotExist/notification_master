@@ -1250,7 +1250,7 @@ object FilterRuleDialogHelper {
         }
     }
 
-    // === Field 條件 row（任意 NotificationEntity column predicate） ===
+    // === Field 條件 row（任意 notification_events column predicate） ===
 
     private class FieldPredicateRow(
         val rootView: View,

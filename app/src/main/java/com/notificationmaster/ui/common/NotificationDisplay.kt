@@ -9,9 +9,9 @@ import org.json.JSONObject
 /**
  * UI 層渲染用的攤平資料（NotificationEventEntity + Snapshot 合成）。
  *
- * Plan 2 Phase 9 過渡期：NotificationEntity 即將移除，list adapter / widget /
- * shortcut 改吃 [NotificationEventEntity]，呈現用屬性多數來自 snapshot 解析。
- * 為避免每個 Adapter 各自重複 parse 邏輯，集中於此 helper。
+ * Plan 2：NotificationEntity 已移除，list adapter / widget / shortcut / detail 全部吃
+ * [NotificationEventEntity]，呈現用屬性多數來自 snapshot 解析。為避免每個 Adapter 各自重複
+ * parse 邏輯，集中於此 helper。
  *
  * Ranking-dependent 欄位（importance / isConversation / isAmbient / isSuspended /
  * lastAudiblyAlertedMillis）目前以預設值（-1 / false / -1L）填入；Phase 7b/9 收尾時

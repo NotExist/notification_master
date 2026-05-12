@@ -227,7 +227,7 @@ sealed interface Matcher {
     }
 
     /**
-     * 通用欄位匹配（NotificationEntity column）— 主要用於 LIST_FILTER rule
+     * 通用欄位匹配（notification_events column）— 主要用於 LIST_FILTER rule
      * 透過 SQL 路徑執行；in-memory 路徑（RuleEngine 對 Service event）對未填值
      * 的欄位永遠通過（fail-open），避免影響其他 ActionType 流程。
      *

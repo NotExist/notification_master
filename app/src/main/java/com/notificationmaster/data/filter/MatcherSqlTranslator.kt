@@ -155,10 +155,7 @@ object MatcherSqlTranslator {
     private fun eventsColumnFor(whitelistColumn: String): String? = when (whitelistColumn) {
         "post_time" -> "e.post_time"
         "capture_time" -> "e.capture_time"
-        // 以下欄位未投影到 notification_events，read-time 走 snapshot 才能取得
-        "priority", "importance", "visibility", "category",
-        "has_bubble_metadata", "has_full_screen_intent", "has_content_intent",
-        "when_time" -> null
+        "event_time" -> "e.event_time"
         else -> null
     }
 

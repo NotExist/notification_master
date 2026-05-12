@@ -42,6 +42,10 @@ interface NotificationRecordDao {
     @Query("SELECT COUNT(*) FROM notification_records")
     suspend fun getTotalCount(): Int
 
+    /** 今日有新事件的 record 數（lastSeen >= startOfDay） */
+    @Query("SELECT COUNT(*) FROM notification_records WHERE last_seen >= :startOfDay")
+    suspend fun getTodayCount(startOfDay: Long): Int
+
     @Query("SELECT MIN(first_seen) FROM notification_records")
     suspend fun getEarliestFirstSeen(): Long?
 

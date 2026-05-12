@@ -366,7 +366,7 @@ class HomeFragment : Fragment() {
     private fun loadStatistics() {
         viewLifecycleOwner.lifecycleScope.launch {
             val database = NotificationMasterApp.getInstance().database
-            val notificationDao = database.notificationDao()
+            val recordDao = database.notificationRecordDao()
 
             // 計算今日開始時間
             val calendar = Calendar.getInstance().apply {
@@ -378,11 +378,11 @@ class HomeFragment : Fragment() {
             val startOfDay = calendar.timeInMillis
 
             val todayCount = withContext(Dispatchers.IO) {
-                notificationDao.getTodayCount(startOfDay)
+                recordDao.getTodayCount(startOfDay)
             }
 
             val totalCount = withContext(Dispatchers.IO) {
-                notificationDao.getTotalCount()
+                recordDao.getTotalCount()
             }
 
             // 更新 UI

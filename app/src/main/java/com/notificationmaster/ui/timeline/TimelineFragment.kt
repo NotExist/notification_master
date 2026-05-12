@@ -61,7 +61,7 @@ import java.util.Locale
  * spec 為「全部」或「僅去重」時走天分頁漸進載入（ViewModel.loadNextDay），其餘走全域 spec 查詢。
  *
  * Plan 2 Phase 9：list 接 [NotificationDisplay]（NotificationEventEntity + snapshot），
- * nav 進 Detail 傳 event id（語意換成 events PK；Detail 內反查 NotificationEntity 渲染）。
+ * nav 進 Detail 傳 anchorEventId（events PK；Detail 內以 NotificationDisplay 攤平渲染）。
  */
 class TimelineFragment : Fragment() {
 
