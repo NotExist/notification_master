@@ -43,6 +43,7 @@ import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.debug.DebugDumper
 import com.notificationmaster.export.calendar.CalendarExporter
 import com.notificationmaster.export.calendar.CalendarExportLog
+import com.notificationmaster.ui.common.NotificationDisplay
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
@@ -453,12 +454,23 @@ class NotificationCaptureService : NotificationListenerService() {
             return
         }
 
-        // 1. 提取 in-memory NotificationEntity（給下游 calendar/persistent alert/clipboard 使用）
-        //    Plan 2 過渡期：UI / Exporter / Calendar 仍讀舊 schema，因此 service 雙寫一份
-        //    NotificationEntity 進 notifications 表；之後 Phase 7 UI 重寫完拆除。
+        // 1. 提取 in-memory NotificationEntity（Plan 2 過渡期：service 雙寫一份 NotificationEntity 進
+        //    notifications 表；Phase 9-6/9-7 整批切換時拆除）
         val entity = extractor.extractNotification(sbn, rankingMap, captureTime)
 
-        // 2. 提取 Actions / 媒體 / 裝置狀態（eventId 留 0，transaction 內取得 event id 後補正）
+        // 2. 提取 NotificationEvent（新 schema 主體；自包含 eventRawJson）+ 攤平成 display 給下游 helper
+        val eventEntity = extractor.extractEvent(
+            sbn = sbn,
+            eventType = eventType,
+            eventTime = captureTime,
+            captureTime = captureTime,
+            isAudible = entity.isAudible,
+            likelyHeadsup = entity.likelyHeadsup,
+            removalReason = null
+        )
+        val display = NotificationDisplay.from(eventEntity)
+
+        // 3. 提取 Actions / 媒體 / 裝置狀態（eventId 留 0，transaction 內取得 event id 後補正）
         val actions = extractor.extractActions(sbn.notification, 0, captureTime)
         val mediaAttachments = try {
             mediaExtractor.extractMedia(sbn.notification, 0, captureTime, sbn.packageName)
@@ -473,11 +485,11 @@ class NotificationCaptureService : NotificationListenerService() {
             null
         }
 
-        // 3. Transaction 寫入新 schema（record + event + ranking observation + children）
+        // 4. Transaction 寫入新 schema（record + event + ranking observation + children）
         //    同時雙寫舊 NotificationEntity 維持 UI/Exporter 編譯與運作（過渡）
         val key = entity.notificationKey
         val notificationId = database.withTransaction {
-            // 3.1 upsert NotificationRecord（自然主鍵 = notification_key）
+            // 4.1 upsert NotificationRecord（自然主鍵 = notification_key）
             val record = database.notificationRecordDao().getByKey(key)
             if (record == null) {
                 database.notificationRecordDao().insertIfAbsent(
@@ -496,21 +508,10 @@ class NotificationCaptureService : NotificationListenerService() {
                 database.notificationRecordDao().bumpEventCount(key, captureTime)
             }
 
-            // 3.2 寫 NotificationEvent（新 schema，自包含 eventRawJson）
-            //     RankingProcessor 已經透過 entity.isAudible/likelyHeadsup 計算過一次（extractNotification
-            //     內呼叫 ApiVersionHelper 推斷），這裡直接沿用避免重複計算。
-            val eventEntity = extractor.extractEvent(
-                sbn = sbn,
-                eventType = eventType,
-                eventTime = captureTime,
-                captureTime = captureTime,
-                isAudible = entity.isAudible,
-                likelyHeadsup = entity.likelyHeadsup,
-                removalReason = null
-            )
+            // 4.2 寫 NotificationEvent
             val eventId = database.notificationEventDao().insert(eventEntity)
 
-            // 3.3 children FK 改 event_id 後寫入
+            // 4.3 children FK 改 event_id 後寫入
             if (actions.isNotEmpty()) {
                 database.actionDao().insertAll(actions.map { it.copy(eventId = eventId) })
             }
@@ -521,10 +522,10 @@ class NotificationCaptureService : NotificationListenerService() {
                 database.deviceStateDao().insert(deviceState.copy(eventId = eventId))
             }
 
-            // 3.4 雙寫舊 NotificationEntity（過渡期，給仍讀舊表的 UI/Exporter）
+            // 4.4 雙寫舊 NotificationEntity（過渡期，給仍讀舊表的 UI/Exporter）
             val nId = database.notificationDao().insert(entity)
 
-            // 3.5 寫 RankingObservation（新軌道，與 NotificationEvent 並行）
+            // 4.5 寫 RankingObservation（新軌道，與 NotificationEvent 並行）
             val obsSource = when (eventType) {
                 EventType.POSTED -> ObservationSource.POSTED
                 EventType.UPDATED -> ObservationSource.UPDATED
@@ -543,13 +544,13 @@ class NotificationCaptureService : NotificationListenerService() {
             nId
         }
 
-        // 3.6 快取 PendingIntent 參照（不需 transaction）
+        // 5. 快取 PendingIntent 參照（不需 transaction）
         cachePendingIntents(sbn)
 
-        // 5. 更新 App 來源
+        // 6. 更新 App 來源
         updateAppSource(sbn.packageName, captureTime)
 
-        // 6. 更新 Channel (API 26+)
+        // 7. 更新 Channel (API 26+)
         // 唯一可靠來源：ranking.channel（API 26+）
         if (ApiVersionHelper.supportsNotificationChannel() && entity.channelId != null) {
             val notificationChannel: android.app.NotificationChannel? = if (rankingMap != null) {
@@ -560,18 +561,18 @@ class NotificationCaptureService : NotificationListenerService() {
             updateChannel(sbn.packageName, entity.channelId, captureTime, notificationChannel)
         }
 
-        // 7. 各 ActionType 獨立判斷 eventType 是否在允許範圍
+        // 8. 各 ActionType 獨立判斷 eventType 是否在允許範圍
         if (eventType in ActionType.AUTO_DISMISS.allowedEventTypes) {
             checkAutoDismiss(sbn, rankingMap, eventType)
         }
         if (eventType in ActionType.CALENDAR_EXPORT.allowedEventTypes) {
-            checkRealtimeCalendarExport(entity, matchCtx)
+            checkRealtimeCalendarExport(display, matchCtx)
         }
         if (eventType in ActionType.PERSISTENT_ALERT.allowedEventTypes) {
-            checkPersistentAlert(entity, matchCtx, sbn, eventType)
+            checkPersistentAlert(display, matchCtx, sbn, eventType)
         }
         if (eventType in ActionType.CLIPBOARD_COPY.allowedEventTypes) {
-            checkClipboardCopy(entity, matchCtx)
+            checkClipboardCopy(display.packageName, matchCtx)
         }
 
         Log.d(TAG, "Saved notification: $notificationId, event: $eventType")
@@ -982,17 +983,17 @@ class NotificationCaptureService : NotificationListenerService() {
      * 每條匹配的 rule 各自寫入到自身 calendarId（per-rule calendar）。
      */
     private fun checkRealtimeCalendarExport(
-        entity: NotificationEntity,
+        display: NotificationDisplay,
         matchCtx: MatchContext
     ) {
         if (!AppPreferences.isRealtimeCalendarEnabled(this)) {
-            CalendarExportLog.log(entity.packageName, "skipped", "disabled")
+            CalendarExportLog.log(display.packageName, "skipped", "disabled")
             return
         }
 
         val matched = RuleEngine.findAllMatchingRules(ActionType.CALENDAR_EXPORT, matchCtx)
         if (matched.isEmpty()) {
-            CalendarExportLog.log(entity.packageName, "skipped",
+            CalendarExportLog.log(display.packageName, "skipped",
                 "no match: ${matchCtx.channelId} event=${matchCtx.eventType}")
             return
         }
@@ -1000,24 +1001,24 @@ class NotificationCaptureService : NotificationListenerService() {
         for (rule in matched) {
             val targetId = (rule.action as? RuleAction.CalendarExport)?.calendarId
             if (targetId == null) {
-                CalendarExportLog.log(entity.packageName, "skipped",
+                CalendarExportLog.log(display.packageName, "skipped",
                     "rule ${rule.id}: calendarId not configured")
                 continue
             }
             if (!applyTargetAccount(targetId)) {
-                CalendarExportLog.log(entity.packageName, "skipped",
+                CalendarExportLog.log(display.packageName, "skipped",
                     "rule ${rule.id}: target calendar #$targetId not found")
                 continue
             }
             // 一律建立新日曆事件（電話類 App 重用通知 key，不能以 key 判斷是否為「同一事件」）
-            val eventId = calendarExporter.exportSingleNotification(entity, targetId, ExportDetailLevel.FULL)
+            val eventId = calendarExporter.exportSingleNotification(display, targetId, ExportDetailLevel.FULL)
             if (eventId > 0) {
-                calendarExportMap.getOrPut(entity.notificationKey) { mutableListOf() }
+                calendarExportMap.getOrPut(display.notificationKey) { mutableListOf() }
                     .add(targetId to eventId)
-                CalendarExportLog.log(entity.packageName, "exported",
+                CalendarExportLog.log(display.packageName, "exported",
                     "rule ${rule.id} cal=$targetId eventId=$eventId")
             } else {
-                CalendarExportLog.log(entity.packageName, "failed",
+                CalendarExportLog.log(display.packageName, "failed",
                     "rule ${rule.id} cal=$targetId returnValue=$eventId")
             }
         }
@@ -1094,31 +1095,31 @@ class NotificationCaptureService : NotificationListenerService() {
      * 僅 POSTED/UPDATED 觸發（在 processNotification 的 eventType != INITIAL 區塊呼叫）。
      */
     private fun checkPersistentAlert(
-        entity: NotificationEntity,
+        display: NotificationDisplay,
         matchCtx: MatchContext,
         sbn: StatusBarNotification,
         eventType: EventType
     ) {
         val rule = RuleEngine.findMatchingRule(ActionType.PERSISTENT_ALERT, matchCtx) ?: return
         val action = rule.action as RuleAction.PersistentAlert
-        val appName = NotificationContentHelper.appName(this, entity.packageName)
+        val appName = NotificationContentHelper.appName(this, display.packageName)
         val actions = sbn.notification.actions
             ?.filter { it.remoteInputs.isNullOrEmpty() }
             ?.toTypedArray()
 
         alertManager.startAlert(AlertData(
-            notificationKey = entity.notificationKey,
-            title = "[$appName] ${NotificationContentHelper.displayTitle(entity)}",
-            text = entity.text,
+            notificationKey = display.notificationKey,
+            title = "[$appName] ${NotificationContentHelper.displayTitle(display)}",
+            text = display.text,
             soundUri = action.soundUri,
             vibrate = action.vibrate,
             audioStream = action.audioStream,
             appName = appName,
-            packageName = entity.packageName,
+            packageName = display.packageName,
             eventType = eventType.name,
-            timestamp = entity.captureTime,
-            subText = entity.subText,
-            bigText = entity.bigText,
+            timestamp = display.captureTime,
+            subText = display.subText,
+            bigText = display.bigText,
             contentIntent = sbn.notification.contentIntent,
             actions = actions
         ))
@@ -1130,7 +1131,7 @@ class NotificationCaptureService : NotificationListenerService() {
      * 無 regex：複製 title + 最完整內容（bigText ?: text）
      * 有 regex：對每個匹配欄位提取所有 capture group，各欄位獨立複製到剪貼簿
      */
-    private suspend fun checkClipboardCopy(entity: NotificationEntity, matchCtx: MatchContext) {
+    private suspend fun checkClipboardCopy(packageName: String, matchCtx: MatchContext) {
         val rule = RuleEngine.findMatchingRule(ActionType.CLIPBOARD_COPY, matchCtx) ?: return
         val keywordMatcher = rule.matchers.filterIsInstance<Matcher.Keyword>().firstOrNull()
         // ClipboardManager 操作需在主線程
@@ -1139,7 +1140,7 @@ class NotificationCaptureService : NotificationListenerService() {
                 this@NotificationCaptureService, matchCtx.title, matchCtx.text, matchCtx.bigText, matchCtx.subText, keywordMatcher
             )
         }
-        if (count > 0) Log.d(TAG, "Clipboard copy: $count entries from ${entity.packageName}")
+        if (count > 0) Log.d(TAG, "Clipboard copy: $count entries from $packageName")
     }
 
     /**

@@ -2,7 +2,7 @@ package com.notificationmaster.core.content
 
 import android.content.Context
 import com.notificationmaster.core.cache.AppLabelCache
-import com.notificationmaster.data.db.entity.NotificationEntity
+import com.notificationmaster.ui.common.NotificationDisplay
 
 /**
  * 匯出精細程度
@@ -25,14 +25,18 @@ enum class ExportDetailLevel {
 /**
  * 通知內容提取的共用 helper
  *
- * 統一各處對 NotificationEntity 欄位的提取邏輯，
- * 避免 `bigText ?: text`、`title ?: "通知"` 等模式散佈各處。
+ * Plan 2 Phase 8：與具體 Entity 類型解耦，所有函式接原子欄位（或 [NotificationDisplay] 攤平）。
+ * 呼叫端責任：從 entity / snapshot 取出欄位後傳入。
  */
 object NotificationContentHelper {
 
+    /** 取得 App 顯示名稱（透過 PackageManager） */
+    fun appName(context: Context, packageName: String): String =
+        AppLabelCache.getLabel(context, packageName)
+
     /** 取得顯示用標題（null 時回傳 fallback） */
-    fun displayTitle(notification: NotificationEntity, fallback: String = "通知"): String =
-        notification.title ?: fallback
+    fun displayTitleOf(title: String?, fallback: String = "通知"): String =
+        title ?: fallback
 
     /**
      * 取得最完整的內容文字
@@ -40,20 +44,21 @@ object NotificationContentHelper {
      * bigText 是 text 的展開版（BigTextStyle），存在時 text 通常是其截斷。
      * 優先使用 bigText 避免重複。
      */
-    fun fullContent(notification: NotificationEntity): String? =
-        notification.bigText ?: notification.text
-
-    /** 取得 App 顯示名稱（透過 PackageManager），需要 Context */
-    fun appName(context: Context, packageName: String): String =
-        AppLabelCache.getLabel(context, packageName)
+    fun fullContentOf(text: String?, bigText: String?): String? =
+        bigText ?: text
 
     /** 組合標題和內容（用於剪貼簿等單一文字輸出） */
-    fun titleAndContent(notification: NotificationEntity, fallbackTitle: String = ""): String {
-        val title = notification.title ?: fallbackTitle
-        val content = fullContent(notification)
+    fun titleAndContentOf(
+        title: String?,
+        text: String?,
+        bigText: String?,
+        fallbackTitle: String = ""
+    ): String {
+        val mainTitle = title ?: fallbackTitle
+        val content = fullContentOf(text, bigText)
         return when {
-            title.isNotEmpty() && !content.isNullOrEmpty() -> "$title\n$content"
-            title.isNotEmpty() -> title
+            mainTitle.isNotEmpty() && !content.isNullOrEmpty() -> "$mainTitle\n$content"
+            mainTitle.isNotEmpty() -> mainTitle
             !content.isNullOrEmpty() -> content
             else -> ""
         }
@@ -62,38 +67,43 @@ object NotificationContentHelper {
     // ========== 匯出用格式化（CalendarExporter / IcsExporter 共用） ==========
 
     /** 匯出用事件標題：[appName] title */
-    fun exportTitle(context: Context, notification: NotificationEntity): String {
-        return "[${appName(context, notification.packageName)}] ${displayTitle(notification)}"
+    fun exportTitleOf(context: Context, packageName: String, title: String?): String {
+        return "[${appName(context, packageName)}] ${displayTitleOf(title)}"
     }
 
     /** 匯出用地點：channelId / packageName */
-    fun exportLocation(notification: NotificationEntity): String {
-        val channelId = notification.channelId
-        return if (channelId != null) "$channelId / ${notification.packageName}"
-        else notification.packageName
+    fun exportLocationOf(packageName: String, channelId: String?): String {
+        return if (channelId != null) "$channelId / $packageName" else packageName
     }
 
     /**
      * 匯出用描述
      */
-    fun exportDescription(notification: NotificationEntity, level: ExportDetailLevel): String {
+    fun exportDescriptionOf(
+        text: String?,
+        bigText: String?,
+        subText: String?,
+        isOngoing: Boolean,
+        isForegroundService: Boolean,
+        level: ExportDetailLevel
+    ): String {
         return buildString {
             when (level) {
                 ExportDetailLevel.TITLE_ONLY -> { /* 標題在 title 欄位，描述留空 */ }
                 ExportDetailLevel.WITH_CONTENT -> {
-                    fullContent(notification)?.let { append(it) }
+                    fullContentOf(text, bigText)?.let { append(it) }
                 }
                 ExportDetailLevel.FULL -> {
-                    fullContent(notification)?.let { append(it) }
+                    fullContentOf(text, bigText)?.let { append(it) }
 
-                    notification.subText?.let {
+                    subText?.let {
                         if (isNotEmpty()) append("\n")
                         append(it)
                     }
 
                     val flags = mutableListOf<String>()
-                    if (notification.isOngoing) flags.add("Ongoing")
-                    if (notification.isForegroundService) flags.add("FG Service")
+                    if (isOngoing) flags.add("Ongoing")
+                    if (isForegroundService) flags.add("FG Service")
                     if (flags.isNotEmpty()) {
                         append("\n\n-- NotificationMaster --\n")
                         append("Flags: ${flags.joinToString(", ")}")
@@ -103,4 +113,31 @@ object NotificationContentHelper {
             }
         }
     }
+
+    // ========== NotificationDisplay overload（攤平模型給 Exporter 用） ==========
+
+    fun displayTitle(display: NotificationDisplay, fallback: String = "通知"): String =
+        displayTitleOf(display.title, fallback)
+
+    fun fullContent(display: NotificationDisplay): String? =
+        fullContentOf(display.text, display.bigText)
+
+    fun titleAndContent(display: NotificationDisplay, fallbackTitle: String = ""): String =
+        titleAndContentOf(display.title, display.text, display.bigText, fallbackTitle)
+
+    fun exportTitle(context: Context, display: NotificationDisplay): String =
+        exportTitleOf(context, display.packageName, display.title)
+
+    fun exportLocation(display: NotificationDisplay): String =
+        exportLocationOf(display.packageName, display.channelId)
+
+    fun exportDescription(display: NotificationDisplay, level: ExportDetailLevel): String =
+        exportDescriptionOf(
+            text = display.text,
+            bigText = display.bigText,
+            subText = display.subText,
+            isOngoing = display.isOngoing,
+            isForegroundService = display.isForegroundService,
+            level = level
+        )
 }

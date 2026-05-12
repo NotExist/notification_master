@@ -6,7 +6,7 @@ import android.content.Context
 import com.notificationmaster.core.content.NotificationContentHelper
 import com.notificationmaster.core.filter.KeywordField
 import com.notificationmaster.core.filter.Matcher
-import com.notificationmaster.data.db.entity.NotificationEntity
+import com.notificationmaster.ui.common.NotificationDisplay
 
 /**
  * 剪貼簿複製共用邏輯
@@ -23,13 +23,13 @@ object ClipboardCopyHelper {
      * 複製單筆通知到剪貼簿
      *
      * @param context Context
-     * @param notification 通知 entity
+     * @param display 攤平後的 NotificationDisplay
      * @param keywordMatcher 規則中的 Keyword matcher（null 時為非 regex 模式）
      * @return 複製的條目數
      */
     fun copyToClipboard(
         context: Context,
-        notification: NotificationEntity,
+        display: NotificationDisplay,
         keywordMatcher: Matcher.Keyword? = null
     ): Int {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -39,10 +39,10 @@ object ClipboardCopyHelper {
             val regex = try { Regex(keywordMatcher.pattern) } catch (_: Exception) { return 0 }
             val fieldTexts = keywordMatcher.fields.mapNotNull { field ->
                 when (field) {
-                    KeywordField.TITLE -> notification.title
-                    KeywordField.TEXT -> notification.text
-                    KeywordField.BIG_TEXT -> notification.bigText
-                    KeywordField.SUB_TEXT -> notification.subText
+                    KeywordField.TITLE -> display.title
+                    KeywordField.TEXT -> display.text
+                    KeywordField.BIG_TEXT -> display.bigText
+                    KeywordField.SUB_TEXT -> display.subText
                 }?.let { field to it }
             }
             for ((field, text) in fieldTexts) {
@@ -55,7 +55,7 @@ object ClipboardCopyHelper {
                 count++
             }
         } else {
-            val clipText = NotificationContentHelper.titleAndContent(notification)
+            val clipText = NotificationContentHelper.titleAndContent(display)
             if (clipText.isNotEmpty()) {
                 clipboard.setPrimaryClip(
                     ClipData.newPlainText("NotificationMaster", clipText)

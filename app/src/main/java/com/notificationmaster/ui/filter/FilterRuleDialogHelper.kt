@@ -1188,9 +1188,8 @@ object FilterRuleDialogHelper {
     /**
      * 對預覽結果套用實際動作
      *
-     * Plan 2 Phase 9：matched 為 NotificationDisplay 列表；ClipboardCopyHelper /
-     * CalendarExporter 仍吃 NotificationEntity（待 Phase 9-6/7 切換）。此處以
-     * notificationKey 反查 NotificationEntity 後傳遞。
+     * Plan 2 Phase 8：matched 為 NotificationDisplay 列表；ClipboardCopyHelper /
+     * CalendarExporter 已對齊新 schema，直接傳遞 display。
      */
     private fun applyActionToResults(
         context: Context,
@@ -1198,16 +1197,15 @@ object FilterRuleDialogHelper {
         actionType: ActionType,
         rule: Rule
     ) {
-        val database = NotificationMasterApp.getInstance().database
         when (actionType) {
             ActionType.CLIPBOARD_COPY -> {
                 val keywordMatcher = rule.matchers.filterIsInstance<Matcher.Keyword>().firstOrNull()
                 kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
                     var copyCount = 0
                     for (display in notifications) {
-                        val entity = database.notificationDao().getLatestByKey(display.notificationKey)
-                            ?: continue
-                        copyCount += ClipboardCopyHelper.copyToClipboard(context, entity, keywordMatcher)
+                        copyCount += withContext(Dispatchers.Main) {
+                            ClipboardCopyHelper.copyToClipboard(context, display, keywordMatcher)
+                        }
                     }
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context,
@@ -1228,17 +1226,16 @@ object FilterRuleDialogHelper {
                     Toast.makeText(context, R.string.filter_calendar_required, Toast.LENGTH_SHORT).show()
                     return
                 }
-                if (exporter.getAvailableCalendars().none { it.id == targetId }) {
+                val targetCal = exporter.getAvailableCalendars().firstOrNull { it.id == targetId }
+                if (targetCal == null) {
                     Toast.makeText(context,
                         CalendarPickerLauncher.resolveLabel(context, targetId),
                         Toast.LENGTH_SHORT).show()
                     return
                 }
+                exporter.setTargetAccount(targetCal.accountName, targetCal.accountType)
                 kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
-                    val entities = notifications.mapNotNull {
-                        database.notificationDao().getLatestByKey(it.notificationKey)
-                    }
-                    val result = exporter.exportToCalendar(entities, targetId, ExportDetailLevel.FULL)
+                    val result = exporter.exportToCalendar(notifications, targetId, ExportDetailLevel.FULL)
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context,
                             context.getString(R.string.filter_preview_applied_calendar, result.successCount),

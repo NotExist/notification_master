@@ -35,11 +35,14 @@ import com.notificationmaster.databinding.FragmentSettingsBinding
 import com.notificationmaster.debug.DebugDumper
 import com.notificationmaster.service.NotificationCaptureService
 import com.notificationmaster.service.NlsKeepaliveService
+import com.notificationmaster.data.db.dao.querySync
+import com.notificationmaster.data.filter.EventFilterSpec
 import com.notificationmaster.export.archive.ArchiveExporter
 import com.notificationmaster.export.archive.ArchiveImporter
 import com.notificationmaster.core.content.ExportDetailLevel
 import com.notificationmaster.export.calendar.CalendarExporter
 import com.notificationmaster.export.ical.IcsExporter
+import com.notificationmaster.ui.common.NotificationDisplay
 import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -760,23 +763,20 @@ class SettingsFragment : Fragment() {
     private fun exportToCalendar(calendarId: Long, detailLevel: ExportDetailLevel, exporter: CalendarExporter) {
         val ctx = context ?: return
         viewLifecycleOwner.lifecycleScope.launch {
-            val database = NotificationMasterApp.getInstance().database
-
             // 預設匯出最近 7 天
             val endTime = System.currentTimeMillis()
             val cal = Calendar.getInstance()
             cal.add(Calendar.DAY_OF_YEAR, -7)
             val startTime = cal.timeInMillis
 
-            val notifications = withContext(Dispatchers.IO) {
-                database.notificationDao()
-                    .getNotificationsByTimeRangePaged(startTime, endTime, 500, 0)
+            val displays = withContext(Dispatchers.IO) {
+                loadDisplaysForExport(startTime, endTime, limit = 500)
             }
 
-            val filteredNotifications = applyCalendarWhitelist(notifications)
+            val filtered = applyCalendarWhitelist(displays)
 
             val result = withContext(Dispatchers.IO) {
-                exporter.exportToCalendar(filteredNotifications, calendarId, detailLevel)
+                exporter.exportToCalendar(filtered, calendarId, detailLevel)
             }
 
             showResultDialog(
@@ -806,15 +806,11 @@ class SettingsFragment : Fragment() {
         val ctx = context ?: return
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                val database = NotificationMasterApp.getInstance().database
-                val notifications = withContext(Dispatchers.IO) {
-                    database.notificationDao()
-                        .getNotificationsByTimeRangePaged(
-                            pendingExportStartTime, pendingExportEndTime, Int.MAX_VALUE, 0
-                        )
+                val displays = withContext(Dispatchers.IO) {
+                    loadDisplaysForExport(pendingExportStartTime, pendingExportEndTime, limit = null)
                 }
 
-                val filtered = applyCalendarWhitelist(notifications)
+                val filtered = applyCalendarWhitelist(displays)
 
                 val icsContent = withContext(Dispatchers.IO) {
                     IcsExporter(requireContext()).export(filtered)
@@ -874,16 +870,35 @@ class SettingsFragment : Fragment() {
 
     // === 白名單篩選（共用） ===
 
+    /**
+     * Plan 2 Phase 8：匯出資料來源改為 NotificationEventEntity（每個 notificationKey 取最新一筆）
+     * → 攤平為 NotificationDisplay 供 Calendar / Ics exporter 使用。
+     */
+    private suspend fun loadDisplaysForExport(
+        startTime: Long,
+        endTime: Long,
+        limit: Int?
+    ): List<NotificationDisplay> = withContext(Dispatchers.IO) {
+        val database = NotificationMasterApp.getInstance().database
+        val spec = EventFilterSpec(
+            deduplicate = true,
+            timeFrom = startTime,
+            timeTo = endTime,
+            limit = limit
+        )
+        database.notificationEventDao().querySync(spec).map { NotificationDisplay.from(it) }
+    }
+
     private fun applyCalendarWhitelist(
-        notifications: List<com.notificationmaster.data.db.entity.NotificationEntity>
-    ): List<com.notificationmaster.data.db.entity.NotificationEntity> {
-        val ctx = context ?: return notifications
+        displays: List<NotificationDisplay>
+    ): List<NotificationDisplay> {
+        val ctx = context ?: return displays
         RuleRepository.load(ctx)
         val whitelistRules = RuleEngine.getRules(ActionType.CALENDAR_EXPORT)
         return if (whitelistRules.isEmpty()) {
-            notifications  // 無白名單 → 全部
+            displays  // 無白名單 → 全部
         } else {
-            notifications.filter {
+            displays.filter {
                 RuleEngine.matchesSource(ActionType.CALENDAR_EXPORT, it.packageName, it.channelId)
             }
         }

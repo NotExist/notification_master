@@ -18,7 +18,7 @@ import androidx.core.content.ContextCompat
 import com.notificationmaster.R
 import com.notificationmaster.core.content.ExportDetailLevel
 import com.notificationmaster.core.content.NotificationContentHelper
-import com.notificationmaster.data.db.entity.NotificationEntity
+import com.notificationmaster.ui.common.NotificationDisplay
 import java.util.TimeZone
 
 /**
@@ -206,32 +206,32 @@ class CalendarExporter(private val context: Context) {
     /**
      * 匯出通知到指定日曆
      *
-     * @param notifications 要匯出的通知清單
+     * @param displays 要匯出的通知（每個 notificationKey 取最新 event 後攤平）
      * @param calendarId 目標日曆 ID
      * @param detailLevel 精細程度
      * @return 成功匯出的數量
      */
     fun exportToCalendar(
-        notifications: List<NotificationEntity>,
+        displays: List<NotificationDisplay>,
         calendarId: Long,
         detailLevel: ExportDetailLevel = ExportDetailLevel.WITH_CONTENT
     ): ExportResult {
         if (!hasCalendarPermission()) {
-            return ExportResult(0, notifications.size, "缺少日曆權限")
+            return ExportResult(0, displays.size, "缺少日曆權限")
         }
 
         var successCount = 0
         var failCount = 0
         val errors = mutableListOf<String>()
 
-        for (notification in notifications) {
+        for (display in displays) {
             try {
-                val eventId = insertCalendarEvent(notification, calendarId, detailLevel)
+                val eventId = insertCalendarEvent(display, calendarId, detailLevel)
                 if (eventId > 0) successCount++ else failCount++
             } catch (e: Exception) {
                 failCount++
                 if (errors.size < 5) {
-                    errors.add("${notification.packageName}: ${e.message}")
+                    errors.add("${display.packageName}: ${e.message}")
                 }
             }
         }
@@ -248,13 +248,13 @@ class CalendarExporter(private val context: Context) {
      * @return 事件 ID（>0 表示成功），-1L 表示失敗
      */
     fun exportSingleNotification(
-        notification: NotificationEntity,
+        display: NotificationDisplay,
         calendarId: Long,
         detailLevel: ExportDetailLevel = ExportDetailLevel.WITH_CONTENT
     ): Long {
         if (!hasCalendarPermission()) return -1L
         return try {
-            insertCalendarEvent(notification, calendarId, detailLevel)
+            insertCalendarEvent(display, calendarId, detailLevel)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to export notification to calendar", e)
             -1L
@@ -266,24 +266,24 @@ class CalendarExporter(private val context: Context) {
      * @return 事件 ID（>0 表示成功），-1L 表示失敗
      */
     private fun insertCalendarEvent(
-        notification: NotificationEntity,
+        display: NotificationDisplay,
         calendarId: Long,
         detailLevel: ExportDetailLevel
     ): Long {
-        val title = buildEventTitle(notification, detailLevel)
-        val description = buildEventDescription(notification, detailLevel)
+        val title = buildEventTitle(display, detailLevel)
+        val description = buildEventDescription(display, detailLevel)
 
         val values = ContentValues().apply {
             put(CalendarContract.Events.CALENDAR_ID, calendarId)
             put(CalendarContract.Events.TITLE, title)
             put(CalendarContract.Events.DESCRIPTION, description)
-            put(CalendarContract.Events.EVENT_LOCATION, buildEventLocation(notification))
-            put(CalendarContract.Events.DTSTART, notification.postTime)
-            put(CalendarContract.Events.DTEND, notification.postTime)
+            put(CalendarContract.Events.EVENT_LOCATION, buildEventLocation(display))
+            put(CalendarContract.Events.DTSTART, display.postTime)
+            put(CalendarContract.Events.DTEND, display.postTime)
             put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
             put(CalendarContract.Events.HAS_ALARM, 0)
             put(CalendarContract.Events.STATUS, CalendarContract.Events.STATUS_TENTATIVE)
-            put(CalendarContract.Events.CUSTOM_APP_URI, notification.notificationKey)
+            put(CalendarContract.Events.CUSTOM_APP_URI, display.notificationKey)
         }
 
         val eventUri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
@@ -304,7 +304,7 @@ class CalendarExporter(private val context: Context) {
                 val extValues = ContentValues().apply {
                     put(CalendarContract.ExtendedProperties.EVENT_ID, eventId)
                     put(CalendarContract.ExtendedProperties.NAME, EXT_PROP_URL_NAME)
-                    put(CalendarContract.ExtendedProperties.VALUE, notification.notificationKey)
+                    put(CalendarContract.ExtendedProperties.VALUE, display.notificationKey)
                 }
                 context.contentResolver.insert(extUri, extValues) != null
             } else {
@@ -318,7 +318,7 @@ class CalendarExporter(private val context: Context) {
 
         // Fallback：ExtendedProperties 寫入失敗時將 Key 追加到 description
         if (!extInserted) {
-            val fallbackDesc = "$description\n\n-- NotificationMaster --\nKey: ${notification.notificationKey}\n-- NotificationMaster --"
+            val fallbackDesc = "$description\n\n-- NotificationMaster --\nKey: ${display.notificationKey}\n-- NotificationMaster --"
             val updateValues = ContentValues().apply {
                 put(CalendarContract.Events.DESCRIPTION, fallbackDesc)
             }
@@ -376,14 +376,14 @@ class CalendarExporter(private val context: Context) {
         }
     }
 
-    private fun buildEventTitle(notification: NotificationEntity, @Suppress("UNUSED_PARAMETER") detailLevel: ExportDetailLevel): String =
-        NotificationContentHelper.exportTitle(context, notification)
+    private fun buildEventTitle(display: NotificationDisplay, @Suppress("UNUSED_PARAMETER") detailLevel: ExportDetailLevel): String =
+        NotificationContentHelper.exportTitle(context, display)
 
-    private fun buildEventLocation(notification: NotificationEntity): String =
-        NotificationContentHelper.exportLocation(notification)
+    private fun buildEventLocation(display: NotificationDisplay): String =
+        NotificationContentHelper.exportLocation(display)
 
-    private fun buildEventDescription(notification: NotificationEntity, detailLevel: ExportDetailLevel): String =
-        NotificationContentHelper.exportDescription(notification, detailLevel)
+    private fun buildEventDescription(display: NotificationDisplay, detailLevel: ExportDetailLevel): String =
+        NotificationContentHelper.exportDescription(display, detailLevel)
 
     // ========== 日曆選擇器 UI ==========
 

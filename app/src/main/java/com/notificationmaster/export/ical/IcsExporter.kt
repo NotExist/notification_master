@@ -3,7 +3,7 @@ package com.notificationmaster.export.ical
 import android.content.Context
 import com.notificationmaster.core.content.ExportDetailLevel
 import com.notificationmaster.core.content.NotificationContentHelper
-import com.notificationmaster.data.db.entity.NotificationEntity
+import com.notificationmaster.ui.common.NotificationDisplay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -14,6 +14,9 @@ import java.util.TimeZone
  *
  * 純 Kotlin 手工建構，不依賴第三方套件。
  * 時間格式使用 UTC（yyyyMMdd'T'HHmmss'Z'）。
+ *
+ * Plan 2 Phase 8：改吃 [NotificationDisplay]（NotificationEventEntity + snapshot 攤平結果），
+ * 對應「每個 notification_key 取最新一筆 event」之後的呈現。
  */
 class IcsExporter(private val context: Context) {
 
@@ -22,10 +25,10 @@ class IcsExporter(private val context: Context) {
     }
 
     /**
-     * 將通知清單轉為 iCalendar 格式字串
+     * 將 NotificationDisplay 清單轉為 iCalendar 格式字串
      */
     fun export(
-        notifications: List<NotificationEntity>,
+        displays: List<NotificationDisplay>,
         detailLevel: ExportDetailLevel = ExportDetailLevel.FULL
     ): String {
         return buildString {
@@ -35,8 +38,8 @@ class IcsExporter(private val context: Context) {
             appendLine("CALSCALE:GREGORIAN")
             appendLine("METHOD:PUBLISH")
 
-            for (notification in notifications) {
-                appendVEvent(this, notification, detailLevel)
+            for (display in displays) {
+                appendVEvent(this, display, detailLevel)
             }
 
             appendLine("END:VCALENDAR")
@@ -45,14 +48,14 @@ class IcsExporter(private val context: Context) {
 
     private fun appendVEvent(
         sb: StringBuilder,
-        notification: NotificationEntity,
+        display: NotificationDisplay,
         detailLevel: ExportDetailLevel
     ) {
-        val uid = "${notification.id}@notificationmaster"
-        val dtStart = formatIcsDateTime(notification.postTime)
-        val dtEnd = formatIcsDateTime(notification.postTime + 60_000)
-        val title = buildEventTitle(notification)
-        val description = buildEventDescription(notification, detailLevel)
+        val uid = "${display.eventId}@notificationmaster"
+        val dtStart = formatIcsDateTime(display.postTime)
+        val dtEnd = formatIcsDateTime(display.postTime + 60_000)
+        val title = NotificationContentHelper.exportTitle(context, display)
+        val description = NotificationContentHelper.exportDescription(display, detailLevel)
 
         sb.appendLine("BEGIN:VEVENT")
         sb.appendLine("UID:$uid")
@@ -60,7 +63,7 @@ class IcsExporter(private val context: Context) {
         sb.appendLine("DTSTART:$dtStart")
         sb.appendLine("DTEND:$dtEnd")
         sb.appendLine("SUMMARY:${escapeIcsText(title)}")
-        sb.appendLine("LOCATION:${escapeIcsText(NotificationContentHelper.exportLocation(notification))}")
+        sb.appendLine("LOCATION:${escapeIcsText(NotificationContentHelper.exportLocation(display))}")
         if (description.isNotEmpty()) {
             sb.appendLine("DESCRIPTION:${escapeIcsText(description)}")
         }
@@ -82,10 +85,4 @@ class IcsExporter(private val context: Context) {
             .replace(",", "\\,")
             .replace("\n", "\\n")
     }
-
-    private fun buildEventTitle(notification: NotificationEntity): String =
-        NotificationContentHelper.exportTitle(context, notification)
-
-    private fun buildEventDescription(notification: NotificationEntity, detailLevel: ExportDetailLevel): String =
-        NotificationContentHelper.exportDescription(notification, detailLevel)
 }
