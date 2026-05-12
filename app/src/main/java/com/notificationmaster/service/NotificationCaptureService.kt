@@ -54,6 +54,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * 通知擷取服務
@@ -75,6 +77,13 @@ class NotificationCaptureService : NotificationListenerService() {
 
     /** 追蹤延遲清除的排程任務，key = notification key */
     private val pendingDismissJobs = ConcurrentHashMap<String, Job>()
+
+    /**
+     * 防止 onListenerConnected 與 captureActiveNotifications 並行進入
+     * processInitialNotifications 造成 race：兩個 task 都讀到 record == null
+     * 然後都進 processNotification 各寫一筆 INITIAL event。
+     */
+    private val initialProcessingMutex = Mutex()
 
     /**
      * 追蹤即時日曆匯出的事件 ID，key = notification key，value = (calendarId, eventId) list。
@@ -281,7 +290,7 @@ class NotificationCaptureService : NotificationListenerService() {
         notifications: List<StatusBarNotification>,
         rankingMap: RankingMap?,
         caller: String
-    ) {
+    ) = initialProcessingMutex.withLock {
         var newCount = 0
         var skipCount = 0
         val initialKeys = mutableSetOf<String>()

@@ -228,8 +228,7 @@ class TimelineViewModel(
                     eventDao.query(yesterdaySpec).first().map(NotificationDisplay::from)
                 }
                 if (yesterdayData.isNotEmpty()) {
-                    _historicalDays.value =
-                        _historicalDays.value + (yesterdayStart to yesterdayData)
+                    insertHistoricalDay(yesterdayStart, yesterdayData)
                 }
                 refreshReachedEnd()
 
@@ -239,8 +238,10 @@ class TimelineViewModel(
                     _todayNotifications.value = withContext(Dispatchers.IO) {
                         todayItems.map(NotificationDisplay::from)
                     }
-                    _awaitingInitialData.value = false
+                    // 注意：必須在 _todayNotifications 寫完後 recombineAll，才能 set awaiting=false；
+                    // 後者放行 loadNextDay 進入「init 已完成」狀態。
                     recombineAll()
+                    _awaitingInitialData.value = false
                 }
             } else {
                 eventDao.query(specSnapshot).collectLatest { items ->
@@ -254,7 +255,10 @@ class TimelineViewModel(
     }
 
     fun loadNextDay() {
-        if (_isLoadingMore.value || _hasReachedEnd.value || !usesDayPaging()) return
+        // 阻擋條件：載入中 / 已到底 / 非天分頁模式 / 初次資料尚未抵達（避免 init yesterday 載入未完
+        // 就觸發 loadNextDay 導致 historicalDays append 順序錯亂）
+        if (_isLoadingMore.value || _hasReachedEnd.value || !usesDayPaging() ||
+            _awaitingInitialData.value) return
         _isLoadingMore.value = true
         val specSnapshot = _coreSpec.value
 
@@ -268,7 +272,7 @@ class TimelineViewModel(
             }
 
             if (data.isNotEmpty()) {
-                _historicalDays.value = _historicalDays.value + (dayStart to data)
+                insertHistoricalDay(dayStart, data)
             }
 
             nextDayToLoad = dayStart - ONE_DAY_MS
@@ -276,6 +280,14 @@ class TimelineViewModel(
             _isLoadingMore.value = false
             recombineAll()
         }
+    }
+
+    /** 插入歷史天資料，保持 dayStart 降序（新到舊）。同 dayStart 已存在則覆蓋（避免 race 重複）。 */
+    private fun insertHistoricalDay(dayStart: Long, data: List<NotificationDisplay>) {
+        val current = _historicalDays.value
+        val withoutSameDay = current.filterNot { it.first == dayStart }
+        val merged = (withoutSameDay + (dayStart to data)).sortedByDescending { it.first }
+        _historicalDays.value = merged
     }
 
     private fun recombineAll() {

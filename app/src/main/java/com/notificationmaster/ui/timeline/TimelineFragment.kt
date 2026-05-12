@@ -481,16 +481,30 @@ class TimelineFragment : Fragment() {
     }
 
     private fun observeViewModel() {
-        // 主資料流：allNotifications + removedIds + filterText 任一變動 → 重 render
+        // 主資料流：allNotifications + removedIds + filterText + isLoadingMore + hasReachedEnd
+        // 任一變動 → 重 render（後兩者控制 footer，缺它們會讓空白天載入完成後 LoadingMore 卡住）
         viewLifecycleOwner.lifecycleScope.launch {
             combine(
-                viewModel.allNotifications,
-                viewModel.removedIds,
-                viewModel.filterText,
-                viewModel.coreSpec,
-                viewModel.awaitingInitialData
-            ) { allList, removed, filterText, spec, awaiting ->
-                ListRenderInput(allList, removed, filterText, spec, awaiting)
+                combine(
+                    viewModel.allNotifications,
+                    viewModel.removedIds,
+                    viewModel.filterText,
+                    viewModel.coreSpec,
+                    viewModel.awaitingInitialData
+                ) { allList, removed, filterText, spec, awaiting ->
+                    arrayOf<Any?>(allList, removed, filterText, spec, awaiting)
+                },
+                viewModel.isLoadingMore,
+                viewModel.hasReachedEnd
+            ) { core, _, _ ->
+                @Suppress("UNCHECKED_CAST")
+                ListRenderInput(
+                    allNotifications = core[0] as List<NotificationDisplay>,
+                    removedIds = core[1] as Set<String>,
+                    filterText = core[2] as String,
+                    spec = core[3] as EventFilterSpec,
+                    awaiting = core[4] as Boolean
+                )
             }.collectLatest { input ->
                 if (_binding == null) return@collectLatest
                 renderList(input)
