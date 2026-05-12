@@ -1,19 +1,15 @@
 package com.notificationmaster.debug
 
 import android.app.Notification
-import android.app.PendingIntent
 import android.content.Context
-import android.graphics.Bitmap
 import android.os.Build
-import android.os.Bundle
 import android.os.Environment
-import android.os.IBinder
 import android.service.notification.NotificationListenerService.RankingMap
 import android.service.notification.NotificationListenerService.Ranking
 import android.service.notification.StatusBarNotification
 import android.util.Log
-import android.widget.RemoteViews
 import com.notificationmaster.BuildConfig
+import com.notificationmaster.core.RawSerializer
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.core.permission.PermissionDescriptions
 import com.notificationmaster.data.model.EnvironmentInfo
@@ -25,36 +21,17 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Debug 模式 Raw Data Dumper
- * 將所有收到的原始資料以反射方式完整傾印到外部儲存供分析
+ * Debug 模式 Raw Data Dumper（Plan 2 Phase 10：反射引擎抽出共用 [RawSerializer]）
  *
- * 所有事件類型共用同一個通用傾印邏輯，不做任何省略。
- * 使用反射自動涵蓋所有 public field 和 no-arg getter，
- * 新增 API 欄位無需修改程式碼。
+ * 將所有收到的原始資料完整傾印到外部儲存供分析。所有事件類型共用同一個通用傾印邏輯，
+ * 不做任何省略。底層反射由 [RawSerializer] 提供，自動涵蓋所有 public field 與 no-arg
+ * getter，新增 API 欄位無需修改程式碼。
  */
 class DebugDumper(private val context: Context) {
 
     companion object {
         private const val TAG = "DebugDumper"
         private const val DEBUG_DIR_NAME = "NotificationMaster/debug"
-        private const val MAX_DEPTH = 5
-
-        /** 不呼叫的 getter 名稱（可能觸發副作用或無用） */
-        private val UNSAFE_METHODS = setOf(
-            "loadDrawable", "getResources", "getApplicationContext", "getBaseContext",
-            "getClass", "hashCode", "notify", "notifyAll", "wait", "clone",
-            "toString", "describeContents", "writeToParcel",
-        )
-
-        /** 不追蹤回傳值的型別（持有 Context/IBinder 等不可序列化資源） */
-        private val SKIP_RETURN_TYPES: Set<Class<*>> = setOf(
-            Context::class.java,
-            android.content.res.Resources::class.java,
-            ClassLoader::class.java,
-            IBinder::class.java,
-            android.content.pm.ApplicationInfo::class.java,
-            android.content.pm.PackageManager::class.java,
-        )
     }
 
     @Volatile
@@ -194,7 +171,6 @@ class DebugDumper(private val context: Context) {
             val safePackageName = sbn.packageName.replace(".", "_")
             val filename = "${safePackageName}_${timestamp}_${eventType}.json"
 
-            val visited = mutableSetOf<Int>()
             val json = JSONObject().apply {
                 put("dumpTime", System.currentTimeMillis())
                 put("dumpTimeFormatted", timestamp)
@@ -206,13 +182,13 @@ class DebugDumper(private val context: Context) {
                     put("removalReasonDescription", ApiVersionHelper.getRemovalReasonDescription(removalReason))
                 }
 
-                put("sbn", reflectToJson(sbn, 0, visited))
+                put("sbn", RawSerializer.serialize(sbn))
 
                 if (rankingMap != null) {
                     val key = ApiVersionHelper.getNotificationKey(sbn)
                     val ranking = Ranking()
                     if (rankingMap.getRanking(key, ranking)) {
-                        put("ranking", reflectToJson(ranking, 0, mutableSetOf()))
+                        put("ranking", RawSerializer.serialize(ranking))
                     }
                 }
 
@@ -247,7 +223,7 @@ class DebugDumper(private val context: Context) {
                 for (key in keys) {
                     val ranking = Ranking()
                     if (rankingMap.getRanking(key, ranking)) {
-                        rankingsArray.put(reflectToJson(ranking, 0, mutableSetOf()))
+                        rankingsArray.put(RawSerializer.serialize(ranking))
                     }
                 }
                 put("rankings", rankingsArray)
@@ -261,192 +237,6 @@ class DebugDumper(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to dump ranking", e)
         }
-    }
-
-    // === 反射引擎 ===
-
-    /**
-     * 遞迴反射序列化任意物件為 JSON 相容值
-     */
-    private fun reflectToJson(obj: Any?, depth: Int, visited: MutableSet<Int>): Any? {
-        if (obj == null) return JSONObject.NULL
-
-        // 基本型別
-        when (obj) {
-            is Boolean, is Int, is Long, is Float, is Double, is Short, is Byte -> return obj
-            is CharSequence -> return obj.toString()
-            is Enum<*> -> return obj.name
-        }
-
-        // Binary 型別：標示但不傾印內容
-        if (isBinaryType(obj)) return buildBinaryMetadata(obj)
-        if (obj is ByteArray) return JSONObject().apply {
-            put("_type", "ByteArray"); put("_binary", true); put("size", obj.size)
-        }
-
-        // 基本陣列
-        when (obj) {
-            is IntArray -> return JSONArray(obj.toList())
-            is LongArray -> return JSONArray(obj.toList())
-            is FloatArray -> return JSONArray(obj.toList())
-            is DoubleArray -> return JSONArray(obj.toList())
-            is BooleanArray -> return JSONArray(obj.toList())
-            is ShortArray -> return JSONArray(obj.toList())
-        }
-
-        // 深度限制
-        if (depth > MAX_DEPTH) return JSONObject().apply {
-            put("_type", obj.javaClass.simpleName); put("_truncated", true)
-        }
-
-        // 循環引用偵測
-        val id = System.identityHashCode(obj)
-        if (id in visited) return JSONObject().apply {
-            put("_type", obj.javaClass.simpleName); put("_circular", true)
-        }
-        visited.add(id)
-
-        try {
-            return when (obj) {
-                is Bundle -> reflectBundle(obj, depth, visited)
-                is PendingIntent -> JSONObject().apply {
-                    put("_type", "PendingIntent")
-                    put("creatorPackage", obj.creatorPackage)
-                    put("creatorUid", obj.creatorUid)
-                }
-                is Array<*> -> JSONArray().apply {
-                    obj.forEach { put(reflectToJson(it, depth + 1, visited)) }
-                }
-                is Collection<*> -> JSONArray().apply {
-                    obj.forEach { put(reflectToJson(it, depth + 1, visited)) }
-                }
-                is Map<*, *> -> JSONObject().apply {
-                    obj.forEach { (k, v) -> put(k.toString(), reflectToJson(v, depth + 1, visited)) }
-                }
-                else -> reflectObject(obj, depth, visited)
-            }
-        } finally {
-            visited.remove(id)
-        }
-    }
-
-    /**
-     * Bundle 用 keySet() 迭代（比反射更可靠）
-     */
-    @Suppress("DEPRECATION")
-    private fun reflectBundle(bundle: Bundle, depth: Int, visited: MutableSet<Int>): JSONObject {
-        val json = JSONObject()
-        json.put("_type", "Bundle")
-        for (key in bundle.keySet()) {
-            try {
-                json.put(key, reflectToJson(bundle.get(key), depth + 1, visited))
-            } catch (e: Exception) {
-                json.put(key, JSONObject().apply { put("_error", e.message) })
-            }
-        }
-        return json
-    }
-
-    /**
-     * 通用物件反射：public fields + no-arg getters
-     */
-    private fun reflectObject(obj: Any, depth: Int, visited: MutableSet<Int>): JSONObject {
-        val json = JSONObject()
-        json.put("_type", obj.javaClass.simpleName)
-
-        val seenNames = mutableSetOf<String>()
-
-        // 1. Public fields
-        for (field in obj.javaClass.fields) {
-            val name = field.name
-            if (name.startsWith("$") || name.startsWith("CREATOR")) continue
-            seenNames.add(name)
-            try {
-                val value = field.get(obj)
-                if (shouldSkipReturnType(field.type)) {
-                    json.put(name, JSONObject().apply {
-                        put("_type", field.type.simpleName); put("_skipped", true)
-                    })
-                } else {
-                    json.put(name, reflectToJson(value, depth + 1, visited))
-                }
-            } catch (e: Exception) {
-                json.put(name, JSONObject().apply { put("_error", e.message) })
-            }
-        }
-
-        // 2. Public no-arg getters (get* / is*)
-        for (method in obj.javaClass.methods) {
-            try {
-                val name = method.name
-                if (method.parameterCount != 0) continue
-                if (name in UNSAFE_METHODS) continue
-                if (!name.startsWith("get") && !name.startsWith("is")) continue
-
-                val returnType = method.returnType
-                if (returnType == Void.TYPE) continue
-
-                val propName = when {
-                    name.startsWith("get") && name.length > 3 ->
-                        name.removePrefix("get").replaceFirstChar { it.lowercase() }
-                    name.startsWith("is") && name.length > 2 -> name
-                    else -> continue
-                }
-                if (propName in seenNames) continue
-                seenNames.add(propName)
-
-                if (shouldSkipReturnType(returnType)) {
-                    json.put(propName, JSONObject().apply {
-                        put("_type", returnType.simpleName); put("_skipped", true)
-                    })
-                    continue
-                }
-
-                val value = method.invoke(obj)
-                json.put(propName, reflectToJson(value, depth + 1, visited))
-            } catch (_: Exception) {
-                // API 版本不符、SecurityException 等 — 靜默跳過
-            }
-        }
-
-        return json
-    }
-
-    // === Binary 型別處理 ===
-
-    private fun isBinaryType(obj: Any): Boolean {
-        return obj is Bitmap ||
-                obj is android.graphics.drawable.Drawable ||
-                obj is RemoteViews ||
-                (Build.VERSION.SDK_INT >= 23 && obj is android.graphics.drawable.Icon)
-    }
-
-    private fun buildBinaryMetadata(obj: Any): JSONObject = JSONObject().apply {
-        put("_type", obj.javaClass.simpleName)
-        put("_binary", true)
-        when (obj) {
-            is Bitmap -> {
-                put("width", obj.width)
-                put("height", obj.height)
-                put("config", obj.config?.toString())
-                put("byteCount", obj.byteCount)
-            }
-            is RemoteViews -> {
-                put("package", obj.`package`)
-                put("layoutId", obj.layoutId)
-            }
-        }
-        if (Build.VERSION.SDK_INT >= 23 && obj is android.graphics.drawable.Icon) {
-            if (Build.VERSION.SDK_INT >= 28) {
-                put("iconType", obj.type)
-                put("resPackage", obj.resPackage)
-                put("resId", obj.resId)
-            }
-        }
-    }
-
-    private fun shouldSkipReturnType(type: Class<*>): Boolean {
-        return SKIP_RETURN_TYPES.any { it.isAssignableFrom(type) }
     }
 
     // === 輔助 ===
