@@ -33,7 +33,6 @@ import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.data.db.entity.AppSourceEntity
 import com.notificationmaster.data.db.entity.ChannelEntity
 import com.notificationmaster.data.db.entity.EventType
-import com.notificationmaster.data.db.entity.NotificationEntity
 import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.data.db.entity.NotificationRecordEntity
 import com.notificationmaster.data.db.entity.ObservationSource
@@ -454,23 +453,20 @@ class NotificationCaptureService : NotificationListenerService() {
             return
         }
 
-        // 1. 提取 in-memory NotificationEntity（Plan 2 過渡期：service 雙寫一份 NotificationEntity 進
-        //    notifications 表；Phase 9-6/9-7 整批切換時拆除）
-        val entity = extractor.extractNotification(sbn, rankingMap, captureTime)
-
-        // 2. 提取 NotificationEvent（新 schema 主體；自包含 eventRawJson）+ 攤平成 display 給下游 helper
+        // 1. 提取 NotificationEvent（新 schema 主體；自包含 eventRawJson）+ 攤平成 display 給下游 helper
         val eventEntity = extractor.extractEvent(
             sbn = sbn,
             eventType = eventType,
             eventTime = captureTime,
             captureTime = captureTime,
-            isAudible = entity.isAudible,
-            likelyHeadsup = entity.likelyHeadsup,
+            isAudible = matchCtx.isAudible,
+            likelyHeadsup = matchCtx.likelyHeadsup,
             removalReason = null
         )
         val display = NotificationDisplay.from(eventEntity)
+        val key = eventEntity.notificationKey
 
-        // 3. 提取 Actions / 媒體 / 裝置狀態（eventId 留 0，transaction 內取得 event id 後補正）
+        // 2. 提取 Actions / 媒體 / 裝置狀態（eventId 留 0，transaction 內取得 event id 後補正）
         val actions = extractor.extractActions(sbn.notification, 0, captureTime)
         val mediaAttachments = try {
             mediaExtractor.extractMedia(sbn.notification, 0, captureTime, sbn.packageName)
@@ -485,18 +481,16 @@ class NotificationCaptureService : NotificationListenerService() {
             null
         }
 
-        // 4. Transaction 寫入新 schema（record + event + ranking observation + children）
-        //    同時雙寫舊 NotificationEntity 維持 UI/Exporter 編譯與運作（過渡）
-        val key = entity.notificationKey
-        val notificationId = database.withTransaction {
-            // 4.1 upsert NotificationRecord（自然主鍵 = notification_key）
+        // 3. Transaction 寫入新 schema（record + event + ranking observation + children）
+        val eventDbId = database.withTransaction {
+            // 3.1 upsert NotificationRecord（自然主鍵 = notification_key）
             val record = database.notificationRecordDao().getByKey(key)
             if (record == null) {
                 database.notificationRecordDao().insertIfAbsent(
                     NotificationRecordEntity(
                         notificationKey = key,
                         packageName = sbn.packageName,
-                        channelId = entity.channelId,
+                        channelId = eventEntity.channelId,
                         notificationId = sbn.id,
                         tag = sbn.tag,
                         firstSeen = captureTime,
@@ -508,10 +502,10 @@ class NotificationCaptureService : NotificationListenerService() {
                 database.notificationRecordDao().bumpEventCount(key, captureTime)
             }
 
-            // 4.2 寫 NotificationEvent
+            // 3.2 寫 NotificationEvent
             val eventId = database.notificationEventDao().insert(eventEntity)
 
-            // 4.3 children FK 改 event_id 後寫入
+            // 3.3 children FK 改 event_id 後寫入
             if (actions.isNotEmpty()) {
                 database.actionDao().insertAll(actions.map { it.copy(eventId = eventId) })
             }
@@ -522,10 +516,7 @@ class NotificationCaptureService : NotificationListenerService() {
                 database.deviceStateDao().insert(deviceState.copy(eventId = eventId))
             }
 
-            // 4.4 雙寫舊 NotificationEntity（過渡期，給仍讀舊表的 UI/Exporter）
-            val nId = database.notificationDao().insert(entity)
-
-            // 4.5 寫 RankingObservation（新軌道，與 NotificationEvent 並行）
+            // 3.4 寫 RankingObservation（新軌道，與 NotificationEvent 並行）
             val obsSource = when (eventType) {
                 EventType.POSTED -> ObservationSource.POSTED
                 EventType.UPDATED -> ObservationSource.UPDATED
@@ -541,27 +532,26 @@ class NotificationCaptureService : NotificationListenerService() {
                 skipIfHashUnchanged = false
             )
 
-            nId
+            eventId
         }
 
-        // 5. 快取 PendingIntent 參照（不需 transaction）
+        // 4. 快取 PendingIntent 參照（不需 transaction）
         cachePendingIntents(sbn)
 
-        // 6. 更新 App 來源
+        // 5. 更新 App 來源
         updateAppSource(sbn.packageName, captureTime)
 
-        // 7. 更新 Channel (API 26+)
+        // 6. 更新 Channel (API 26+)
         // 唯一可靠來源：ranking.channel（API 26+）
-        if (ApiVersionHelper.supportsNotificationChannel() && entity.channelId != null) {
+        if (ApiVersionHelper.supportsNotificationChannel() && eventEntity.channelId != null) {
             val notificationChannel: android.app.NotificationChannel? = if (rankingMap != null) {
                 val ranking = Ranking()
-                val key = ApiVersionHelper.getNotificationKey(sbn)
                 if (rankingMap.getRanking(key, ranking)) ranking.channel else null
             } else null
-            updateChannel(sbn.packageName, entity.channelId, captureTime, notificationChannel)
+            updateChannel(sbn.packageName, eventEntity.channelId, captureTime, notificationChannel)
         }
 
-        // 8. 各 ActionType 獨立判斷 eventType 是否在允許範圍
+        // 7. 各 ActionType 獨立判斷 eventType 是否在允許範圍
         if (eventType in ActionType.AUTO_DISMISS.allowedEventTypes) {
             checkAutoDismiss(sbn, rankingMap, eventType)
         }
@@ -575,7 +565,7 @@ class NotificationCaptureService : NotificationListenerService() {
             checkClipboardCopy(display.packageName, matchCtx)
         }
 
-        Log.d(TAG, "Saved notification: $notificationId, event: $eventType")
+        Log.d(TAG, "Saved event: $eventDbId, type: $eventType")
 
         // 通知 Widget 更新
         NotificationWidgetProvider.notifyUpdate(this@NotificationCaptureService)
@@ -651,17 +641,6 @@ class NotificationCaptureService : NotificationListenerService() {
             )
             database.notificationEventDao().insert(removedEvent)
 
-            // 雙寫舊 schema：notifications 表標記移除（過渡期，UI 仍讀此欄位）
-            //   - getLatestByKey 為 null（NLS 競態 / 舊 schema 未建）→ 補建一份
-            val legacyExisting = database.notificationDao().getLatestByKey(key)
-            if (legacyExisting == null) {
-                val legacyEntity = extractor.extractNotification(sbn, rankingMap, captureTime)
-                    .copy(removedAt = captureTime)
-                database.notificationDao().insert(legacyEntity)
-            } else {
-                database.notificationDao().markRemovedByKey(key, captureTime)
-            }
-
             // 寫 RankingObservation (source = REMOVED)
             rankingProcessor.process(
                 notificationKey = key,
@@ -708,11 +687,10 @@ class NotificationCaptureService : NotificationListenerService() {
             val ranking = Ranking()
             if (!rankingMap.getRanking(key, ranking)) continue
             val ch = ranking.channel ?: continue
-            // 從新 schema 的 record 取 package/channel 資訊；過渡期也 fallback 到 NotificationEntity
-            val rec = database.notificationRecordDao().getByKey(key)
-            val pkgName = rec?.packageName ?: database.notificationDao().getLatestByKey(key)?.packageName
-            val chId = rec?.channelId ?: database.notificationDao().getLatestByKey(key)?.channelId
-            if (pkgName == null || chId == null) continue
+            // 從新 schema 的 record 取 package/channel 資訊（單一 source）
+            val rec = database.notificationRecordDao().getByKey(key) ?: continue
+            val pkgName = rec.packageName
+            val chId = rec.channelId ?: continue
             val existing = database.channelDao().getByPackageAndChannelId(pkgName, chId)
             if (existing != null && existing.channelName == null) {
                 updateChannel(pkgName, chId, captureTime, ch)
@@ -875,8 +853,6 @@ class NotificationCaptureService : NotificationListenerService() {
                     isBlocked = notificationChannel.importance == android.app.NotificationManager.IMPORTANCE_NONE,
                     updateTime = captureTime
                 )
-                // 回填 NotificationEntity.importance（補 importance < 0 的記錄）
-                database.notificationDao().backfillImportance(packageName, channelId, notificationChannel.importance)
             } else {
                 // Channel 資訊不可用時僅遞增計數
                 database.channelDao().incrementNotificationCount(packageName, channelId, captureTime)
@@ -910,10 +886,6 @@ class NotificationCaptureService : NotificationListenerService() {
                 notificationCount = 1
             )
             database.channelDao().insert(channelEntity)
-            // 新增 Channel 時也回填
-            if (notificationChannel != null) {
-                database.notificationDao().backfillImportance(packageName, channelId, notificationChannel.importance)
-            }
         }
     }
 
