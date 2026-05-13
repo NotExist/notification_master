@@ -113,12 +113,26 @@ class NotificationDetailFragment : Fragment() {
     private fun setupEventList() {
         eventAdapter = NotificationEventAdapter(
             onEventClick = { event -> showEventDetail(event) },
-            onObservationClick = { obs -> showObservationDetail(obs) }
+            onEventLongClick = { event -> copyToClipboard(event.eventRawJson, "event raw JSON") },
+            onObservationClick = { obs -> showObservationDetail(obs) },
+            onObservationLongClick = { obs ->
+                val merged = com.notificationmaster.core.RankingSnapshotMerger.merge(obs.snapshot, obs.observation)
+                val text = merged?.toString(2) ?: obs.snapshot.rankingJson
+                copyToClipboard(text, "ranking JSON")
+            }
         )
         binding.recyclerEvents.apply {
             adapter = eventAdapter
             layoutManager = LinearLayoutManager(context)
         }
+    }
+
+    /** 將文字複製到剪貼簿並 Toast 提示 */
+    private fun copyToClipboard(text: String, label: String) {
+        val ctx = context ?: return
+        val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText(label, text))
+        Toast.makeText(ctx, getString(R.string.clipboard_copied_with_label, label), Toast.LENGTH_SHORT).show()
     }
 
     /** 點擊 ranking observation 行時顯示完整 merged ranking JSON */
@@ -171,7 +185,15 @@ class NotificationDetailFragment : Fragment() {
             val anchorEventId = anchorEvent?.id ?: -1L
 
             if (anchorEvent != null) {
-                val display = NotificationDisplay.from(anchorEvent)
+                // Phase 14 Q2-A/B：走 NotificationEnricher 注入 channel importance + ranking 屬性
+                val display = withContext(Dispatchers.IO) {
+                    com.notificationmaster.ui.common.NotificationEnricher.enrich(
+                        listOf(anchorEvent),
+                        database.channelDao(),
+                        database.rankingObservationDao(),
+                        database.rankingSnapshotDao()
+                    ).first()
+                }
                 val channelEntity = withContext(Dispatchers.IO) {
                     display.channelId?.let { chId ->
                         database.channelDao().getByPackageAndChannelId(display.packageName, chId)
@@ -597,6 +619,13 @@ class NotificationDetailFragment : Fragment() {
         sb.appendLine("event_type: ${event.eventType.name}")
         sb.appendLine("event_time: ${preciseTimeFormat.format(Date(event.eventTime))}")
         sb.appendLine("event_time_raw: ${event.eventTime}")
+        sb.appendLine("package: ${event.packageName}")
+        event.channelId?.let { sb.appendLine("channel_id: $it") }
+        event.title?.let { sb.appendLine("title: $it") }
+        event.text?.let { sb.appendLine("text: $it") }
+        sb.appendLine("content_hash: ${event.contentHash}")
+        sb.appendLine("is_audible: ${event.isAudible}")
+        sb.appendLine("likely_headsup: ${event.likelyHeadsup}")
 
         // REMOVED 事件：移除原因
         if (event.eventType == EventType.REMOVED && event.removalReason != null) {
@@ -607,17 +636,9 @@ class NotificationDetailFragment : Fragment() {
             sb.appendLine("removal_reason_desc: ${ApiVersionHelper.getRemovalReasonDescription(event.removalReason)}")
         }
 
-        // 事件 raw JSON（callback 元資料 + sbn 完整序列化；不含 ranking）
-        if (event.eventRawJson.isNotEmpty()) {
-            sb.appendLine()
-            sb.appendLine("── Event Raw JSON ──")
-            try {
-                val json = JSONObject(event.eventRawJson)
-                sb.appendLine(json.toString(2))
-            } catch (_: Exception) {
-                sb.appendLine(event.eventRawJson)
-            }
-        }
+        sb.appendLine()
+        sb.appendLine("── 提示 ──")
+        sb.appendLine("長按時間軸事件可複製完整 event raw JSON 至剪貼簿")
 
         val textView = TextView(requireContext()).apply {
             text = sb.toString()
@@ -634,6 +655,9 @@ class NotificationDetailFragment : Fragment() {
             .setTitle("${event.eventType.name} 事件詳情")
             .setView(scrollView)
             .setPositiveButton(R.string.ok, null)
+            .setNeutralButton(R.string.clipboard_copy_raw_json) { _, _ ->
+                copyToClipboard(event.eventRawJson, "event raw JSON")
+            }
             .show()
     }
 

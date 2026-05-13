@@ -15,6 +15,7 @@ import com.notificationmaster.data.filter.EventFilterSpec
 import com.notificationmaster.data.filter.coreFilterSpecOf
 import com.notificationmaster.data.filter.toFilterSpec
 import com.notificationmaster.ui.common.NotificationDisplay
+import com.notificationmaster.ui.common.NotificationEnricher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +23,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
@@ -50,6 +54,9 @@ class TimelineViewModel(
 
     private val database = NotificationMasterApp.getInstance().database
     private val eventDao = database.notificationEventDao()
+    private val channelDao = database.channelDao()
+    private val rankingObsDao = database.rankingObservationDao()
+    private val rankingSnapDao = database.rankingSnapshotDao()
 
     // === 篩選狀態 ===
 
@@ -97,6 +104,16 @@ class TimelineViewModel(
 
     private val _awaitingInitialData = MutableStateFlow(false)
     val awaitingInitialData: StateFlow<Boolean> = _awaitingInitialData.asStateFlow()
+
+    /**
+     * 標記當前的 `loadNotifications` 觸發來源。Fragment 觀察此值決定 UI 載入指示：
+     * - USER_REFRESH：使用者下拉 → SwipeRefresh spinner（中央 progressLoading 不顯示）
+     * - SYSTEM：初次載入、spec/rule 切換等 system-initiated → 中央 progressLoading 圓圈
+     */
+    enum class LoadOrigin { SYSTEM, USER_REFRESH }
+
+    private val _loadOrigin = MutableStateFlow(LoadOrigin.SYSTEM)
+    val loadOrigin: StateFlow<LoadOrigin> = _loadOrigin.asStateFlow()
 
     private var earliestPostTime: Long? = null
     private var nextDayToLoad: Long = 0L
@@ -185,9 +202,10 @@ class TimelineViewModel(
             spec.limit == null
     }
 
-    fun loadNotifications() {
+    fun loadNotifications(origin: LoadOrigin = LoadOrigin.SYSTEM) {
         loadJob?.cancel()
 
+        _loadOrigin.value = origin
         _awaitingInitialData.value = true
         _todayNotifications.value = emptyList()
         _historicalDays.value = emptyList()
@@ -225,7 +243,7 @@ class TimelineViewModel(
                 val yesterdaySpec =
                     specSnapshot.copy(timeFrom = yesterdayStart, timeTo = todayStart)
                 val yesterdayData = withContext(Dispatchers.IO) {
-                    eventDao.query(yesterdaySpec).first().map(NotificationDisplay::from)
+                    enrichAndMap(eventDao.query(yesterdaySpec).first())
                 }
                 if (yesterdayData.isNotEmpty()) {
                     insertHistoricalDay(yesterdayStart, yesterdayData)
@@ -234,22 +252,33 @@ class TimelineViewModel(
 
                 val todaySpec =
                     specSnapshot.copy(timeFrom = todayStart, timeTo = Long.MAX_VALUE)
-                eventDao.query(todaySpec).collectLatest { todayItems ->
-                    _todayNotifications.value = withContext(Dispatchers.IO) {
-                        todayItems.map(NotificationDisplay::from)
+                // Phase 14 Q3：map 工作從 collectLatest 內部移到 Flow upstream + conflate。
+                // 原本 collectLatest 在連續 Room invalidation 下會反覆 cancel map 工作，
+                // 導致 list 渲染落後 totalCount counter。改用 .map { } + flowOn(IO) + .conflate()：
+                // - map 在 IO 上游完成，不被下游 cancel 中斷已完成的計算
+                // - conflate 對連續 emit 只保留最新，下游 collect 處理中不被打斷
+                // Phase 14 Q2-A/B：enrichAndMap 內 batch 預載 channel importance + ranking observation，
+                // 注入 NotificationDisplay 對應 chip 顯示用欄位
+                eventDao.query(todaySpec)
+                    .map { items -> enrichAndMap(items) }
+                    .flowOn(Dispatchers.IO)
+                    .conflate()
+                    .collect { displays ->
+                        _todayNotifications.value = displays
+                        // 注意：必須在 _todayNotifications 寫完後 recombineAll，才能 set awaiting=false；
+                        // 後者放行 loadNextDay 進入「init 已完成」狀態。
+                        recombineAll()
+                        _awaitingInitialData.value = false
                     }
-                    // 注意：必須在 _todayNotifications 寫完後 recombineAll，才能 set awaiting=false；
-                    // 後者放行 loadNextDay 進入「init 已完成」狀態。
-                    recombineAll()
-                    _awaitingInitialData.value = false
-                }
             } else {
-                eventDao.query(specSnapshot).collectLatest { items ->
-                    _allNotifications.value = withContext(Dispatchers.IO) {
-                        items.map(NotificationDisplay::from)
+                eventDao.query(specSnapshot)
+                    .map { items -> enrichAndMap(items) }
+                    .flowOn(Dispatchers.IO)
+                    .conflate()
+                    .collect { displays ->
+                        _allNotifications.value = displays
+                        _awaitingInitialData.value = false
                     }
-                    _awaitingInitialData.value = false
-                }
             }
         }
     }
@@ -268,7 +297,7 @@ class TimelineViewModel(
             val spec = specSnapshot.copy(timeFrom = dayStart, timeTo = dayEnd)
 
             val data = withContext(Dispatchers.IO) {
-                eventDao.query(spec).first().map(NotificationDisplay::from)
+                enrichAndMap(eventDao.query(spec).first())
             }
 
             if (data.isNotEmpty()) {
@@ -308,6 +337,9 @@ class TimelineViewModel(
     private fun usesDayPagingForSpec(spec: EventFilterSpec): Boolean =
         spec.matchers.isEmpty() && spec.timeFrom == null && spec.timeTo == null &&
             spec.limit == null
+
+    private suspend fun enrichAndMap(events: List<com.notificationmaster.data.db.entity.NotificationEventEntity>): List<NotificationDisplay> =
+        NotificationEnricher.enrich(events, channelDao, rankingObsDao, rankingSnapDao)
 
     private fun startOfDay(timestamp: Long): Long {
         val cal = Calendar.getInstance()

@@ -23,6 +23,10 @@ interface RankingSnapshotDao {
     @Query("SELECT * FROM ranking_snapshots WHERE id = :id")
     suspend fun getById(id: Long): RankingSnapshotEntity?
 
+    /** Phase 14 Q2-B：batch lookup */
+    @Query("SELECT * FROM ranking_snapshots WHERE id IN (:ids)")
+    suspend fun getByIdsSync(ids: List<Long>): List<RankingSnapshotEntity>
+
     @Query("SELECT COUNT(*) FROM ranking_snapshots")
     suspend fun getTotalCount(): Int
 

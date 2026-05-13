@@ -447,6 +447,10 @@
     <string name="filter_keyword_display">%1$s (%2$s)</string>
     <string name="filter_flags_hint_below_api27">⚠ 旗標條件在 Android 8.1 以下無法於列表/Widget 預覽中過濾；Service 即時觸發不受影響</string>
 
+    <!-- Detail 事件詳情 -->
+    <string name="clipboard_copied_with_label">已複製 %1$s 到剪貼簿</string>
+    <string name="clipboard_copy_raw_json">複製 Raw JSON</string>
+
     <!-- 規則預覽 -->
     <string name="filter_preview_match">預覽匹配結果</string>
     <string name="filter_preview_title">匹配結果（最近 %d 筆中）</string>

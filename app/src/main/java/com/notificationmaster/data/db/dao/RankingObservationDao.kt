@@ -30,6 +30,20 @@ interface RankingObservationDao {
     @Query("SELECT * FROM ranking_observations WHERE notification_key = :key ORDER BY observed_at DESC LIMIT 1")
     suspend fun getLatestByKey(key: String): RankingObservationEntity?
 
+    /**
+     * Phase 14 Q2-B：batch query 多個 key 各自最新 observation。
+     * 用 correlated subquery 對每個 key 取 observed_at MAX 的 row。
+     */
+    @Query("""
+        SELECT * FROM ranking_observations o
+        WHERE notification_key IN (:keys)
+          AND observed_at = (
+              SELECT MAX(observed_at) FROM ranking_observations
+              WHERE notification_key = o.notification_key
+          )
+    """)
+    suspend fun getLatestByKeysSync(keys: List<String>): List<RankingObservationEntity>
+
     @Query("""
         SELECT * FROM ranking_observations
         WHERE notification_key = :key AND source = :source

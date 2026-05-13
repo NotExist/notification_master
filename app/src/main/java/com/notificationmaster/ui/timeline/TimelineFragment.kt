@@ -476,7 +476,7 @@ class TimelineFragment : Fragment() {
                     )
                 }
             }
-            viewModel.loadNotifications()
+            viewModel.loadNotifications(TimelineViewModel.LoadOrigin.USER_REFRESH)
         }
     }
 
@@ -528,14 +528,27 @@ class TimelineFragment : Fragment() {
         }
 
         // swipe refresh 結束時機：第一筆主資料抵達後關閉 spinner
+        // Phase 14：依 LoadOrigin 區分指示器 — USER_REFRESH 只顯示 SwipeRefresh，
+        // SYSTEM（init / spec 變更）顯示中央 progressLoading 圓圈，避免雙 indicator
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.awaitingInitialData.collectLatest { awaiting ->
+            combine(viewModel.awaitingInitialData, viewModel.loadOrigin) { awaiting, origin ->
+                awaiting to origin
+            }.collectLatest { (awaiting, origin) ->
                 if (_binding == null) return@collectLatest
+                val b = _binding ?: return@collectLatest
                 if (!awaiting) {
-                    _binding?.swipeRefresh?.isRefreshing = false
-                    _binding?.progressLoading?.visibility = View.GONE
+                    b.swipeRefresh.isRefreshing = false
+                    b.progressLoading.visibility = View.GONE
                 } else {
-                    _binding?.progressLoading?.visibility = View.VISIBLE
+                    when (origin) {
+                        TimelineViewModel.LoadOrigin.USER_REFRESH -> {
+                            // SwipeRefreshLayout 的 spinner 已由 SwipeRefreshLayout 內部控制
+                            b.progressLoading.visibility = View.GONE
+                        }
+                        TimelineViewModel.LoadOrigin.SYSTEM -> {
+                            b.progressLoading.visibility = View.VISIBLE
+                        }
+                    }
                 }
             }
         }

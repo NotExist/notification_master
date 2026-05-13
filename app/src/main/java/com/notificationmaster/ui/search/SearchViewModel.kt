@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.ui.common.NotificationDisplay
+import com.notificationmaster.ui.common.NotificationEnricher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -48,7 +49,13 @@ class SearchViewModel : ViewModel() {
             delay(300)
             val database = NotificationMasterApp.getInstance().database
             val results = withContext(Dispatchers.IO) {
-                database.notificationEventDao().searchEvents(query, 100).map(NotificationDisplay::from)
+                val events = database.notificationEventDao().searchEvents(query, 100)
+                NotificationEnricher.enrich(
+                    events,
+                    database.channelDao(),
+                    database.rankingObservationDao(),
+                    database.rankingSnapshotDao()
+                )
             }
             _results.value = results
         }

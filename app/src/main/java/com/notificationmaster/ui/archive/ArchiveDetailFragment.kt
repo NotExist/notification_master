@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.databinding.FragmentArchiveDetailBinding
 import com.notificationmaster.ui.common.NotificationDisplay
+import com.notificationmaster.ui.common.NotificationEnricher
 import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import com.notificationmaster.ui.filter.SoundPickerLauncher
@@ -121,7 +122,13 @@ class ArchiveDetailFragment : Fragment() {
                     binding.emptyState.visibility = View.GONE
                     binding.recyclerView.visibility = View.VISIBLE
                     val displays = withContext(Dispatchers.IO) {
-                        events.map(NotificationDisplay::from)
+                        val database = NotificationMasterApp.getInstance().database
+                        NotificationEnricher.enrich(
+                            events,
+                            database.channelDao(),
+                            database.rankingObservationDao(),
+                            database.rankingSnapshotDao()
+                        )
                     }
                     adapter.submitList(buildTimelineItems(displays)) {
                         pendingScrollRestore?.let {

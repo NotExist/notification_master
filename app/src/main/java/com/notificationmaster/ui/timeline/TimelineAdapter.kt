@@ -176,15 +176,29 @@ class TimelineAdapter(
             // 標籤
             binding.tagsContainer.removeAllViews()
 
-            // Priority tag（importance 暫時不可用，待 Phase 7b 由 ranking merger 補上）
-            when (display.priority) {
-                -2 -> addTag(binding.tagsContainer, "P:MIN", R.color.tag_silent, R.string.tag_priority_min_desc, "PRI:MIN")
-                -1 -> addTag(binding.tagsContainer, "P:LOW", R.color.tag_silent, R.string.tag_priority_low_desc, "PRI:LOW")
-                1 -> addTag(binding.tagsContainer, "P:HI", R.color.status_warning, R.string.tag_priority_high_desc, "PRI:HIGH")
-                2 -> addTag(binding.tagsContainer, "P:MAX", R.color.status_warning, R.string.tag_priority_max_desc, "PRI:MAX")
+            // Importance / Priority tag — Phase 14 Q2-A：channel.importance 已注入，優先用 importance；
+            // 沒有（API <26 或 channel meta 未補齊）才 fallback 顯示 priority
+            if (display.importance >= 0) {
+                when (display.importance) {
+                    0 -> addTag(binding.tagsContainer, "NONE", R.color.status_disabled, R.string.tag_importance_none_desc, "Importance: NONE")
+                    1 -> addTag(binding.tagsContainer, "MIN", R.color.tag_silent, R.string.tag_importance_min_desc, "Importance: MIN")
+                    2 -> addTag(binding.tagsContainer, "LOW", R.color.tag_silent, R.string.tag_importance_low_desc, "Importance: LOW")
+                    4 -> addTag(binding.tagsContainer, "HIGH", R.color.status_warning, R.string.tag_importance_high_desc, "Importance: HIGH")
+                    5 -> addTag(binding.tagsContainer, "MAX", R.color.status_warning, R.string.tag_importance_max_desc, "Importance: MAX")
+                }
+            } else {
+                when (display.priority) {
+                    -2 -> addTag(binding.tagsContainer, "P:MIN", R.color.tag_silent, R.string.tag_priority_min_desc, "PRI:MIN")
+                    -1 -> addTag(binding.tagsContainer, "P:LOW", R.color.tag_silent, R.string.tag_priority_low_desc, "PRI:LOW")
+                    1 -> addTag(binding.tagsContainer, "P:HI", R.color.status_warning, R.string.tag_priority_high_desc, "PRI:HIGH")
+                    2 -> addTag(binding.tagsContainer, "P:MAX", R.color.status_warning, R.string.tag_priority_max_desc, "PRI:MAX")
+                }
             }
 
             // 系統通知抽屜分類標籤
+            if (display.isConversation) {
+                addTag(binding.tagsContainer, "Conv", R.color.tag_conversation, R.string.tag_conversation_desc, "Conversation")
+            }
             if (display.isMessagingStyle) {
                 addTag(binding.tagsContainer, "Msg", R.color.tag_messaging_style, R.string.tag_messaging_style_desc, "MessagingStyle")
             }
@@ -225,6 +239,13 @@ class TimelineAdapter(
             }
             if (display.showChronometer) {
                 addTag(binding.tagsContainer, "Chrono", R.color.event_ranking, R.string.tag_chronometer_desc, "Chronometer")
+            }
+            // Phase 14 Q2-B：Ambient / Suspended 來自 RankingObservation enrichment
+            if (display.isAmbient) {
+                addTag(binding.tagsContainer, "Amb", R.color.tag_silent, R.string.tag_ambient_desc, "Ambient")
+            }
+            if (display.isSuspended) {
+                addTag(binding.tagsContainer, "Susp", R.color.status_disabled, R.string.tag_suspended_desc, "Suspended")
             }
 
             // Style 標籤（基於 template 尾綴匹配）

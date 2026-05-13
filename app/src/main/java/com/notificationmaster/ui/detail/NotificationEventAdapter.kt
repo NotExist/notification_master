@@ -32,7 +32,9 @@ import java.util.Locale
  */
 class NotificationEventAdapter(
     private val onEventClick: (NotificationEventEntity) -> Unit,
-    private val onObservationClick: (TimelineRow.Observation) -> Unit = {}
+    private val onEventLongClick: (NotificationEventEntity) -> Unit = {},
+    private val onObservationClick: (TimelineRow.Observation) -> Unit = {},
+    private val onObservationLongClick: (TimelineRow.Observation) -> Unit = {}
 ) : ListAdapter<TimelineRow, NotificationEventAdapter.RowViewHolder>(DiffCallback()) {
 
     private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
@@ -77,6 +79,16 @@ class NotificationEventAdapter(
                         is TimelineRow.Observation -> onObservationClick(row)
                     }
                 }
+            }
+            binding.root.setOnLongClickListener {
+                val position = bindingAdapterPosition
+                if (position != RecyclerView.NO_POSITION) {
+                    when (val row = getItem(position)) {
+                        is TimelineRow.Event -> onEventLongClick(row.event)
+                        is TimelineRow.Observation -> onObservationLongClick(row)
+                    }
+                    true
+                } else false
             }
         }
 

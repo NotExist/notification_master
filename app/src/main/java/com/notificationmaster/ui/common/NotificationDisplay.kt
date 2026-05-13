@@ -93,9 +93,28 @@ data class NotificationDisplay(
     /** event PK（nav arg / DiffUtil 主鍵） */
     val eventId: Long get() = event.id
 
+    /**
+     * Phase 14 Q2-A/B：Display 渲染所需的外部 enrichment 資料。
+     * - [channelImportance]：來自 [com.notificationmaster.data.db.entity.ChannelEntity.importance]（API 26+）
+     *   API <26 或 channel 尚未補齊 → -1（呼叫端 fallback 用 priority）
+     * - [mergedRankingJson]：來自 [com.notificationmaster.core.RankingSnapshotMerger.merge]
+     *   解析後可填入 [isAmbient] / [isSuspended] / [isConversation]
+     */
+    data class Enrichment(
+        val channelImportance: Int = -1,
+        val mergedRankingJson: JSONObject? = null
+    ) {
+        val isAmbient: Boolean = mergedRankingJson?.optBoolean("isAmbient", false) ?: false
+        val isSuspended: Boolean = mergedRankingJson?.optBoolean("isSuspended", false) ?: false
+        val isConversation: Boolean = mergedRankingJson?.optBoolean("isConversation", false) ?: false
+    }
+
     companion object {
 
-        fun from(event: NotificationEventEntity): NotificationDisplay {
+        fun from(
+            event: NotificationEventEntity,
+            enrichment: Enrichment = Enrichment()
+        ): NotificationDisplay {
             val snap = NotificationSnapshotParser.parse(event.eventRawJson)
             val flags = snap?.flags ?: 0
             val notif = snap?.notification
@@ -147,10 +166,12 @@ data class NotificationDisplay(
                 hasCustomHeadsUpContentView = notif?.optJSONObject("headsUpContentView") != null,
                 showChronometer = extras?.optBoolean("android.showChronometer", false) == true,
                 shortcutId = notif?.optStringOrNull("shortcutId"),
-                importance = -1,
-                isConversation = false,
-                isAmbient = false,
-                isSuspended = false,
+                importance = enrichment.channelImportance,
+                isConversation = enrichment.isConversation ||
+                    (template?.endsWith("MessagingStyle") == true &&
+                        !notif?.optStringOrNull("shortcutId").isNullOrEmpty()),
+                isAmbient = enrichment.isAmbient,
+                isSuspended = enrichment.isSuspended,
                 hasContentIntent = notif?.optJSONObject("contentIntent") != null,
                 hasFullScreenIntent = notif?.optJSONObject("fullScreenIntent") != null,
                 hasDeleteIntent = notif?.optJSONObject("deleteIntent") != null
