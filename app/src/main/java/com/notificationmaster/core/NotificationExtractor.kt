@@ -20,19 +20,15 @@ import org.json.JSONObject
  * 只保留事件主體所需：
  * - [extractEvent]：產出 [NotificationEventEntity]（eventRawJson 由 [RawSerializer] 序列化）
  * - [extractActions]：FK = event_id 的 ActionEntity 列表
+ *
+ * Plan 2 Phase 13：移除原本 64KB 截斷上限（`MAX_JSON_SIZE` / `truncateJson`）。
+ * - Plan 2 §3 設計初衷是「raw 接近 callback」，任意截斷會破壞 JSON 結構導致
+ *   [NotificationSnapshotParser] 完全 parse 失敗 → 所有 chip / 衍生欄位回預設
+ * - Bitmap / Icon / Drawable / RemoteViews 已由 RawSerializer 限制只輸出 metadata
+ * - 大圖檔（LARGE_ICON / PICTURE / EXTRA_LARGE_ICON_BIG）已由 MediaExtractor 抽到 disk
+ * - Android framework 對 Notification 本身有 ~1MB IPC enforcement，sbn 序列化不會無限大
  */
 class NotificationExtractor(@Suppress("unused") private val context: Context) {
-
-    companion object {
-        /** JSON 欄位大小上限（64 KB），超過則截斷並附帶標記 */
-        internal const val MAX_JSON_SIZE = 64 * 1024
-
-        /** 截斷過長 JSON 字串，附帶截斷標記 */
-        internal fun truncateJson(json: String): String {
-            if (json.length <= MAX_JSON_SIZE) return json
-            return json.substring(0, MAX_JSON_SIZE) + "…[truncated, original ${json.length} chars]"
-        }
-    }
 
     /**
      * 產出 [NotificationEventEntity]：事件主體 + 索引投影 + eventRawJson 自包含完整 sbn 序列化。
@@ -82,7 +78,7 @@ class NotificationExtractor(@Suppress("unused") private val context: Context) {
             removalReasonCategory = removalReason?.let { ApiVersionHelper.categorizeRemovalReason(it) },
             isAudible = isAudible,
             likelyHeadsup = likelyHeadsup,
-            eventRawJson = truncateJson(rawJson)
+            eventRawJson = rawJson
         )
     }
 
