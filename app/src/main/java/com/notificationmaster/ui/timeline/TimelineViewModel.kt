@@ -234,17 +234,24 @@ class TimelineViewModel(
             if (usesDayPagingForSpec(specSnapshot)) {
                 val todayStart = startOfDay(System.currentTimeMillis())
                 val yesterdayStart = todayStart - ONE_DAY_MS
-                nextDayToLoad = yesterdayStart - ONE_DAY_MS
 
                 earliestPostTime = withContext(Dispatchers.IO) { eventDao.getEarliestPostTime() }
 
-                val yesterdaySpec =
-                    specSnapshot.copy(timeFrom = yesterdayStart, timeTo = todayStart)
-                val yesterdayData = withContext(Dispatchers.IO) {
-                    enrichAndMap(eventDao.query(yesterdaySpec).first())
-                }
-                if (yesterdayData.isNotEmpty()) {
-                    insertHistoricalDay(yesterdayStart, yesterdayData)
+                // Phase 18：預載「最近兩個有資料的歷史天」而非「昨天」這一天。
+                // 跨日午夜後 today 是新一天可能空，user 開 app 仍能看到昨日 + 前日資料；
+                // 連續空白天自動跳過（最多 MAX_CONSECUTIVE_EMPTY_DAYS_INIT 嘗試）。
+                nextDayToLoad = yesterdayStart
+                var preloadedDays = 0
+                while (preloadedDays < INIT_PRELOAD_DAY_COUNT) {
+                    val result = nextNonEmptyHistoricalDay(nextDayToLoad, specSnapshot)
+                    if (result == null) {
+                        _hasReachedEnd.value = true
+                        break
+                    }
+                    val (foundDayStart, displays) = result
+                    insertHistoricalDay(foundDayStart, displays)
+                    nextDayToLoad = foundDayStart - ONE_DAY_MS
+                    preloadedDays++
                 }
                 refreshReachedEnd()
 
@@ -290,23 +297,50 @@ class TimelineViewModel(
         val specSnapshot = _coreSpec.value
 
         viewModelScope.launch {
-            val dayStart = nextDayToLoad
-            val dayEnd = dayStart + ONE_DAY_MS
-            val spec = specSnapshot.copy(timeFrom = dayStart, timeTo = dayEnd)
-
-            val data = withContext(Dispatchers.IO) {
-                enrichAndMap(eventDao.query(spec).first())
+            // Phase 18：用「找到下一個非空歷史天」邏輯取代「一次查一天」
+            // 連續空白天自動跳過，避免 lazyload 卡死
+            val result = nextNonEmptyHistoricalDay(nextDayToLoad, specSnapshot)
+            if (result != null) {
+                val (foundDayStart, displays) = result
+                insertHistoricalDay(foundDayStart, displays)
+                nextDayToLoad = foundDayStart - ONE_DAY_MS
+                refreshReachedEnd()
+            } else {
+                _hasReachedEnd.value = true
             }
-
-            if (data.isNotEmpty()) {
-                insertHistoricalDay(dayStart, data)
-            }
-
-            nextDayToLoad = dayStart - ONE_DAY_MS
-            refreshReachedEnd()
             _isLoadingMore.value = false
             recombineAll()
         }
+    }
+
+    /**
+     * Phase 18：從 [fromDayStart] 開始往前找最近一個「該天 spec 篩選後非空」的歷史天。
+     *
+     * - 連續空白天自動跨過（最多 [MAX_CONSECUTIVE_EMPTY_DAYS_LAZY] 嘗試後放棄）
+     * - 到達 earliestPostTime 之前停止
+     * - 找到 → 回傳 (dayStart, displays)；找不到 → null（呼叫端設 hasReachedEnd=true）
+     */
+    private suspend fun nextNonEmptyHistoricalDay(
+        fromDayStart: Long,
+        specSnapshot: EventFilterSpec
+    ): Pair<Long, List<NotificationDisplay>>? {
+        val earliest = earliestPostTime ?: return null
+        var dayStart = fromDayStart
+        var emptyAttempts = 0
+        while (dayStart + ONE_DAY_MS > earliest) {
+            val data = withContext(Dispatchers.IO) {
+                enrichAndMap(
+                    eventDao.query(
+                        specSnapshot.copy(timeFrom = dayStart, timeTo = dayStart + ONE_DAY_MS)
+                    ).first()
+                )
+            }
+            if (data.isNotEmpty()) return dayStart to data
+            emptyAttempts++
+            if (emptyAttempts >= MAX_CONSECUTIVE_EMPTY_DAYS_LAZY) return null
+            dayStart -= ONE_DAY_MS
+        }
+        return null
     }
 
     /** 插入歷史天資料，保持 dayStart 降序（新到舊）。同 dayStart 已存在則覆蓋（避免 race 重複）。 */
@@ -356,5 +390,15 @@ class TimelineViewModel(
         const val KEY_FILTER_TEXT = "timeline.filterText"
         const val KEY_USER_DEDUP_BEFORE_RULE = "timeline.userDedupBeforeRule"
         const val KEY_SCROLL_STATE = "timeline.scrollState"
+
+        /** Phase 18：init 預載非空歷史天的數量 — 跨日午夜後仍能看到 N 天有資料的歷史 */
+        const val INIT_PRELOAD_DAY_COUNT = 2
+
+        /**
+         * Phase 18：loadNextDay 連續嘗試空白天的上限。
+         * 連續 N 天無資料就放棄（設 hasReachedEnd=true），避免阻塞 UI 無限往前查。
+         * 30 天約一個月空窗，超過此值通常表示真的到達歷史底部。
+         */
+        const val MAX_CONSECUTIVE_EMPTY_DAYS_LAZY = 30
     }
 }
