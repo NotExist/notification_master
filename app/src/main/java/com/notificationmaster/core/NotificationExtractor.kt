@@ -74,8 +74,7 @@ class NotificationExtractor(@Suppress("unused") private val context: Context) {
             contentHash = contentHash,
             title = title,
             text = text,
-            removalReason = removalReason,
-            removalReasonCategory = removalReason?.let { ApiVersionHelper.categorizeRemovalReason(it) },
+            // removalReason 走 eventRawJson.removalReason 取（buildEventRawJson 已寫入）
             isAudible = isAudible,
             likelyHeadsup = likelyHeadsup,
             eventRawJson = rawJson

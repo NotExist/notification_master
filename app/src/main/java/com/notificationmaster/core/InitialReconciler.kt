@@ -5,8 +5,7 @@ import androidx.room.withTransaction
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.data.db.entity.EventType
-import com.notificationmaster.data.db.entity.NotificationEventEntity
-import com.notificationmaster.data.db.entity.RemovalReasonCategory
+import org.json.JSONObject
 
 /**
  * INITIAL reconciliation：補登錄漏接的 REMOVED 事件（Plan 2 §K）
@@ -57,14 +56,22 @@ class InitialReconciler(private val database: NotificationDatabase) {
         database.withTransaction {
             for (key in missingKeys) {
                 val lastEvent = eventDao.getLatestEventByKey(key) ?: continue
+                // Plan 2 Phase 16：removalReason 直接寫進 eventRawJson root（取代舊 column）；
+                // 從 lastEvent.eventRawJson 沿用最後已知狀態，蓋掉 callbackType + removalReason
+                val patchedRawJson = try {
+                    val json = JSONObject(lastEvent.eventRawJson)
+                    json.put("callbackType", EventType.REMOVED.name)
+                    json.put("removalReason", ApiVersionHelper.REASON_RECONCILED_AFTER_FACT)
+                    json.toString()
+                } catch (_: Exception) {
+                    lastEvent.eventRawJson
+                }
                 val reconciledEvent = lastEvent.copy(
                     id = 0,  // autoGenerate 重發
                     eventType = EventType.REMOVED,
                     eventTime = captureTime,
                     captureTime = captureTime,
-                    removalReason = ApiVersionHelper.REASON_RECONCILED_AFTER_FACT,
-                    removalReasonCategory = RemovalReasonCategory.RECONCILED_AFTER_FACT
-                    // eventRawJson 沿用 lastEvent，保留最後已知狀態
+                    eventRawJson = patchedRawJson
                 )
                 eventDao.insert(reconciledEvent)
                 inserted++

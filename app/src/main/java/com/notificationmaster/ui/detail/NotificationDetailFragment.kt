@@ -627,13 +627,17 @@ class NotificationDetailFragment : Fragment() {
         sb.appendLine("is_audible: ${event.isAudible}")
         sb.appendLine("likely_headsup: ${event.likelyHeadsup}")
 
-        // REMOVED 事件：移除原因
-        if (event.eventType == EventType.REMOVED && event.removalReason != null) {
-            sb.appendLine()
-            sb.appendLine("── 移除資訊 ──")
-            sb.appendLine("removal_reason: ${event.removalReason}")
-            sb.appendLine("removal_reason_category: ${event.removalReasonCategory}")
-            sb.appendLine("removal_reason_desc: ${ApiVersionHelper.getRemovalReasonDescription(event.removalReason)}")
+        // REMOVED 事件：移除原因（Phase 16：從 eventRawJson.removalReason 取，不再有 column）
+        if (event.eventType == EventType.REMOVED) {
+            val reason = com.notificationmaster.core.NotificationSnapshotParser
+                .parse(event.eventRawJson)?.removalReason
+            if (reason != null) {
+                sb.appendLine()
+                sb.appendLine("── 移除資訊 ──")
+                sb.appendLine("removal_reason: $reason")
+                sb.appendLine("removal_reason_category: ${ApiVersionHelper.categorizeRemovalReason(reason)}")
+                sb.appendLine("removal_reason_desc: ${ApiVersionHelper.getRemovalReasonDescription(reason)}")
+            }
         }
 
         sb.appendLine()

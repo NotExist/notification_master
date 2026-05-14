@@ -117,16 +117,19 @@ class NotificationEventAdapter(
 
             binding.textEventTime.text = timeFormat.format(Date(event.eventTime))
 
-            // 移除原因（僅 REMOVED 事件顯示）
-            if (event.eventType == EventType.REMOVED && event.removalReason != null) {
+            // 移除原因（僅 REMOVED 事件顯示）— Phase 16：從 eventRawJson.removalReason 取
+            val removalReason = if (event.eventType == EventType.REMOVED) {
+                NotificationSnapshotParser.parse(event.eventRawJson)?.removalReason
+            } else null
+            if (removalReason != null) {
                 binding.textRemovalReason.visibility = View.VISIBLE
                 binding.textRemovalReason.text = context.getString(
                     R.string.format_removal_reason,
-                    ApiVersionHelper.getRemovalReasonText(context, event.removalReason),
-                    event.removalReason
+                    ApiVersionHelper.getRemovalReasonText(context, removalReason),
+                    removalReason
                 )
                 binding.textRemovalReason.setOnClickListener {
-                    showAllRemovalReasons(context, event.removalReason)
+                    showAllRemovalReasons(context, removalReason)
                 }
             } else {
                 binding.textRemovalReason.visibility = View.GONE

@@ -156,9 +156,19 @@ class ArchiveImporter(private val context: Context) {
         val notificationKey = json.getString("notificationKey")
         require(notificationKey.isNotBlank()) { "Event notificationKey must not be blank" }
 
-        // 允許 0 與負值 reason（如 -100 = RECONCILED_AFTER_FACT）
-        val rawReason = if (json.has("removalReason")) json.optInt("removalReason", Int.MIN_VALUE) else Int.MIN_VALUE
-        val removalReason = if (rawReason == Int.MIN_VALUE) null else rawReason
+        // Phase 16：removalReason / removalReasonCategory column 已移除，
+        // 改從 eventRawJson.removalReason 取。若舊匯出檔含 removalReason 但 eventRawJson 缺，
+        // 補進 eventRawJson root（向下相容）。
+        var rawJsonStr = json.optString("eventRawJson", "")
+        if (json.has("removalReason") && rawJsonStr.isNotEmpty()) {
+            try {
+                val rawObj = JSONObject(rawJsonStr)
+                if (!rawObj.has("removalReason")) {
+                    rawObj.put("removalReason", json.optInt("removalReason"))
+                    rawJsonStr = rawObj.toString()
+                }
+            } catch (_: Exception) { /* malformed raw 保留原樣 */ }
+        }
 
         return NotificationEventEntity(
             id = json.optLong("id", 0),
@@ -172,11 +182,9 @@ class ArchiveImporter(private val context: Context) {
             contentHash = json.optString("contentHash", ""),
             title = json.optStringOrNull("title"),
             text = json.optStringOrNull("text"),
-            removalReason = removalReason,
-            removalReasonCategory = json.optStringOrNull("removalReasonCategory"),
             isAudible = json.optBoolean("isAudible", false),
             likelyHeadsup = json.optBoolean("likelyHeadsup", false),
-            eventRawJson = json.optString("eventRawJson", "")
+            eventRawJson = rawJsonStr
         )
     }
 

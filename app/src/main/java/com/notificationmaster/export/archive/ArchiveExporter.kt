@@ -219,8 +219,7 @@ class ArchiveExporter(
             put("contentHash", e.contentHash)
             put("title", e.title)
             put("text", e.text)
-            put("removalReason", e.removalReason)
-            put("removalReasonCategory", e.removalReasonCategory)
+            // Phase 16：removalReason 已從 entity column 移除，整段在 eventRawJson.removalReason 內
             put("isAudible", e.isAudible)
             put("likelyHeadsup", e.likelyHeadsup)
             put("eventRawJson", e.eventRawJson)

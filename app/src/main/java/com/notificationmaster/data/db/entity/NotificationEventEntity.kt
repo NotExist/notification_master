@@ -142,16 +142,10 @@ data class NotificationEventEntity(
     @ColumnInfo(name = "text")
     val text: String?,
 
-    // === 事件特有 ===
-
-    /** Android REASON_* (1-22) 或 App 自訂負值（如 -100 = RECONCILED_AFTER_FACT） */
-    @ColumnInfo(name = "removal_reason")
-    val removalReason: Int?,
-
-    @ColumnInfo(name = "removal_reason_category")
-    val removalReasonCategory: String?,
-
     // === 篩選投影（寫入時即時計算後快取，對齊 Plan 1 EventFilterSpec 欄位） ===
+    // Plan 2 Phase 16：移除 removal_reason / removal_reason_category 兩 column；
+    // 兩者皆從 event_raw_json.removalReason 取（reason）/ 即時計算（category），
+    // 純化 single source of truth（Plan §1）。
 
     @ColumnInfo(name = "is_audible")
     val isAudible: Boolean,

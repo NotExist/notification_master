@@ -138,11 +138,15 @@ interface NotificationEventDao {
     suspend fun getSimilarEvents(hash: String, startTime: Long, endTime: Long): List<NotificationEventEntity>
 
     /**
-     * UI 搜尋（標題 / 內文 LIKE）。
+     * UI 搜尋（標題 / 內文 / raw 全文 LIKE）。
      *
-     * Plan 2：events 表只投影 title / text；big_text / sub_text 由 snapshot 內提供，
-     * SQL 搜尋暫時涵蓋不到。檔名 LIKE 反查（透過 media_attachments JOIN）待
-     * media_attachments FK 重新對齊 event_id 後重做。
+     * Plan 2 Phase 16：除 title / text 兩個投影 column，也直接對 event_raw_json 做 LIKE。
+     * 這樣 bigText / subText / summaryText / extras 內任何字串值都能被搜尋命中
+     * （e.g. MessagingStyle 訊息內容、ticker 等）。
+     *
+     * 副作用：raw LIKE 可能命中 JSON 結構字（如 "_type"），但實務上使用者搜尋字串
+     * 很少剛好等於 JSON key name，可接受。SQLite LIKE 對中等大小字串（每筆 ≤ 100KB）
+     * 配合 LIMIT 100 在實機上仍可秒級回應。
      */
     @Query("""
         SELECT * FROM notification_events
@@ -151,6 +155,7 @@ interface NotificationEventDao {
                 SELECT id, MAX(event_time) FROM notification_events
                 WHERE title LIKE '%' || :query || '%'
                    OR text LIKE '%' || :query || '%'
+                   OR event_raw_json LIKE '%' || :query || '%'
                 GROUP BY notification_key
             )
         )
