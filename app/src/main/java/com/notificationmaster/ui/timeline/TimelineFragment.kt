@@ -211,8 +211,9 @@ class TimelineFragment : Fragment() {
         binding.chipDeduplicated.setOnClickListener {
             if (suppressChipListener) return@setOnClickListener
             // disabled 狀態下不會觸發；rule 模式由 rule chip 點擊取消
+            // Phase 15：不再強制 SwipeRefresh.isRefreshing = true；progress_loading 光條
+            // 由 awaitingInitialData + LoadOrigin.SYSTEM 統一控制
             viewModel.setDedupChecked(binding.chipDeduplicated.isChecked)
-            binding.swipeRefresh.isRefreshing = true
         }
     }
 
@@ -253,12 +254,11 @@ class TimelineFragment : Fragment() {
             chip.isChecked = (activeRuleId == rule.id)
             chip.setOnClickListener {
                 if (suppressChipListener) return@setOnClickListener
+                // Phase 15：不再強制 SwipeRefresh.isRefreshing；走 SYSTEM origin 由光條顯示
                 if (chip.isChecked) {
                     viewModel.applyRule(rule)
-                    binding.swipeRefresh.isRefreshing = true
                 } else {
                     viewModel.deactivateRule()
-                    binding.swipeRefresh.isRefreshing = true
                 }
             }
             chip.setOnLongClickListener {
@@ -527,28 +527,21 @@ class TimelineFragment : Fragment() {
             }
         }
 
-        // swipe refresh 結束時機：第一筆主資料抵達後關閉 spinner
-        // Phase 14：依 LoadOrigin 區分指示器 — USER_REFRESH 只顯示 SwipeRefresh，
-        // SYSTEM（init / spec 變更）顯示中央 progressLoading 圓圈，避免雙 indicator
+        // Phase 15：載入指示單一原則
+        // - awaitingInitialData=true 期間顯示「藍色光條」(LinearProgressIndicator) — 不阻擋瀏覽既有 list
+        // - SwipeRefresh 圓圈只由「使用者下拉動作」觸發；ViewModel 不主動 set，
+        //   只在 awaiting=false 時關閉（fallback 保險）
+        // - 兩個 indicator 在 USER_REFRESH 下可能同時短暫出現（SwipeRefresh 內建 + 光條），
+        //   但 list 不被清空，使用者仍可瀏覽，不阻礙體驗
         viewLifecycleOwner.lifecycleScope.launch {
-            combine(viewModel.awaitingInitialData, viewModel.loadOrigin) { awaiting, origin ->
-                awaiting to origin
-            }.collectLatest { (awaiting, origin) ->
+            viewModel.awaitingInitialData.collectLatest { awaiting ->
                 if (_binding == null) return@collectLatest
                 val b = _binding ?: return@collectLatest
-                if (!awaiting) {
-                    b.swipeRefresh.isRefreshing = false
-                    b.progressLoading.visibility = View.GONE
+                if (awaiting) {
+                    b.progressLoading.show()
                 } else {
-                    when (origin) {
-                        TimelineViewModel.LoadOrigin.USER_REFRESH -> {
-                            // SwipeRefreshLayout 的 spinner 已由 SwipeRefreshLayout 內部控制
-                            b.progressLoading.visibility = View.GONE
-                        }
-                        TimelineViewModel.LoadOrigin.SYSTEM -> {
-                            b.progressLoading.visibility = View.VISIBLE
-                        }
-                    }
+                    b.progressLoading.hide()
+                    b.swipeRefresh.isRefreshing = false
                 }
             }
         }

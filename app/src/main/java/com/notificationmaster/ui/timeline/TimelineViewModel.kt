@@ -207,13 +207,11 @@ class TimelineViewModel(
 
         _loadOrigin.value = origin
         _awaitingInitialData.value = true
-        _todayNotifications.value = emptyList()
-        _historicalDays.value = emptyList()
-        _allNotifications.value = emptyList()
+        // Phase 15：不清空 list / counter / removed state。保留舊資料直到新 Flow 第一筆 emit 覆寫。
+        // 這是 0.1.0 順暢體驗的關鍵：切換 chip / rule 時畫面不消失，新結果到才替換。
+        // 載入控制 flag 仍 reset（舊狀態對新查詢無效）。
         _isLoadingMore.value = false
         _hasReachedEnd.value = false
-        _removedIds.value = emptySet()
-        _totalCount.value = 0
 
         val specSnapshot = _coreSpec.value
 
