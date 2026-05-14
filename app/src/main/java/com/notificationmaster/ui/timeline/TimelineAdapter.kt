@@ -320,8 +320,38 @@ class TimelineAdapter(
             }
         }
 
+        /**
+         * Phase 17：只比實際影響 UI 渲染的欄位，避免 data class 預設 equals 觸發
+         * JSONObject reference 比較（每次 Flow emit 都會建新 snapshot 物件，reference 必不等）
+         * 導致所有 row 被誤判 content changed → DefaultItemAnimator 連發 fade 動畫 → list 閃動。
+         */
         override fun areContentsTheSame(oldItem: TimelineItem, newItem: TimelineItem): Boolean {
-            return oldItem == newItem
+            return when {
+                oldItem is TimelineItem.NotificationItem && newItem is TimelineItem.NotificationItem -> {
+                    val o = oldItem.notification
+                    val n = newItem.notification
+                    oldItem.similarCount == newItem.similarCount &&
+                        oldItem.isRemoved == newItem.isRemoved &&
+                        o.contentHash == n.contentHash &&
+                        o.title == n.title &&
+                        o.text == n.text &&
+                        o.postTime == n.postTime &&
+                        o.isAudible == n.isAudible &&
+                        o.likelyHeadsup == n.likelyHeadsup &&
+                        o.importance == n.importance &&
+                        o.priority == n.priority &&
+                        o.flags == n.flags &&
+                        o.isAmbient == n.isAmbient &&
+                        o.isSuspended == n.isSuspended &&
+                        o.isConversation == n.isConversation &&
+                        o.template == n.template
+                }
+                oldItem is TimelineItem.DateHeader && newItem is TimelineItem.DateHeader ->
+                    oldItem.date == newItem.date
+                oldItem is TimelineItem.LoadingMore && newItem is TimelineItem.LoadingMore -> true
+                oldItem is TimelineItem.EndOfTimeline && newItem is TimelineItem.EndOfTimeline -> true
+                else -> false
+            }
         }
     }
 }

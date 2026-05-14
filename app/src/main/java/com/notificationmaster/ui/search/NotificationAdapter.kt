@@ -145,8 +145,24 @@ class NotificationAdapter(
             return oldItem.eventId == newItem.eventId
         }
 
+        /**
+         * Phase 17：避免 data class 預設 equals 比 JSONObject reference 造成所有 row 誤判 changed
+         * （詳見 TimelineAdapter.DiffCallback 同段註解）
+         */
         override fun areContentsTheSame(oldItem: NotificationDisplay, newItem: NotificationDisplay): Boolean {
-            return oldItem == newItem
+            return oldItem.contentHash == newItem.contentHash &&
+                oldItem.title == newItem.title &&
+                oldItem.text == newItem.text &&
+                oldItem.postTime == newItem.postTime &&
+                oldItem.isAudible == newItem.isAudible &&
+                oldItem.likelyHeadsup == newItem.likelyHeadsup &&
+                oldItem.importance == newItem.importance &&
+                oldItem.priority == newItem.priority &&
+                oldItem.flags == newItem.flags &&
+                oldItem.isAmbient == newItem.isAmbient &&
+                oldItem.isSuspended == newItem.isSuspended &&
+                oldItem.isConversation == newItem.isConversation &&
+                oldItem.template == newItem.template
         }
     }
 }
