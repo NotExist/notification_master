@@ -459,6 +459,9 @@ class TimelineFragment : Fragment() {
 
     private fun setupSwipeRefresh() {
         binding.swipeRefresh.setOnRefreshListener {
+            // Phase 20：統一只用 progress_loading 光條表達載入；立即關掉 SwipeRefreshLayout
+            // 自動開啟的圓形 spinner，避免雙 indicator
+            binding.swipeRefresh.isRefreshing = false
             val isGranted = NlsConnectionManager.isNlsEnabled(requireContext())
             if (isGranted != wasPermissionGranted) {
                 wasPermissionGranted = isGranted
@@ -476,7 +479,7 @@ class TimelineFragment : Fragment() {
                     )
                 }
             }
-            viewModel.loadNotifications(TimelineViewModel.LoadOrigin.USER_REFRESH)
+            viewModel.loadNotifications()
         }
     }
 
@@ -527,31 +530,13 @@ class TimelineFragment : Fragment() {
             }
         }
 
-        // Phase 19：兩個 indicator 互斥
-        // - USER_REFRESH（下拉手勢）→ 只 SwipeRefresh 圓圈，光條隱藏
-        // - SYSTEM（init / chip / rule 切換）→ 只 progress_loading 光條，SwipeRefresh 不主動
-        // - awaiting=false 兩者全關
+        // Phase 20：所有載入場景統一用 progress_loading 光條
+        // SwipeRefresh 圓圈在 setOnRefreshListener 內已被立即抑制
         viewLifecycleOwner.lifecycleScope.launch {
-            combine(viewModel.awaitingInitialData, viewModel.loadOrigin) { awaiting, origin ->
-                awaiting to origin
-            }.collectLatest { (awaiting, origin) ->
+            viewModel.awaitingInitialData.collectLatest { awaiting ->
                 if (_binding == null) return@collectLatest
                 val b = _binding ?: return@collectLatest
-                if (awaiting) {
-                    when (origin) {
-                        TimelineViewModel.LoadOrigin.USER_REFRESH -> {
-                            // SwipeRefresh 圓圈由下拉手勢自動開啟，不顯示光條
-                            b.progressLoading.hide()
-                        }
-                        TimelineViewModel.LoadOrigin.SYSTEM -> {
-                            // 光條顯示，SwipeRefresh 圓圈不顯示（沒下拉手勢觸發）
-                            b.progressLoading.show()
-                        }
-                    }
-                } else {
-                    b.progressLoading.hide()
-                    b.swipeRefresh.isRefreshing = false
-                }
+                if (awaiting) b.progressLoading.show() else b.progressLoading.hide()
             }
         }
     }
