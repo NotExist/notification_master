@@ -12,50 +12,53 @@ import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.data.db.dao.count
 import com.notificationmaster.data.db.dao.query
+import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.data.filter.EventFilterSpec
 import com.notificationmaster.data.filter.toFilterSpec
 import com.notificationmaster.ui.common.NotificationDisplay
 import com.notificationmaster.ui.common.NotificationEnricher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.util.Calendar
 
 /**
  * Timeline 狀態 ViewModel
  *
- * 抖動修復（Plan 2 §J）：把 chip / 篩選 / 載入結果搬到 ViewModel，跨 view 重建保留，
- * 避免從 Detail 返回時 Flow 重新訂閱 + counter 從 0 重畫的中間態。
+ * Plan 2 Phase 23（單一 Flow 模型）：
  *
- * 持久化（SavedStateHandle）：
- * - `KEY_DEDUP_CHECKED`、`KEY_ACTIVE_RULE_ID`、`KEY_FILTER_TEXT`、`KEY_USER_DEDUP_BEFORE_RULE`、
- *   `KEY_SCROLL_STATE`，process death 後也能還原。
+ * **架構**：
+ * - 一條 base Flow 訂閱 `EventFilterSpec.All`（不去重、無 matcher）+ 動態 `_pageSize`
+ * - Service 寫入任何 event（INITIAL / POSTED / UPDATED / REMOVED，任何 postTime）
+ *   → Room invalidation → Flow re-emit → list 動態更新
+ * - Lazyload = `_pageSize += PAGE_INCREMENT`，flatMapLatest 自動重新訂閱
+ * - 沒有「today vs historical」二分；service 不需要通知 ViewModel
  *
- * scroll position 還原：Fragment 在 onPause 把 LayoutManager 的 Parcelable state 存到 [scrollState]，
- * 重建後 onViewCreated 取出，等 adapter 完成 submitList 後 restore。從 Detail 返回時等同回到進入前位置
- * （不再採 Plan 2 §I 原方案 §I 的 lastViewedKey + Snackbar 銜接）。
+ * **chip overlay**（Phase 22）：
+ * - `displayedNotifications` 由 `allNotifications` + chip state combine
+ * - dedup / rule chip 純 client-side filter，不重查 DB；取消 chip 瞬間 restore
  *
- * Plan 2 Phase 9：列表資料切到 [com.notificationmaster.data.db.entity.NotificationEventEntity]，
- * 渲染前一次性 transform 為 [NotificationDisplay]（snapshot 解析在 IO thread 集中完成）。
+ * **持久化**（SavedStateHandle）：
+ * - chip 狀態 / pageSize / 篩選文字 / scroll position
  *
- * Phase 22（filter chip overlay）：
- * - **base spec 永遠 [EventFilterSpec.All]**（不去重、無 matcher）：DB 訂閱 + day paging 載入都用這份。
- * - **chip 純 client-side overlay**：dedupChecked / activeRuleId 變動只改 UI state，不重查 DB。
- * - [displayedNotifications] 由 [allNotifications] + chip state combine 出來，套上 rule predicate +
- *   dedup（per-key 取最新 event_time）後輸出。chip 取消 = 瞬間 restore 為 base list。
+ * **被移除的東西**（Phase 23）：
+ * - today Flow + historicalDays（合併為單一 allNotifications）
+ * - earliestPostTime / nextDayToLoad / nextNonEmptyHistoricalDay / insertHistoricalDay /
+ *   refreshReachedEnd / recombineAll：靠 pageSize vs totalCount 判斷邊界
+ * - INIT_PRELOAD_DAY_COUNT / MAX_CONSECUTIVE_EMPTY_DAYS_LAZY：自然消失
+ * - loadNotifications 的「重 launch loadJob」邏輯：base Flow 永遠 Eagerly 訂閱
  */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class TimelineViewModel(
     application: Application,
     private val savedState: SavedStateHandle
@@ -67,7 +70,7 @@ class TimelineViewModel(
     private val rankingObsDao = database.rankingObservationDao()
     private val rankingSnapDao = database.rankingSnapshotDao()
 
-    // === 篩選狀態 ===
+    // === 篩選 chip state（Phase 22）===
 
     /** 當前 LIST_FILTER rule id，null 表示走核心 chip */
     private val _activeRuleId = MutableStateFlow<String?>(savedState[KEY_ACTIVE_RULE_ID])
@@ -84,8 +87,7 @@ class TimelineViewModel(
     val filterText: StateFlow<String> = _filterText.asStateFlow()
 
     /**
-     * Phase 22：base spec 永遠是 `EventFilterSpec.All`（不去重、無 matcher）。
-     * 給 fragment 用於渲染決策（如 buildTimelineItems 是否要算 similarCount 等）的「邏輯 spec」
+     * 邏輯 spec：給 fragment 用於渲染決策（如 buildTimelineItems 是否顯示 similarCount）。
      * 由 chip state 衍生而成，**不參與 DB query**。
      */
     val coreSpec: StateFlow<EventFilterSpec> = combine(
@@ -99,22 +101,35 @@ class TimelineViewModel(
         EventFilterSpec(deduplicate = savedState[KEY_DEDUP_CHECKED] ?: true)
     )
 
-    // === 載入狀態 ===
-
-    private val _todayNotifications = MutableStateFlow<List<NotificationDisplay>>(emptyList())
-    val todayNotifications: StateFlow<List<NotificationDisplay>> = _todayNotifications.asStateFlow()
-
-    private val _historicalDays =
-        MutableStateFlow<List<Pair<Long, List<NotificationDisplay>>>>(emptyList())
-    val historicalDays: StateFlow<List<Pair<Long, List<NotificationDisplay>>>> =
-        _historicalDays.asStateFlow()
+    // === 動態載入控制 ===
 
     /**
-     * Phase 22：base list — 由 base spec ([EventFilterSpec.All]) 訂閱出的不去重 raw events，
-     * 不受 chip 影響。chip 切換 = 在這份 list 上重套 client-side overlay。
+     * Phase 23：base list 載入量上限。flatMapLatest 訂閱會跟著這個值變動，
+     * lazyload 時 += [PAGE_INCREMENT] 即可載入更多。
      */
-    private val _allNotifications = MutableStateFlow<List<NotificationDisplay>>(emptyList())
-    val allNotifications: StateFlow<List<NotificationDisplay>> = _allNotifications.asStateFlow()
+    private val _pageSize = MutableStateFlow(
+        savedState[KEY_PAGE_SIZE] ?: INITIAL_PAGE_SIZE
+    )
+
+    // === DB 訂閱（base）===
+
+    /**
+     * Phase 23：base list — 訂閱 `EventFilterSpec.All` 加動態 limit。
+     *
+     * - Service 寫入新 event（任何 postTime）→ Room invalidation → Flow re-emit
+     * - User 卷到底 → [loadNextDay] 增加 _pageSize → flatMapLatest 重新訂閱
+     * - 不再切「今天 vs 歷史」兩段，跨日事件由 Flow 自然涵蓋
+     *
+     * 排序為 postTime DESC（base spec 預設 OrderBy.PostTimeDesc）。
+     */
+    val allNotifications: StateFlow<List<NotificationDisplay>> = _pageSize
+        .flatMapLatest { size ->
+            eventDao.query(EventFilterSpec.All.copy(limit = size))
+                .map { items -> enrichAndMap(items) }
+                .flowOn(Dispatchers.IO)
+                .conflate()
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /**
      * Phase 22：UI 實際顯示的 list（base + client-side overlay）。
@@ -127,7 +142,7 @@ class TimelineViewModel(
      * chip 變動時這個 flow 立即 re-emit，無 DB query / 無空窗。
      */
     val displayedNotifications: StateFlow<List<NotificationDisplay>> = combine(
-        _allNotifications, _dedupChecked, _activeRuleId
+        allNotifications, _dedupChecked, _activeRuleId
     ) { base, dedup, ruleId ->
         applyClientSideOverlay(base, dedup, ruleId)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -141,25 +156,26 @@ class TimelineViewModel(
     private val _isLoadingMore = MutableStateFlow(false)
     val isLoadingMore: StateFlow<Boolean> = _isLoadingMore.asStateFlow()
 
-    private val _hasReachedEnd = MutableStateFlow(false)
-    val hasReachedEnd: StateFlow<Boolean> = _hasReachedEnd.asStateFlow()
+    /**
+     * Phase 23：是否已載完 DB 全部 events。`_pageSize >= _totalCount` 就算盡頭。
+     * `_totalCount == 0` 時保持 false 避免 init 期間誤判（DB 空 / count Flow 尚未 emit）。
+     */
+    val hasReachedEnd: StateFlow<Boolean> = combine(_pageSize, _totalCount) { size, total ->
+        total > 0 && size >= total
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    private val _awaitingInitialData = MutableStateFlow(false)
+    private val _awaitingInitialData = MutableStateFlow(true)
     val awaitingInitialData: StateFlow<Boolean> = _awaitingInitialData.asStateFlow()
 
     /**
-     * 標記當前的 `loadNotifications` 觸發來源。Fragment 觀察此值決定 UI 載入指示：
-     * - USER_REFRESH：使用者下拉 → SwipeRefresh spinner（中央 progressLoading 不顯示）
-     * - SYSTEM：初次載入、spec/rule 切換等 system-initiated → 中央 progressLoading 圓圈
+     * 標記當前的 `loadNotifications` 觸發來源。Phase 23 後保留給呼叫端區分
+     * USER_REFRESH（下拉手勢）vs SYSTEM（init / 權限變動）— 雖然 base Flow 永遠常駐、
+     * 兩者實際行為相同，但 fragment 仍可能用此值控制其他 indicator。
      */
     enum class LoadOrigin { SYSTEM, USER_REFRESH }
 
     private val _loadOrigin = MutableStateFlow(LoadOrigin.SYSTEM)
     val loadOrigin: StateFlow<LoadOrigin> = _loadOrigin.asStateFlow()
-
-    private var earliestPostTime: Long? = null
-    private var nextDayToLoad: Long = 0L
-    private var loadJob: Job? = null
 
     /** RecyclerView LayoutManager.onSaveInstanceState() 的結果；SavedStateHandle 自動序列化 Parcelable。 */
     var scrollState: Parcelable?
@@ -177,7 +193,29 @@ class TimelineViewModel(
             userDedupBeforeRule = null
             savedState[KEY_USER_DEDUP_BEFORE_RULE] = null
         }
-        loadNotifications()
+
+        // totalCount Flow（DB 全 events 數，給 hasReachedEnd 用）
+        viewModelScope.launch {
+            eventDao.count(EventFilterSpec.All).collectLatest { total ->
+                _totalCount.value = total
+            }
+        }
+
+        // base 包含所有事件（含 REMOVED），removed overlay 仍需持續訂閱供 chip 渲染參考
+        viewModelScope.launch {
+            eventDao.getRemovedNotificationKeysFlow().collectLatest { ids ->
+                _removedIds.value = ids.toSet()
+            }
+        }
+
+        // awaitingInitialData：第一筆 base list emit 後永遠 false
+        viewModelScope.launch {
+            allNotifications.collect { items ->
+                if (items.isNotEmpty() || _totalCount.value == 0) {
+                    _awaitingInitialData.value = false
+                }
+            }
+        }
     }
 
     fun setDedupChecked(checked: Boolean) {
@@ -222,15 +260,15 @@ class TimelineViewModel(
     }
 
     /**
-     * Phase 22：base spec 永遠是 [EventFilterSpec.All] → 永遠走天分頁。
-     * 保留 API 給 Fragment 的 scroll listener 判斷是否要觸發 loadNextDay。
+     * Phase 23：保留 API 兼容（usesDayPaging 永遠 true，沒有「不分天」分支）。
+     * Fragment 內 scroll listener 仍用此判斷是否要觸發 loadNextDay。
      */
     fun usesDayPaging(): Boolean = true
 
     /**
      * Phase 22：在 base list 上套 client-side overlay（rule predicate + dedup）。
      *
-     * 維持與 SQL [EventFilterSqlBuilder] 一致語意：
+     * 維持與 SQL [com.notificationmaster.data.filter.EventFilterSqlBuilder] 一致語意：
      * - rule.matchers AND 組合（沿用 [Rule.matches]）
      * - rule.timeFrom/timeTo 套在 postTime 上
      * - dedup = per `notificationKey` 取 `event_time` 最大者
@@ -276,187 +314,63 @@ class TimelineViewModel(
         subText = d.subText,
         channelImportance = d.importance.takeIf { it >= 0 },
         // channelGroupId 未進 NotificationDisplay；group 條件 rule 在 client-side 視為不符合
-        // （fail-closed，與 in-memory MatchContext 預設一致；常用 rule 罕用 group 篩選）
         flags = d.flags,
         isAudible = d.isAudible,
         likelyHeadsup = d.likelyHeadsup,
         isRemoved = d.isRemoved
     )
 
+    /**
+     * Phase 23：保留 API 給 fragment 下拉刷新呼叫。base Flow 永遠 Eagerly 訂閱、
+     * service 寫入會自動觸發 emit，所以此函式不再「重 launch loadJob」，只更新
+     * loadOrigin 和短暫 awaiting state 給 UI indicator 用。
+     */
     fun loadNotifications(origin: LoadOrigin = LoadOrigin.SYSTEM) {
-        loadJob?.cancel()
-
         _loadOrigin.value = origin
-        _awaitingInitialData.value = true
-        // Phase 15：不清空 list / counter / removed state。保留舊資料直到新 Flow 第一筆 emit 覆寫。
-        // 這是 0.1.0 順暢體驗的關鍵：切換 chip / rule 時畫面不消失，新結果到才替換。
-        // 載入控制 flag 仍 reset（舊狀態對新查詢無效）。
-        _isLoadingMore.value = false
-        _hasReachedEnd.value = false
-
-        // Phase 22：base spec 永遠 All，不再隨 chip 變動
-        val specSnapshot = BASE_SPEC
-
-        loadJob = viewModelScope.launch {
-            launch {
-                eventDao.count(specSnapshot).collectLatest { total ->
-                    _totalCount.value = total
-                }
-            }
-
-            // base 包含所有事件（含 REMOVED），removed overlay 仍需持續訂閱供 chip 渲染參考
-            launch {
-                eventDao.getRemovedNotificationKeysFlow().collectLatest { ids ->
-                    _removedIds.value = ids.toSet()
-                }
-            }
-
-            val todayStart = startOfDay(System.currentTimeMillis())
-            val yesterdayStart = todayStart - ONE_DAY_MS
-
-            earliestPostTime = withContext(Dispatchers.IO) { eventDao.getEarliestPostTime() }
-
-            // Phase 18：預載「最近兩個有資料的歷史天」而非「昨天」這一天。
-            nextDayToLoad = yesterdayStart
-            var preloadedDays = 0
-            while (preloadedDays < INIT_PRELOAD_DAY_COUNT) {
-                val result = nextNonEmptyHistoricalDay(nextDayToLoad, specSnapshot)
-                if (result == null) {
-                    _hasReachedEnd.value = true
-                    break
-                }
-                val (foundDayStart, displays) = result
-                insertHistoricalDay(foundDayStart, displays)
-                nextDayToLoad = foundDayStart - ONE_DAY_MS
-                preloadedDays++
-            }
-            refreshReachedEnd()
-
-            val todaySpec = specSnapshot.copy(timeFrom = todayStart, timeTo = Long.MAX_VALUE)
-            // Phase 14 Q3：map 工作從 collectLatest 內部移到 Flow upstream + conflate。
-            // Phase 14 Q2-A/B：enrichAndMap 內 batch 預載 channel importance + ranking observation。
-            eventDao.query(todaySpec)
-                .map { items -> enrichAndMap(items) }
-                .flowOn(Dispatchers.IO)
-                .conflate()
-                .collect { displays ->
-                    _todayNotifications.value = displays
-                    // 注意：必須在 _todayNotifications 寫完後 recombineAll，才能 set awaiting=false；
-                    // 後者放行 loadNextDay 進入「init 已完成」狀態。
-                    recombineAll()
-                    _awaitingInitialData.value = false
-                }
-        }
-    }
-
-    fun loadNextDay() {
-        // 阻擋條件：載入中 / 已到底 / 初次資料尚未抵達（避免 init yesterday 載入未完
-        // 就觸發 loadNextDay 導致 historicalDays append 順序錯亂）
-        if (_isLoadingMore.value || _hasReachedEnd.value || _awaitingInitialData.value) return
-        _isLoadingMore.value = true
-
-        viewModelScope.launch {
-            // Phase 18：用「找到下一個非空歷史天」邏輯取代「一次查一天」
-            // 連續空白天自動跳過，避免 lazyload 卡死
-            val result = nextNonEmptyHistoricalDay(nextDayToLoad, BASE_SPEC)
-            if (result != null) {
-                val (foundDayStart, displays) = result
-                insertHistoricalDay(foundDayStart, displays)
-                nextDayToLoad = foundDayStart - ONE_DAY_MS
-                refreshReachedEnd()
-            } else {
-                _hasReachedEnd.value = true
-            }
-            _isLoadingMore.value = false
-            recombineAll()
+        // 下拉刷新時 user 期待短暫 spinner；base Flow 會在下一次 emit 後 reset awaiting
+        // 但若 DB 已有資料，allNotifications.value 非空 → 不主動把 awaiting 設 true 避免閃爍
+        if (origin == LoadOrigin.USER_REFRESH && allNotifications.value.isEmpty()) {
+            _awaitingInitialData.value = true
         }
     }
 
     /**
-     * Phase 18：從 [fromDayStart] 開始往前找最近一個「該天 spec 篩選後非空」的歷史天。
-     *
-     * - 連續空白天自動跨過（最多 [MAX_CONSECUTIVE_EMPTY_DAYS_LAZY] 嘗試後放棄）
-     * - 到達 earliestPostTime 之前停止
-     * - 找到 → 回傳 (dayStart, displays)；找不到 → null（呼叫端設 hasReachedEnd=true）
+     * Phase 23：lazyload 改為 pageSize 漸進擴張。
+     * - flatMapLatest 自動重新訂閱 DAO，更新後的 base list 涵蓋更多 events
+     * - 「沒有更多」由 [hasReachedEnd]（pageSize vs totalCount）判斷，不再依賴 earliestPostTime
+     * - 等下次 emit 後 reset isLoadingMore
      */
-    private suspend fun nextNonEmptyHistoricalDay(
-        fromDayStart: Long,
-        specSnapshot: EventFilterSpec
-    ): Pair<Long, List<NotificationDisplay>>? {
-        val earliest = earliestPostTime ?: return null
-        var dayStart = fromDayStart
-        var emptyAttempts = 0
-        while (dayStart + ONE_DAY_MS > earliest) {
-            val data = withContext(Dispatchers.IO) {
-                enrichAndMap(
-                    eventDao.query(
-                        specSnapshot.copy(timeFrom = dayStart, timeTo = dayStart + ONE_DAY_MS)
-                    ).first()
-                )
+    fun loadNextDay() {
+        if (_isLoadingMore.value || hasReachedEnd.value || _awaitingInitialData.value) return
+        _isLoadingMore.value = true
+        val target = _pageSize.value + PAGE_INCREMENT
+        _pageSize.value = target
+        savedState[KEY_PAGE_SIZE] = target
+
+        viewModelScope.launch {
+            // 等到 list 變大（DB 確實有更多資料）或已抵達盡頭再放開 isLoadingMore
+            allNotifications.first { items ->
+                items.size >= target || hasReachedEnd.value
             }
-            if (data.isNotEmpty()) return dayStart to data
-            emptyAttempts++
-            if (emptyAttempts >= MAX_CONSECUTIVE_EMPTY_DAYS_LAZY) return null
-            dayStart -= ONE_DAY_MS
-        }
-        return null
-    }
-
-    /** 插入歷史天資料，保持 dayStart 降序（新到舊）。同 dayStart 已存在則覆蓋（避免 race 重複）。 */
-    private fun insertHistoricalDay(dayStart: Long, data: List<NotificationDisplay>) {
-        val current = _historicalDays.value
-        val withoutSameDay = current.filterNot { it.first == dayStart }
-        val merged = (withoutSameDay + (dayStart to data)).sortedByDescending { it.first }
-        _historicalDays.value = merged
-    }
-
-    private fun recombineAll() {
-        _allNotifications.value =
-            _todayNotifications.value + _historicalDays.value.flatMap { it.second }
-    }
-
-    private fun refreshReachedEnd() {
-        val earliest = earliestPostTime ?: run {
-            _hasReachedEnd.value = true
-            return
-        }
-        if (nextDayToLoad + ONE_DAY_MS <= earliest) {
-            _hasReachedEnd.value = true
+            _isLoadingMore.value = false
         }
     }
 
-    private suspend fun enrichAndMap(events: List<com.notificationmaster.data.db.entity.NotificationEventEntity>): List<NotificationDisplay> =
+    private suspend fun enrichAndMap(events: List<NotificationEventEntity>): List<NotificationDisplay> =
         NotificationEnricher.enrich(events, channelDao, rankingObsDao, rankingSnapDao)
 
-    private fun startOfDay(timestamp: Long): Long {
-        val cal = Calendar.getInstance()
-        cal.timeInMillis = timestamp
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        return cal.timeInMillis
-    }
-
     private companion object {
-        /** Phase 22：固定 base spec（不去重、無 matcher）。所有 DB 訂閱 / count / lazyload 都用這份。 */
-        val BASE_SPEC = EventFilterSpec.All
-
-        const val ONE_DAY_MS = 24 * 60 * 60 * 1000L
         const val KEY_DEDUP_CHECKED = "timeline.dedupChecked"
         const val KEY_ACTIVE_RULE_ID = "timeline.activeRuleId"
         const val KEY_FILTER_TEXT = "timeline.filterText"
         const val KEY_USER_DEDUP_BEFORE_RULE = "timeline.userDedupBeforeRule"
         const val KEY_SCROLL_STATE = "timeline.scrollState"
+        const val KEY_PAGE_SIZE = "timeline.pageSize"
 
-        /** Phase 18：init 預載非空歷史天的數量 — 跨日午夜後仍能看到 N 天有資料的歷史 */
-        const val INIT_PRELOAD_DAY_COUNT = 2
+        /** Phase 23：base list 初始載入量。涵蓋多數 user 的「今天 + 昨天」資料量。 */
+        const val INITIAL_PAGE_SIZE = 300
 
-        /**
-         * Phase 18：loadNextDay 連續嘗試空白天的上限。
-         * 連續 N 天無資料就放棄（設 hasReachedEnd=true），避免阻塞 UI 無限往前查。
-         * 30 天約一個月空窗，超過此值通常表示真的到達歷史底部。
-         */
-        const val MAX_CONSECUTIVE_EMPTY_DAYS_LAZY = 30
+        /** Phase 23：每次 lazyload 擴張的 events 數量。 */
+        const val PAGE_INCREMENT = 300
     }
 }
