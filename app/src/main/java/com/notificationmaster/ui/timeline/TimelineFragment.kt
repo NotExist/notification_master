@@ -487,12 +487,13 @@ class TimelineFragment : Fragment() {
     }
 
     private fun observeViewModel() {
-        // 主資料流：allNotifications + removedIds + filterText + isLoadingMore + hasReachedEnd
-        // 任一變動 → 重 render（後兩者控制 footer，缺它們會讓空白天載入完成後 LoadingMore 卡住）
+        // 主資料流：displayedNotifications + removedIds + filterText + isLoadingMore + hasReachedEnd
+        // Phase 22：observe displayedNotifications（client-side overlay 後的 list），不再是 base raw events。
+        // 切換 chip 時 displayedNotifications 立即 re-emit、不重查 DB。
         viewLifecycleOwner.lifecycleScope.launch {
             combine(
                 combine(
-                    viewModel.allNotifications,
+                    viewModel.displayedNotifications,
                     viewModel.removedIds,
                     viewModel.filterText,
                     viewModel.coreSpec,
@@ -520,7 +521,7 @@ class TimelineFragment : Fragment() {
         // counter：totalCount / awaitingInitialData / 當前篩選後筆數
         viewLifecycleOwner.lifecycleScope.launch {
             combine(
-                viewModel.allNotifications,
+                viewModel.displayedNotifications,
                 viewModel.totalCount,
                 viewModel.filterText,
                 viewModel.coreSpec,
@@ -608,11 +609,13 @@ class TimelineFragment : Fragment() {
     }
 
     private fun renderCounter(input: CounterInput) {
+        // Phase 22：displayedNotifications 已包含 client-side dedup + rule predicate，
+        // counter 只需把 text filter 套上計算即可，不再額外 distinctBy。
         val filtered = filterNotifications(input.allNotifications, input.filterText)
         val loadedDisplay: String = if (input.awaiting) {
             getString(R.string.timeline_count_loading_placeholder)
         } else {
-            loadedCountForCounter(filtered, input.spec).toString()
+            filtered.size.toString()
         }
         val text = getString(
             R.string.timeline_count_format_loaded_total,
@@ -621,11 +624,6 @@ class TimelineFragment : Fragment() {
         )
         (activity as? MainActivity)?.setToolbarCount(text)
     }
-
-    private fun loadedCountForCounter(
-        filtered: List<NotificationDisplay>,
-        spec: EventFilterSpec
-    ): Int = if (spec.deduplicate) filtered.distinctBy { it.notificationKey }.size else filtered.size
 
     private fun filterNotifications(
         notifications: List<NotificationDisplay>,
