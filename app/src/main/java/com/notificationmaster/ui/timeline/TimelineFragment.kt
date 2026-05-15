@@ -459,9 +459,12 @@ class TimelineFragment : Fragment() {
 
     private fun setupSwipeRefresh() {
         binding.swipeRefresh.setOnRefreshListener {
-            // Phase 20：統一只用 progress_loading 光條表達載入；立即關掉 SwipeRefreshLayout
-            // 自動開啟的圓形 spinner，避免雙 indicator
-            binding.swipeRefresh.isRefreshing = false
+            // Phase 21：spinner 由 NotificationCaptureService.isProcessingInitial 接管
+            // 若 onRefresh 沒觸發 service INITIAL 處理（NLS 沒授權 / service 未連線），
+            // service signal 不會變動 → 需手動關 spinner 防卡住
+            val willTriggerService = wasPermissionGranted && NotificationCaptureService.isConnected
+            if (!willTriggerService) binding.swipeRefresh.isRefreshing = false
+
             val isGranted = NlsConnectionManager.isNlsEnabled(requireContext())
             if (isGranted != wasPermissionGranted) {
                 wasPermissionGranted = isGranted
@@ -530,13 +533,21 @@ class TimelineFragment : Fragment() {
             }
         }
 
-        // Phase 20：所有載入場景統一用 progress_loading 光條
-        // SwipeRefresh 圓圈在 setOnRefreshListener 內已被立即抑制
+        // Phase 21：兩個 indicator 對應兩種實質性不同事件
+        // - DAO 載入（query DB / Flow re-emit）→ progress_loading 光條（快、< 1 秒）
+        // - Service INITIAL 處理（mutex 內序列寫入）→ SwipeRefresh 圓圈（慢、5-30 秒）
+        // 兩者獨立顯示；同時出現也合理（DAO 第一次 emit 後光條關，圓圈持續到 service 完成）
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.awaitingInitialData.collectLatest { awaiting ->
                 if (_binding == null) return@collectLatest
                 val b = _binding ?: return@collectLatest
                 if (awaiting) b.progressLoading.show() else b.progressLoading.hide()
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            NotificationCaptureService.isProcessingInitial.collectLatest { processing ->
+                if (_binding == null) return@collectLatest
+                _binding?.swipeRefresh?.isRefreshing = processing
             }
         }
     }

@@ -53,6 +53,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -112,6 +113,17 @@ class NotificationCaptureService : NotificationListenerService() {
          * false = 未連線、或 RankingMap 已填充
          */
         val showRankingBanner = androidx.lifecycle.MutableLiveData(false)
+
+        /**
+         * Phase 21：Service 端 INITIAL 處理狀態（mutex 內序列寫入）。
+         * - true：onListenerConnected / captureActiveNotifications 觸發的批次正在執行
+         * - false：閒置
+         * UI 觀察此 StateFlow 顯示「Service 正在補抓系統通知」的指示（如 SwipeRefresh 圓圈），
+         * 與 ViewModel.awaitingInitialData（DAO 載入狀態）獨立。
+         */
+        private val _isProcessingInitial = kotlinx.coroutines.flow.MutableStateFlow(false)
+        val isProcessingInitial: kotlinx.coroutines.flow.StateFlow<Boolean> =
+            _isProcessingInitial.asStateFlow()
 
         // 用於 UI 層查詢服務狀態
         private var instance: NotificationCaptureService? = null
@@ -291,6 +303,8 @@ class NotificationCaptureService : NotificationListenerService() {
         rankingMap: RankingMap?,
         caller: String
     ): Unit = initialProcessingMutex.withLock {
+        _isProcessingInitial.value = true
+        try {
         var newCount = 0
         var skipCount = 0
         val initialKeys = mutableSetOf<String>()
@@ -328,6 +342,9 @@ class NotificationCaptureService : NotificationListenerService() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "$caller: reconciliation failed", e)
+        }
+        } finally {
+            _isProcessingInitial.value = false
         }
     }
 
