@@ -527,18 +527,27 @@ class TimelineFragment : Fragment() {
             }
         }
 
-        // Phase 15：載入指示單一原則
-        // - awaitingInitialData=true 期間顯示「藍色光條」(LinearProgressIndicator) — 不阻擋瀏覽既有 list
-        // - SwipeRefresh 圓圈只由「使用者下拉動作」觸發；ViewModel 不主動 set，
-        //   只在 awaiting=false 時關閉（fallback 保險）
-        // - 兩個 indicator 在 USER_REFRESH 下可能同時短暫出現（SwipeRefresh 內建 + 光條），
-        //   但 list 不被清空，使用者仍可瀏覽，不阻礙體驗
+        // Phase 19：兩個 indicator 互斥
+        // - USER_REFRESH（下拉手勢）→ 只 SwipeRefresh 圓圈，光條隱藏
+        // - SYSTEM（init / chip / rule 切換）→ 只 progress_loading 光條，SwipeRefresh 不主動
+        // - awaiting=false 兩者全關
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.awaitingInitialData.collectLatest { awaiting ->
+            combine(viewModel.awaitingInitialData, viewModel.loadOrigin) { awaiting, origin ->
+                awaiting to origin
+            }.collectLatest { (awaiting, origin) ->
                 if (_binding == null) return@collectLatest
                 val b = _binding ?: return@collectLatest
                 if (awaiting) {
-                    b.progressLoading.show()
+                    when (origin) {
+                        TimelineViewModel.LoadOrigin.USER_REFRESH -> {
+                            // SwipeRefresh 圓圈由下拉手勢自動開啟，不顯示光條
+                            b.progressLoading.hide()
+                        }
+                        TimelineViewModel.LoadOrigin.SYSTEM -> {
+                            // 光條顯示，SwipeRefresh 圓圈不顯示（沒下拉手勢觸發）
+                            b.progressLoading.show()
+                        }
+                    }
                 } else {
                     b.progressLoading.hide()
                     b.swipeRefresh.isRefreshing = false
