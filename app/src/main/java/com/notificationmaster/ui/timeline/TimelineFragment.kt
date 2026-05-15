@@ -137,6 +137,22 @@ class TimelineFragment : Fragment() {
         }
         // onResume 可能因 MainActivity.onNewIntent 而觸發，重新檢查 Intent
         handleIncomingIntent()
+        // Phase 24 Q5：onPause 把 toolbar counter 清空後，collect 不會重新 emit
+        // （StateFlow value 未變），主動讀 ViewModel value 重渲染一次
+        rerenderToolbarCounter()
+    }
+
+    private fun rerenderToolbarCounter() {
+        if (_binding == null) return
+        renderCounter(
+            CounterInput(
+                allNotifications = viewModel.displayedNotifications.value,
+                totalCount = viewModel.totalCount.value,
+                filterText = viewModel.filterText.value,
+                spec = viewModel.coreSpec.value,
+                awaiting = viewModel.awaitingInitialData.value
+            )
+        )
     }
 
     override fun onPause() {
@@ -459,11 +475,10 @@ class TimelineFragment : Fragment() {
 
     private fun setupSwipeRefresh() {
         binding.swipeRefresh.setOnRefreshListener {
-            // Phase 21：spinner 由 NotificationCaptureService.isProcessingInitial 接管
-            // 若 onRefresh 沒觸發 service INITIAL 處理（NLS 沒授權 / service 未連線），
-            // service signal 不會變動 → 需手動關 spinner 防卡住
-            val willTriggerService = wasPermissionGranted && NotificationCaptureService.isConnected
-            if (!willTriggerService) binding.swipeRefresh.isRefreshing = false
+            // Phase 24：spinner 表達「DAO 小事件」（awaitingInitialData / isLoadingMore），
+            // 不再被 service signal 接管。下拉手勢自動 set true 的 spinner 立即關閉避免衝突；
+            // service INITIAL 大事件改由 progress_loading 光條呈現。
+            binding.swipeRefresh.isRefreshing = false
 
             val isGranted = NlsConnectionManager.isNlsEnabled(requireContext())
             if (isGranted != wasPermissionGranted) {
@@ -534,22 +549,26 @@ class TimelineFragment : Fragment() {
             }
         }
 
-        // Phase 21：兩個 indicator 對應兩種實質性不同事件
-        // - DAO 載入（query DB / Flow re-emit）→ progress_loading 光條（快、< 1 秒）
-        // - Service INITIAL 處理（mutex 內序列寫入）→ SwipeRefresh 圓圈（慢、5-30 秒）
-        // 兩者獨立顯示；同時出現也合理（DAO 第一次 emit 後光條關，圓圈持續到 service 完成）
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.awaitingInitialData.collectLatest { awaiting ->
-                if (_binding == null) return@collectLatest
-                val b = _binding ?: return@collectLatest
-                if (awaiting) b.progressLoading.show() else b.progressLoading.hide()
-            }
-        }
+        // Phase 24：indicator 重新指派
+        // - Service INITIAL 大事件（5-30 秒）→ progress_loading 光條（視覺干擾小，適合長時間）
+        // - DAO 載入小事件（init / lazyload < 1 秒）→ SwipeRefresh 圓圈（明顯反饋立刻消失）
+        // LoadingMore footer 是 list item placeholder，跟頂部圓圈位置不同、不重複
         viewLifecycleOwner.lifecycleScope.launch {
             NotificationCaptureService.isProcessingInitial.collectLatest { processing ->
                 if (_binding == null) return@collectLatest
-                _binding?.swipeRefresh?.isRefreshing = processing
+                val b = _binding ?: return@collectLatest
+                if (processing) b.progressLoading.show() else b.progressLoading.hide()
             }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            combine(
+                viewModel.awaitingInitialData,
+                viewModel.isLoadingMore
+            ) { awaiting, loading -> awaiting || loading }
+                .collectLatest { show ->
+                    if (_binding == null) return@collectLatest
+                    _binding?.swipeRefresh?.isRefreshing = show
+                }
         }
     }
 

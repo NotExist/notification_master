@@ -97,6 +97,14 @@ interface NotificationEventDao {
     @Query("SELECT MIN(post_time) FROM notification_events")
     suspend fun getEarliestPostTime(): Long?
 
+    /**
+     * Phase 24：在 `before` 之前的最近 event post_time。
+     * Timeline lazyload 用：以「目前 window 起點」為界往前找下一個事件，自動跳過空白天範圍。
+     * 回傳 null 代表 `before` 之前已無資料（lazyload 應視為盡頭）。
+     */
+    @Query("SELECT MAX(post_time) FROM notification_events WHERE post_time < :before")
+    suspend fun getLatestPostTimeBefore(before: Long): Long?
+
     /** 有過 REMOVED 事件的 notification_key 集合（Timeline 已移除淡化用） */
     @Query("""
         SELECT DISTINCT notification_key FROM notification_events
