@@ -379,10 +379,17 @@ class TimelineViewModel(
         const val KEY_SCROLL_STATE = "timeline.scrollState"
         const val KEY_PAGE_SIZE = "timeline.pageSize"
 
-        /** Phase 25：base list 初始載入量。涵蓋多數 user 的「今天 + 昨天」資料量。 */
-        const val INITIAL_PAGE_SIZE = 300
+        /**
+         * Phase 25：base list 初始載入量。
+         * 主要 enrich 成本是 per-event JSON parse（~1-5ms/筆），小 preload 換初次載入快。
+         * 100 events 通常涵蓋當天 + 部分昨天，足夠 user 第一眼閱讀。
+         */
+        const val INITIAL_PAGE_SIZE = 100
 
-        /** Phase 25：每次 lazyload 擴張的 events 數量。 */
-        const val PAGE_INCREMENT = 300
+        /**
+         * Phase 25：每次 lazyload 擴張的 events 數量。
+         * 與 INITIAL_PAGE_SIZE 相同 — 每次卷到底反應快，多次觸發但每次 < 0.5 秒。
+         */
+        const val PAGE_INCREMENT = 100
     }
 }

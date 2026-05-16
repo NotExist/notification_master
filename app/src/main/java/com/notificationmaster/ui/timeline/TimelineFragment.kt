@@ -201,7 +201,9 @@ class TimelineFragment : Fragment() {
                     val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return
                     val totalItemCount = layoutManager.itemCount
                     val lastVisible = layoutManager.findLastVisibleItemPosition()
-                    if (totalItemCount - lastVisible <= 5 &&
+                    // Phase 25：prefetch threshold 從 5 → 30，提前觸發 lazyload，
+                    // 配合小 PAGE_INCREMENT (100) user 接近底部前就開始載入下一批
+                    if (totalItemCount - lastVisible <= 30 &&
                         !viewModel.isLoadingMore.value &&
                         !viewModel.hasReachedEnd.value
                     ) {
