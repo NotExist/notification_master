@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.snackbar.Snackbar
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.cache.AppLabelCache
@@ -133,7 +134,7 @@ class TimelineFragment : Fragment() {
         if (isGranted != wasPermissionGranted) {
             wasPermissionGranted = isGranted
             updateEmptyStateForPermission()
-            if (isGranted) viewModel.loadNotifications()
+            if (isGranted) viewModel.refresh()
         }
         // onResume 可能因 MainActivity.onNewIntent 而觸發，重新檢查 Intent
         handleIncomingIntent()
@@ -150,7 +151,7 @@ class TimelineFragment : Fragment() {
                 totalCount = viewModel.totalCount.value,
                 filterText = viewModel.filterText.value,
                 spec = viewModel.coreSpec.value,
-                awaiting = viewModel.awaitingInitialData.value
+                state = viewModel.state.value
             )
         )
     }
@@ -201,11 +202,13 @@ class TimelineFragment : Fragment() {
                     val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return
                     val totalItemCount = layoutManager.itemCount
                     val lastVisible = layoutManager.findLastVisibleItemPosition()
-                    // Phase 25：prefetch threshold 從 5 → 30，提前觸發 lazyload，
-                    // 配合小 PAGE_INCREMENT (100) user 接近底部前就開始載入下一批
+                    // Phase 25：prefetch threshold 從 5 → 30，配合小 PAGE_INCREMENT (100)
+                    // Phase 26：guard 改讀 viewModel.state — single source of truth，
+                    // 只有 Ready(canLoadMore) 才觸發。LoadingMore / EndReached / Initial /
+                    // Empty / Error 都不會 fire，杜絕 D 的反覆觸發。
+                    val st = viewModel.state.value
                     if (totalItemCount - lastVisible <= 30 &&
-                        !viewModel.isLoadingMore.value &&
-                        !viewModel.hasReachedEnd.value
+                        st is TimelineLoadState.Ready && st.canLoadMore
                     ) {
                         viewModel.loadNextDay()
                     }
@@ -228,9 +231,7 @@ class TimelineFragment : Fragment() {
     private fun setupFilterChips() {
         binding.chipDeduplicated.setOnClickListener {
             if (suppressChipListener) return@setOnClickListener
-            // disabled 狀態下不會觸發；rule 模式由 rule chip 點擊取消
-            // Phase 15：不再強制 SwipeRefresh.isRefreshing = true；progress_loading 光條
-            // 由 awaitingInitialData + LoadOrigin.SYSTEM 統一控制
+            // Phase 22+：純 client-side overlay，不觸發任何 indicator
             viewModel.setDedupChecked(binding.chipDeduplicated.isChecked)
         }
     }
@@ -477,9 +478,9 @@ class TimelineFragment : Fragment() {
 
     private fun setupSwipeRefresh() {
         binding.swipeRefresh.setOnRefreshListener {
-            // Phase 24：spinner 表達「DAO 小事件」（awaitingInitialData / isLoadingMore），
-            // 不再被 service signal 接管。下拉手勢自動 set true 的 spinner 立即關閉避免衝突；
-            // service INITIAL 大事件改由 progress_loading 光條呈現。
+            // Phase 26：spinner 由 viewModel.state.is InitialLoading 接管（冷啟 < 1s 黑屏避免器）
+            // 下拉手勢自動觸發的內建 spinner 立即關閉，避免跟 state-driven indicator 衝突。
+            // 下拉觸發的視覺反饋交給 progress_loading 光條（service.isProcessingInitial）
             binding.swipeRefresh.isRefreshing = false
 
             val isGranted = NlsConnectionManager.isNlsEnabled(requireContext())
@@ -499,62 +500,62 @@ class TimelineFragment : Fragment() {
                     )
                 }
             }
-            viewModel.loadNotifications()
+            viewModel.refresh()
         }
     }
 
     private fun observeViewModel() {
-        // 主資料流：displayedNotifications + removedIds + filterText + isLoadingMore + hasReachedEnd
-        // Phase 22：observe displayedNotifications（client-side overlay 後的 list），不再是 base raw events。
-        // 切換 chip 時 displayedNotifications 立即 re-emit、不重查 DB。
+        // Phase 26：state 為單一 source of truth。Fragment 用一次 when 映射所有 indicator。
+        // ListRenderInput 帶 state 一起傳給 renderList/renderCounter，避免在 render 內部讀 state.value
+        // 跟 list 在不同時間點 emit 而錯位。
         viewLifecycleOwner.lifecycleScope.launch {
             combine(
-                combine(
-                    viewModel.displayedNotifications,
-                    viewModel.removedIds,
-                    viewModel.filterText,
-                    viewModel.coreSpec,
-                    viewModel.awaitingInitialData
-                ) { allList, removed, filterText, spec, awaiting ->
-                    arrayOf<Any?>(allList, removed, filterText, spec, awaiting)
-                },
-                viewModel.isLoadingMore,
-                viewModel.hasReachedEnd
-            ) { core, _, _ ->
-                @Suppress("UNCHECKED_CAST")
+                viewModel.displayedNotifications,
+                viewModel.removedIds,
+                viewModel.filterText,
+                viewModel.coreSpec,
+                viewModel.state
+            ) { allList, removed, filterText, spec, state ->
                 ListRenderInput(
-                    allNotifications = core[0] as List<NotificationDisplay>,
-                    removedIds = core[1] as Set<String>,
-                    filterText = core[2] as String,
-                    spec = core[3] as EventFilterSpec,
-                    awaiting = core[4] as Boolean
+                    allNotifications = allList,
+                    removedIds = removed,
+                    filterText = filterText,
+                    spec = spec,
+                    state = state
                 )
             }.collectLatest { input ->
                 if (_binding == null) return@collectLatest
-                renderList(input)
+                try {
+                    renderList(input)
+                } catch (e: Exception) {
+                    Log.e(TAG, "renderList failed", e)
+                }
             }
         }
 
-        // counter：totalCount / awaitingInitialData / 當前篩選後筆數
+        // counter：用 state + totalCount + displayedNotifications
         viewLifecycleOwner.lifecycleScope.launch {
             combine(
                 viewModel.displayedNotifications,
                 viewModel.totalCount,
                 viewModel.filterText,
                 viewModel.coreSpec,
-                viewModel.awaitingInitialData
-            ) { all, total, text, spec, awaiting ->
-                CounterInput(all, total, text, spec, awaiting)
+                viewModel.state
+            ) { all, total, text, spec, state ->
+                CounterInput(all, total, text, spec, state)
             }.collectLatest { input ->
                 if (_binding == null) return@collectLatest
                 renderCounter(input)
             }
         }
 
-        // Phase 24：indicator 重新指派
-        // - Service INITIAL 大事件（5-30 秒）→ progress_loading 光條（視覺干擾小，適合長時間）
-        // - DAO 載入小事件（init / lazyload < 1 秒）→ SwipeRefresh 圓圈（明顯反饋立刻消失）
-        // LoadingMore footer 是 list item placeholder，跟頂部圓圈位置不同、不重複
+        // Phase 26 indicator 對應（單一映射，無重複）：
+        // - progress_loading 光條（頂部） → service.isProcessingInitial（大事件 5-30s）
+        // - SwipeRefresh 圓圈 → state is InitialLoading（冷啟 < 1s 黑屏避免器）
+        // - LoadingMore footer → state is LoadingMore（lazyload 中，list 內慣例）
+        // - EndOfTimeline footer → state is EndReached（list 內靜態指示）
+        // - emptyState → state is EmptyDb（DB 真空）
+        // - Snackbar → state is Error
         viewLifecycleOwner.lifecycleScope.launch {
             NotificationCaptureService.isProcessingInitial.collectLatest { processing ->
                 if (_binding == null) return@collectLatest
@@ -563,14 +564,31 @@ class TimelineFragment : Fragment() {
             }
         }
         viewLifecycleOwner.lifecycleScope.launch {
-            combine(
-                viewModel.awaitingInitialData,
-                viewModel.isLoadingMore
-            ) { awaiting, loading -> awaiting || loading }
-                .collectLatest { show ->
-                    if (_binding == null) return@collectLatest
-                    _binding?.swipeRefresh?.isRefreshing = show
+            viewModel.state.collectLatest { st ->
+                if (_binding == null) return@collectLatest
+                _binding?.swipeRefresh?.isRefreshing = st is TimelineLoadState.InitialLoading
+                if (st is TimelineLoadState.Error) {
+                    showErrorSnackbar(st.cause)
                 }
+            }
+        }
+    }
+
+    private var lastErrorSnackbar: Snackbar? = null
+
+    private fun showErrorSnackbar(cause: Throwable) {
+        val binding = _binding ?: return
+        lastErrorSnackbar?.dismiss()
+        lastErrorSnackbar = Snackbar.make(
+            binding.root,
+            getString(R.string.timeline_error_snackbar, cause.message ?: cause.javaClass.simpleName),
+            Snackbar.LENGTH_LONG
+        ).also { sb ->
+            sb.setAction(R.string.timeline_error_dismiss) {
+                viewModel.refresh()
+                sb.dismiss()
+            }
+            sb.show()
         }
     }
 
@@ -579,27 +597,37 @@ class TimelineFragment : Fragment() {
         val removedIds: Set<String>,
         val filterText: String,
         val spec: EventFilterSpec,
-        val awaiting: Boolean
+        val state: TimelineLoadState
     )
 
     private data class CounterInput(
         val allNotifications: List<NotificationDisplay>,
-        val totalCount: Int,
+        val totalCount: Int?,
         val filterText: String,
         val spec: EventFilterSpec,
-        val awaiting: Boolean
+        val state: TimelineLoadState
     )
 
     private fun renderList(input: ListRenderInput) {
         val binding = _binding ?: return
         val filtered = filterNotifications(input.allNotifications, input.filterText)
+
         if (filtered.isEmpty()) {
-            // 載入中（首筆主資料未到）保留現狀，不切到 emptyState 避免閃爍
-            if (input.awaiting) return
-            binding.emptyState.visibility = View.VISIBLE
-            binding.recyclerView.visibility = View.GONE
-            updateEmptyStateForPermission()
-            adapter?.submitList(emptyList())
+            // Phase 26：emptyState 只在 state 確認 DB 空時顯示；
+            // InitialLoading / LoadingMore 期間保留 list 渲染（avoid emptyState 閃爍）；
+            // Error 維持現有 list（Snackbar 已給反饋，不切空頁）
+            when (input.state) {
+                is TimelineLoadState.EmptyDb -> {
+                    binding.emptyState.visibility = View.VISIBLE
+                    binding.recyclerView.visibility = View.GONE
+                    updateEmptyStateForPermission()
+                    adapter?.submitList(emptyList())
+                }
+                else -> {
+                    // 不切到 emptyState，避免 InitialLoading 時閃白頁
+                    return
+                }
+            }
             return
         }
         binding.emptyState.visibility = View.GONE
@@ -607,19 +635,23 @@ class TimelineFragment : Fragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             val eventDao = NotificationMasterApp.getInstance().database.notificationEventDao()
-            var timelineItems: List<TimelineItem> = if (input.spec.deduplicate) {
-                buildTimelineItemsWithSimilarCount(filtered, input.removedIds, eventDao)
-            } else {
-                buildTimelineItems(filtered, input.removedIds)
-            }
-            if (viewModel.usesDayPaging()) {
-                val footer = when {
-                    viewModel.isLoadingMore.value -> TimelineItem.LoadingMore
-                    viewModel.hasReachedEnd.value -> TimelineItem.EndOfTimeline
-                    else -> null
+            // Phase 26：buildTimelineItemsWithSimilarCount 改為單一 IO 包覆（vs 之前每 item 一次
+            // withContext(IO) 切換），長 list 不再 N 次 thread hop 拖累 main thread
+            var timelineItems: List<TimelineItem> = withContext(Dispatchers.IO) {
+                if (input.spec.deduplicate) {
+                    buildTimelineItemsWithSimilarCountInIo(filtered, input.removedIds, eventDao)
+                } else {
+                    buildTimelineItems(filtered, input.removedIds)
                 }
-                if (footer != null) timelineItems = timelineItems + footer
             }
+            // Phase 26：footer 條件用 state（單一 source of truth）
+            val footer = when (input.state) {
+                is TimelineLoadState.LoadingMore -> TimelineItem.LoadingMore
+                is TimelineLoadState.EndReached -> TimelineItem.EndOfTimeline
+                else -> null
+            }
+            if (footer != null) timelineItems = timelineItems + footer
+
             adapter?.submitList(timelineItems) {
                 pendingScrollRestore?.let {
                     binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
@@ -633,15 +665,17 @@ class TimelineFragment : Fragment() {
         // Phase 22：displayedNotifications 已包含 client-side dedup + rule predicate，
         // counter 只需把 text filter 套上計算即可，不再額外 distinctBy。
         val filtered = filterNotifications(input.allNotifications, input.filterText)
-        val loadedDisplay: String = if (input.awaiting) {
+        // Phase 26：loadingPlaceholder 在 InitialLoading 顯示；其他 state（含 LoadingMore）都直接顯示數字
+        val loadedDisplay: String = if (input.state is TimelineLoadState.InitialLoading) {
             getString(R.string.timeline_count_loading_placeholder)
         } else {
             filtered.size.toString()
         }
+        // totalCount 可能還是 null（InitialLoading 期間 count Flow 未 emit），顯示 0 避免 format 失敗
         val text = getString(
             R.string.timeline_count_format_loaded_total,
             loadedDisplay,
-            input.totalCount
+            input.totalCount ?: 0
         )
         (activity as? MainActivity)?.setToolbarCount(text)
     }
@@ -686,7 +720,11 @@ class TimelineFragment : Fragment() {
         return items
     }
 
-    private suspend fun buildTimelineItemsWithSimilarCount(
+    /**
+     * Phase 26：呼叫端負責 `withContext(Dispatchers.IO)`，本函式內不再 per-item 切 thread。
+     * 對 100 筆 list 從 N 次 dispatcher hop 變 0 次，避免 main thread 等候 IO pool 排程。
+     */
+    private fun buildTimelineItemsWithSimilarCountInIo(
         notifications: List<NotificationDisplay>,
         removedIds: Set<String>,
         eventDao: com.notificationmaster.data.db.dao.NotificationEventDao
@@ -701,9 +739,9 @@ class TimelineFragment : Fragment() {
             }
             val dayStart = notificationDate
             val dayEnd = dayStart + ONE_DAY_MS
-            val similarCount = withContext(Dispatchers.IO) {
-                eventDao.getDeduplicatedCount(notification.contentHash, dayStart, dayEnd)
-            }
+            val similarCount = eventDao.getDeduplicatedCount(
+                notification.contentHash, dayStart, dayEnd
+            )
             items.add(TimelineItem.NotificationItem(
                 notification = notification,
                 similarCount = similarCount,

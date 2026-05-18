@@ -47,6 +47,8 @@
     <string name="timeline_count_format">%d 筆</string>
     <string name="timeline_count_format_loaded_total">%1$s / %2$d 筆</string>
     <string name="timeline_count_loading_placeholder">…</string>
+    <string name="timeline_error_snackbar">載入失敗：%1$s</string>
+    <string name="timeline_error_dismiss">關閉</string>
     <string name="timeline_filter_hint">依標題、內容、App 名稱或包名過濾…</string>
     <string name="timeline_similar_count">+%d 筆相似</string>
     <string name="similar_notifications_title">相似通知</string>
