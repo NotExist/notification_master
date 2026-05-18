@@ -723,8 +723,9 @@ class TimelineFragment : Fragment() {
     /**
      * Phase 26：呼叫端負責 `withContext(Dispatchers.IO)`，本函式內不再 per-item 切 thread。
      * 對 100 筆 list 從 N 次 dispatcher hop 變 0 次，避免 main thread 等候 IO pool 排程。
+     * 仍須是 suspend — `getDeduplicatedCount` 是 DAO suspend method。
      */
-    private fun buildTimelineItemsWithSimilarCountInIo(
+    private suspend fun buildTimelineItemsWithSimilarCountInIo(
         notifications: List<NotificationDisplay>,
         removedIds: Set<String>,
         eventDao: com.notificationmaster.data.db.dao.NotificationEventDao
