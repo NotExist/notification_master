@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Timeline 載入頂層狀態（Phase 26）。
@@ -157,8 +158,13 @@ class TimelineViewModel(
 
     /**
      * Phase 25：base list 載入量上限。Lazyload 時 += [PAGE_INCREMENT] 擴張。
+     *
+     * Phase 27：**不持久化**。
+     * - Fragment 重建（detail 返回 / tab 切換 / config change）→ ViewModel 仍活，_pageSize 保留
+     * - Process restart（冷啟 / force-stop）→ ViewModel 重建，_pageSize 回到 INITIAL_PAGE_SIZE
+     * 與 user 直覺一致（「重開 App 從頭開始」），避免 phase 25 持久化造成的重 enrich OOM。
      */
-    private val _pageSize = MutableStateFlow(savedState[KEY_PAGE_SIZE] ?: INITIAL_PAGE_SIZE)
+    private val _pageSize = MutableStateFlow(INITIAL_PAGE_SIZE)
 
     // === 錯誤通道（Phase 26）===
 
@@ -238,10 +244,15 @@ class TimelineViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TimelineLoadState.InitialLoading)
 
-    /** RecyclerView LayoutManager.onSaveInstanceState() 的結果；SavedStateHandle 自動序列化 Parcelable。 */
-    var scrollState: Parcelable?
-        get() = savedState[KEY_SCROLL_STATE]
-        set(value) { savedState[KEY_SCROLL_STATE] = value }
+    /**
+     * RecyclerView LayoutManager.onSaveInstanceState() 的結果。
+     *
+     * Phase 27：從 SavedStateHandle 改為 ViewModel-local var，生命週期跟 ViewModel 一致：
+     * - Fragment 重建（detail 返回）→ ViewModel 仍活，scrollState 保留 → 回原位置
+     * - Process restart → ViewModel 重建，scrollState=null → 從頂部開始
+     * 與 [_pageSize] 同生死，避免 list 大小跟 scroll 位置語意不一致。
+     */
+    var scrollState: Parcelable? = null
 
     init {
         // RuleEngine 內容可能還沒載入；冪等呼叫保證 activeRuleId 對應的 rule 能讀到
@@ -387,13 +398,16 @@ class TimelineViewModel(
         val target = _pageSize.value + PAGE_INCREMENT
         _isLoadingMore.value = true
         _pageSize.value = target
-        savedState[KEY_PAGE_SIZE] = target
+        // Phase 27：pageSize 不持久化（避免重 enrich 大量 events 造成 OOM）
 
         viewModelScope.launch {
             // 等到「items 達 target 量」或「DB 已全載入」確定條件，再 reset isLoadingMore
-            combine(allNotifications, _totalCount) { items, total ->
-                items.size >= target || (total != null && items.size >= total)
-            }.first { it }
+            // Phase 27：加 10s timeout safety net 防止極端例外（如 OOM）導致 _isLoadingMore 永久 true
+            withTimeoutOrNull(10_000L) {
+                combine(allNotifications, _totalCount) { items, total ->
+                    items.size >= target || (total != null && items.size >= total)
+                }.first { it }
+            }
             _isLoadingMore.value = false
         }
     }
@@ -410,8 +424,7 @@ class TimelineViewModel(
         const val KEY_ACTIVE_RULE_ID = "timeline.activeRuleId"
         const val KEY_FILTER_TEXT = "timeline.filterText"
         const val KEY_USER_DEDUP_BEFORE_RULE = "timeline.userDedupBeforeRule"
-        const val KEY_SCROLL_STATE = "timeline.scrollState"
-        const val KEY_PAGE_SIZE = "timeline.pageSize"
+        // Phase 27 移除：KEY_SCROLL_STATE / KEY_PAGE_SIZE（不跨 process 持久化）
 
         /**
          * Phase 25：base list 初始載入量。

@@ -81,7 +81,7 @@ object NotificationEnricher {
     private fun fallbackDisplay(event: NotificationEventEntity): NotificationDisplay {
         return NotificationDisplay(
             event = event,
-            snapshot = null,
+            // Phase 27：snapshot field 已移除
             isRemoved = event.eventType == com.notificationmaster.data.db.entity.EventType.REMOVED,
             packageName = event.packageName,
             notificationKey = event.notificationKey,

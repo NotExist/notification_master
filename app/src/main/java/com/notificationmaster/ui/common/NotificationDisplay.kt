@@ -19,7 +19,10 @@ import org.json.JSONObject
  */
 data class NotificationDisplay(
     val event: NotificationEventEntity,
-    val snapshot: NotificationSnapshot?,
+
+    // Phase 27：移除 snapshot 欄位（之前是 NotificationSnapshot? 持有 raw JSONObject）。
+    // 攤平到下方純值欄位後不再持有 reference，list 內 N 個 display 從 ~50KB/筆 降到 ~2KB/筆。
+    // 需要原始 snapshot 的場合（Detail Fragment）改為從 [event.eventRawJson] lazy parse。
 
     // === 事件層級 ===
     val isRemoved: Boolean,
@@ -123,7 +126,7 @@ data class NotificationDisplay(
                 ?: notif?.optStringOrNull("template")
             return NotificationDisplay(
                 event = event,
-                snapshot = snap,
+                // Phase 27：snap 是 local val，攤平後 function 結束 GC，display 不持有 reference
                 isRemoved = event.eventType == EventType.REMOVED,
                 packageName = event.packageName,
                 notificationKey = event.notificationKey,

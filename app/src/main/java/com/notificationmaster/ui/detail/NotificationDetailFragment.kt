@@ -39,7 +39,9 @@ import com.notificationmaster.data.db.entity.ActionEntity
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.MediaAttachmentEntity
 import com.notificationmaster.data.db.entity.DeviceStateEntity
+import com.notificationmaster.core.NotificationSnapshotParser
 import com.notificationmaster.ui.common.NotificationDisplay
+import com.notificationmaster.data.model.NotificationSnapshot
 import com.notificationmaster.data.db.entity.SemanticAction
 import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.service.NotificationCaptureService
@@ -63,6 +65,23 @@ class NotificationDetailFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val args: NotificationDetailFragmentArgs by navArgs()
+
+    /**
+     * Phase 27：list 內的 NotificationDisplay 不再持有 NotificationSnapshot reference（避免 OOM）。
+     * Detail 進入時對當前 event 的 eventRawJson lazy parse 一次，cache 給所有 display* 函式共用。
+     * 換 notification（如 Toolbar 切上下篇）時呼叫 [updateSnapshotCache] 重新 parse。
+     */
+    private var cachedSnapshot: NotificationSnapshot? = null
+    private var cachedSnapshotForEventId: Long = -1L
+
+    /** 確保 cache 對應當前 notification；若已 parse 過直接 reuse。 */
+    private fun snapshotFor(notification: NotificationDisplay): NotificationSnapshot? {
+        if (cachedSnapshotForEventId != notification.event.id) {
+            cachedSnapshot = NotificationSnapshotParser.parse(notification.event.eventRawJson)
+            cachedSnapshotForEventId = notification.event.id
+        }
+        return cachedSnapshot
+    }
 
     private fun formatTime(millis: Long): String {
         return if (Build.VERSION.SDK_INT >= 26) {
@@ -356,7 +375,7 @@ class NotificationDetailFragment : Fragment() {
         if (whenTime > 0) {
             binding.layoutWhenTime.visibility = View.VISIBLE
             val whenText = formatTime(whenTime)
-            val showWhen = notification.snapshot?.extras?.optBoolean("android.showWhen", true) ?: true
+            val showWhen = snapshotFor(notification)?.extras?.optBoolean("android.showWhen", true) ?: true
             binding.textWhenTime.text = if (showWhen) whenText
                 else "$whenText ${getString(R.string.label_when_not_shown)}"
             binding.labelWhenTime.setOnClickListener {
@@ -517,7 +536,7 @@ class NotificationDetailFragment : Fragment() {
         binding.labelCategory.setOnClickListener { showDescDialog(R.string.label_category, R.string.desc_category) }
         binding.textGroup.text = notification.groupKey ?: "null"
         binding.labelGroup.setOnClickListener { showDescDialog(R.string.label_group, R.string.desc_group_key) }
-        val overrideGroupKey = notification.snapshot?.overrideGroupKey
+        val overrideGroupKey = snapshotFor(notification)?.overrideGroupKey
         if (overrideGroupKey != null) {
             binding.layoutOverrideGroupKey.visibility = View.VISIBLE
             binding.textOverrideGroupKey.text = overrideGroupKey
@@ -773,7 +792,7 @@ class NotificationDetailFragment : Fragment() {
         val container = _binding.layoutStyleInfoContainer
         container.removeAllViews()
 
-        val extras = notification.snapshot?.extras
+        val extras = snapshotFor(notification)?.extras
 
         var hasContent = false
 
@@ -875,8 +894,8 @@ class NotificationDetailFragment : Fragment() {
 
     private fun displayConditionalBlocks(notification: NotificationDisplay) {
         val _binding = _binding ?: return
-        val extras = notification.snapshot?.extras
-        val notif = notification.snapshot?.notification
+        val extras = snapshotFor(notification)?.extras
+        val notif = snapshotFor(notification)?.notification
 
         // 進度條
         val progress = extras?.optInt("android.progress", 0) ?: 0
@@ -947,7 +966,7 @@ class NotificationDetailFragment : Fragment() {
 
     private fun displayEffects(notification: NotificationDisplay) {
         val _binding = _binding ?: return
-        val notif = notification.snapshot?.notification
+        val notif = snapshotFor(notification)?.notification
         val soundUri = notif?.let {
             if (it.has("sound") && !it.isNull("sound")) it.optString("sound").takeIf { s -> s.isNotEmpty() } else null
         }
@@ -1233,7 +1252,7 @@ class NotificationDetailFragment : Fragment() {
             }
             intentsContainer.visibility = View.VISIBLE
 
-            val intentMeta = notification.snapshot?.notification?.optJSONObject("intents")
+            val intentMeta = snapshotFor(notification)?.notification?.optJSONObject("intents")
 
             if (notification.hasContentIntent) {
                 val desc = buildIntentDescription("contentIntent", intentMeta?.optJSONObject("contentIntent"), notification.packageName)
@@ -1290,7 +1309,7 @@ class NotificationDetailFragment : Fragment() {
         container.removeAllViews()
 
         // 從 snapshot 取 remoteViews 元資料（contentView / bigContentView / headsUpContentView 內含 layoutId / layoutName）
-        val notif = notification.snapshot?.notification
+        val notif = snapshotFor(notification)?.notification
         val remoteViewsMeta = JSONObject().apply {
             notif?.optJSONObject("contentView")?.let { put("contentView", it) }
             notif?.optJSONObject("bigContentView")?.let { put("bigContentView", it) }

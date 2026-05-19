@@ -578,10 +578,16 @@ class TimelineFragment : Fragment() {
 
     private fun showErrorSnackbar(cause: Throwable) {
         val binding = _binding ?: return
+        // Phase 27：OOM 訊息友善化 — raw exception message 對 user 無意義
+        val msg = if (cause is OutOfMemoryError) {
+            getString(R.string.timeline_error_oom)
+        } else {
+            getString(R.string.timeline_error_snackbar, cause.message ?: cause.javaClass.simpleName)
+        }
         lastErrorSnackbar?.dismiss()
         lastErrorSnackbar = Snackbar.make(
             binding.root,
-            getString(R.string.timeline_error_snackbar, cause.message ?: cause.javaClass.simpleName),
+            msg,
             Snackbar.LENGTH_LONG
         ).also { sb ->
             sb.setAction(R.string.timeline_error_dismiss) {
