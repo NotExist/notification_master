@@ -129,11 +129,11 @@ class TimelineViewModel(
 
     val dedupChecked: StateFlow<Boolean> = _chipState
         .map { it.dedupChecked }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, _chipState.value.dedupChecked)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), _chipState.value.dedupChecked)
 
     val activeRuleId: StateFlow<String?> = _chipState
         .map { it.activeRuleId }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, _chipState.value.activeRuleId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), _chipState.value.activeRuleId)
 
     /** 套 rule 前 user 自選的去重狀態，rule 取消後還原 */
     private var userDedupBeforeRule: Boolean? = savedState[KEY_USER_DEDUP_BEFORE_RULE]
@@ -150,7 +150,7 @@ class TimelineViewModel(
         rule?.toFilterSpec() ?: EventFilterSpec(deduplicate = chip.dedupChecked)
     }.stateIn(
         viewModelScope,
-        SharingStarted.Eagerly,
+        SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS),
         EventFilterSpec(deduplicate = _chipState.value.dedupChecked)
     )
 
@@ -194,7 +194,7 @@ class TimelineViewModel(
             _errorCh.value = e
             emit(emptyList())
         }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), emptyList())
 
     /**
      * Phase 22：UI 實際顯示的 list（base + client-side overlay）。
@@ -203,16 +203,25 @@ class TimelineViewModel(
         allNotifications, _chipState
     ) { base, chip ->
         applyClientSideOverlay(base, chip.dedupChecked, chip.activeRuleId)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), emptyList())
 
     /**
      * Phase 26：DB 全 events 數。
      * **`null` = count Flow 尚未首次 emit**（init 期間 → InitialLoading state）
      * **`0` = 確認 DB 真空**（EmptyDb state）
      * 不再用 0 代表「未知」，避免 init 競態。
+     *
+     * Phase 28：改為直接 stateIn Room count Flow，配合 WhileSubscribed 跟 fragment 訂閱同步啟動。
+     * 之前用 viewModelScope.launch 內 collect 寫入 MutableStateFlow，會在 ViewModel.init 就啟動
+     * → cold start 時 fragment 來看時可能已是 200，看不到 null/InitialLoading 中間態。
      */
-    private val _totalCount = MutableStateFlow<Int?>(null)
-    val totalCount: StateFlow<Int?> = _totalCount.asStateFlow()
+    val totalCount: StateFlow<Int?> = eventDao.count(EventFilterSpec.All)
+        .map<Int, Int?> { it }
+        .catch { e ->
+            _errorCh.value = e
+            emit(null)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), null)
 
     private val _removedIds = MutableStateFlow<Set<String>>(emptySet())
     val removedIds: StateFlow<Set<String>> = _removedIds.asStateFlow()
@@ -223,12 +232,12 @@ class TimelineViewModel(
      * Phase 26：頂層載入狀態。Fragment 觀察此值用單一 `when` 映射所有 indicator
      * （SwipeRefresh 圓圈 / progress 光條 / footer / emptyState / Snackbar）。
      *
-     * 派生時序：所有 source（allNotifications / _totalCount / _pageSize / _isLoadingMore /
-     * _errorCh）任一變動觸發重算。combine 對 Eagerly StateFlow 通常合併同 dispatch frame。
+     * 派生時序：所有 source（allNotifications / totalCount / _pageSize / _isLoadingMore /
+     * _errorCh）任一變動觸發重算。combine 對 StateFlow 通常合併同 dispatch frame。
      */
     val state: StateFlow<TimelineLoadState> = combine(
         allNotifications,
-        _totalCount,
+        totalCount,
         _pageSize,
         _isLoadingMore,
         _errorCh
@@ -242,7 +251,7 @@ class TimelineViewModel(
             size >= total            -> TimelineLoadState.EndReached
             else                     -> TimelineLoadState.Ready(canLoadMore = true)
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, TimelineLoadState.InitialLoading)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), TimelineLoadState.InitialLoading)
 
     /**
      * RecyclerView LayoutManager.onSaveInstanceState() 的結果。
@@ -266,14 +275,11 @@ class TimelineViewModel(
             savedState[KEY_USER_DEDUP_BEFORE_RULE] = null
         }
 
-        // totalCount Flow（DB 全 events 數）— 首次 emit 時把 null 轉為實際數字
-        viewModelScope.launch {
-            eventDao.count(EventFilterSpec.All)
-                .catch { e -> _errorCh.value = e }
-                .collectLatest { total -> _totalCount.value = total }
-        }
+        // Phase 28：totalCount 改為 stateIn Room Flow 直接 derive（見 [totalCount] 宣告），
+        // 不在 init 內 launch — 確保 cold start 時 fragment 來 collect 才啟動 Room Flow，
+        // state 從 InitialLoading 開始 emit。
 
-        // removed overlay 訂閱
+        // removed overlay 訂閱（保留 init launch — 跟 fragment 訂閱解耦無妨，且需要持續更新）
         viewModelScope.launch {
             eventDao.getRemovedNotificationKeysFlow()
                 .catch { /* removed overlay 非關鍵，例外吞掉避免影響 state */ }
@@ -396,16 +402,23 @@ class TimelineViewModel(
         if (_isLoadingMore.value) return
 
         val target = _pageSize.value + PAGE_INCREMENT
+        // Phase 28：以 displayedNotifications.value 為基準（user 實際看到的 list），
+        // 等 size 增長才 reset isLoadingMore，避免「圓圈消失但內容沒呈現」空檔。
+        val beforeDisplayedSize = displayedNotifications.value.size
         _isLoadingMore.value = true
         _pageSize.value = target
         // Phase 27：pageSize 不持久化（避免重 enrich 大量 events 造成 OOM）
 
         viewModelScope.launch {
-            // 等到「items 達 target 量」或「DB 已全載入」確定條件，再 reset isLoadingMore
-            // Phase 27：加 10s timeout safety net 防止極端例外（如 OOM）導致 _isLoadingMore 永久 true
+            // Phase 28：reset 條件改為「user 實際看到的 list 變大」OR「DB 全載完」。
+            // dedup 模式下 displayedNotifications.size 可能不會達 _pageSize（被去重）
+            // 但每次 lazyload 100 raw events 通常會帶來 N unique events → size > before。
+            // 極端 case（lazyload 100 raw events 全是同 key dedup）→ 10s timeout 兜底。
+            // Phase 27：加 10s timeout safety net 防止極端例外（OOM）導致 _isLoadingMore 永久 true
             withTimeoutOrNull(10_000L) {
-                combine(allNotifications, _totalCount) { items, total ->
-                    items.size >= target || (total != null && items.size >= total)
+                combine(displayedNotifications, allNotifications, totalCount) { displays, items, total ->
+                    displays.size > beforeDisplayedSize ||
+                        (total != null && items.size >= total)
                 }.first { it }
             }
             _isLoadingMore.value = false
@@ -425,6 +438,18 @@ class TimelineViewModel(
         const val KEY_FILTER_TEXT = "timeline.filterText"
         const val KEY_USER_DEDUP_BEFORE_RULE = "timeline.userDedupBeforeRule"
         // Phase 27 移除：KEY_SCROLL_STATE / KEY_PAGE_SIZE（不跨 process 持久化）
+
+        /**
+         * Phase 28：stateIn 的 SharingStarted.WhileSubscribed timeout。
+         *
+         * Eagerly → WhileSubscribed(5s) 後，upstream Flow 只在有 collector 時啟動。
+         * Cold start 時 fragment 來 collect 才開始 query / enrich，state 從 InitialLoading
+         * 開始 emit，user 能看到 spinner（Eagerly 模式下 stateIn 在 ViewModel.init 就啟動，
+         * fragment 來 collect 時可能已經 transition 過 InitialLoading 到 Ready）。
+         *
+         * 5s timeout 給 fragment 重建（detail 返回 / config change）grace period 重用 cache。
+         */
+        const val SHARING_STOP_TIMEOUT_MS = 5_000L
 
         /**
          * Phase 25：base list 初始載入量。
