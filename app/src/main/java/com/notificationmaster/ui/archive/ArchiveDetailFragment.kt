@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.databinding.FragmentArchiveDetailBinding
 import com.notificationmaster.ui.common.NotificationDisplay
+import com.notificationmaster.core.debug.ProfileLogger
 import com.notificationmaster.ui.common.NotificationEnricher
 import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
@@ -106,6 +107,11 @@ class ArchiveDetailFragment : Fragment() {
         val database = NotificationMasterApp.getInstance().database
         val eventDao = database.notificationEventDao()
 
+        val mode = if (args.channelId.isNotEmpty()) "channel" else "package"
+        val target = if (args.channelId.isNotEmpty()) "${args.packageName}/${args.channelId}" else args.packageName
+        val tStart = System.currentTimeMillis()
+        ProfileLogger.append("Archive", "load start mode=$mode target=$target")
+
         val flow = if (args.channelId.isNotEmpty()) {
             eventDao.getLatestEventsByChannel(args.packageName, args.channelId)
         } else {
@@ -114,6 +120,10 @@ class ArchiveDetailFragment : Fragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             flow.collectLatest { events ->
+                ProfileLogger.append(
+                    "Archive",
+                    "query emit size=${events.size} since-start=${System.currentTimeMillis() - tStart}ms"
+                )
                 val binding = _binding ?: return@collectLatest
                 if (events.isEmpty()) {
                     binding.emptyState.visibility = View.VISIBLE
@@ -121,6 +131,7 @@ class ArchiveDetailFragment : Fragment() {
                 } else {
                     binding.emptyState.visibility = View.GONE
                     binding.recyclerView.visibility = View.VISIBLE
+                    val tEnrich = System.currentTimeMillis()
                     val displays = withContext(Dispatchers.IO) {
                         val database = NotificationMasterApp.getInstance().database
                         NotificationEnricher.enrich(
@@ -130,7 +141,13 @@ class ArchiveDetailFragment : Fragment() {
                             database.rankingSnapshotDao()
                         )
                     }
+                    val tSubmit = System.currentTimeMillis()
                     adapter.submitList(buildTimelineItems(displays)) {
+                        ProfileLogger.append(
+                            "Archive",
+                            "submitList done size=${displays.size} " +
+                                "enrich=${tSubmit - tEnrich}ms commit=${System.currentTimeMillis() - tSubmit}ms"
+                        )
                         pendingScrollRestore?.let {
                             binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
                             pendingScrollRestore = null

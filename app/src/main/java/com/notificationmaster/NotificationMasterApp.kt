@@ -6,6 +6,7 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import com.notificationmaster.core.alert.PersistentAlertManager
+import com.notificationmaster.core.debug.ProfileLogger
 import com.notificationmaster.service.NlsKeepaliveService
 import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.ui.shortcut.AudibleShortcutActivity
@@ -26,6 +27,7 @@ class NotificationMasterApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        ProfileLogger.init(this)
         PersistentAlertManager.createNotificationChannel(this)
         NlsKeepaliveService.createNotificationChannel(this)
         setupShortcuts()

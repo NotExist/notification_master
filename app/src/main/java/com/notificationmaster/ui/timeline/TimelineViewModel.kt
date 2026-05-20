@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.notificationmaster.NotificationMasterApp
+import com.notificationmaster.core.debug.ProfileLogger
 import com.notificationmaster.core.filter.MatchContext
 import com.notificationmaster.core.filter.Rule
 import com.notificationmaster.core.filter.RuleEngine
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -185,7 +187,15 @@ class TimelineViewModel(
      */
     val allNotifications: StateFlow<List<NotificationDisplay>> = _pageSize
         .flatMapLatest { size ->
+            val tStart = System.currentTimeMillis()
+            ProfileLogger.append("Timeline", "flatMapLatest start limit=$size")
             eventDao.query(EventFilterSpec.All.copy(limit = size))
+                .onEach { items ->
+                    ProfileLogger.append(
+                        "Timeline",
+                        "query emit limit=$size size=${items.size} since-start=${System.currentTimeMillis() - tStart}ms"
+                    )
+                }
                 .map { items -> enrichAndMap(items) }
                 .flowOn(Dispatchers.IO)
                 .conflate()
@@ -405,6 +415,10 @@ class TimelineViewModel(
         // Phase 28：以 displayedNotifications.value 為基準（user 實際看到的 list），
         // 等 size 增長才 reset isLoadingMore，避免「圓圈消失但內容沒呈現」空檔。
         val beforeDisplayedSize = displayedNotifications.value.size
+        ProfileLogger.append(
+            "Timeline",
+            "loadNextDay trigger target=$target beforeDisplayed=$beforeDisplayedSize allItems=${allNotifications.value.size}"
+        )
         _isLoadingMore.value = true
         _pageSize.value = target
         // Phase 27：pageSize 不持久化（避免重 enrich 大量 events 造成 OOM）
@@ -453,11 +467,11 @@ class TimelineViewModel(
 
         /**
          * Phase 25：base list 初始載入量。
-         * 主要 enrich 成本是 per-event JSON parse（~1-5ms/筆），小 preload 換初次載入快。
+         * Phase 29：100 → 30，cold start 先快速顯示 30 項，避免 user 等 30+ 秒空白。
          */
-        const val INITIAL_PAGE_SIZE = 100
+        const val INITIAL_PAGE_SIZE = 30
 
-        /** Phase 25：每次 lazyload 擴張的 events 數量。 */
-        const val PAGE_INCREMENT = 100
+        /** Phase 25：每次 lazyload 擴張的 events 數量。Phase 29：100 → 50 配合 INITIAL 縮小。 */
+        const val PAGE_INCREMENT = 50
     }
 }

@@ -22,6 +22,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.notificationmaster.core.debug.ProfileLogger
 import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.core.permission.NlsConnectionManager
 import com.notificationmaster.core.filter.ActionType
@@ -565,6 +566,8 @@ class TimelineFragment : Fragment() {
         }
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.state.collectLatest { st ->
+                // Phase 29：state transition log，定位 cold start 為何卡 InitialLoading
+                ProfileLogger.append("Fragment", "state=${st::class.simpleName}")
                 if (_binding == null) return@collectLatest
                 _binding?.swipeRefresh?.isRefreshing = st is TimelineLoadState.InitialLoading
                 if (st is TimelineLoadState.Error) {

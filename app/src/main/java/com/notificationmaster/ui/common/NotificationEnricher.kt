@@ -2,6 +2,7 @@ package com.notificationmaster.ui.common
 
 import android.util.Log
 import com.notificationmaster.core.RankingSnapshotMerger
+import com.notificationmaster.core.debug.ProfileLogger
 import com.notificationmaster.data.db.dao.ChannelDao
 import com.notificationmaster.data.db.dao.RankingObservationDao
 import com.notificationmaster.data.db.dao.RankingSnapshotDao
@@ -32,8 +33,10 @@ object NotificationEnricher {
         rankingSnapDao: RankingSnapshotDao
     ): List<NotificationDisplay> {
         if (events.isEmpty()) return emptyList()
+        val t0 = System.currentTimeMillis()
 
         // Channel enrichment：API 26+ 用 channels.importance；API <26 沒 channel 概念，map 拿到 -1
+        val t1 = System.currentTimeMillis()
         val channelMap: Map<String, Int> = if (events.any { it.channelId != null }) {
             channelDao.getAllChannelsSync()
                 .associateBy(
@@ -41,6 +44,7 @@ object NotificationEnricher {
                     valueTransform = { it.importance }
                 )
         } else emptyMap()
+        val t2 = System.currentTimeMillis()
 
         // Ranking enrichment：每個 key 最新 observation + 對應 snapshot
         val keys = events.map { it.notificationKey }.distinct()
@@ -54,8 +58,9 @@ object NotificationEnricher {
                 RankingSnapshotMerger.merge(it, obs)
             })
         }
+        val t3 = System.currentTimeMillis()
 
-        return events.map { event ->
+        val result = events.map { event ->
             runCatching {
                 val channelKey = event.channelId?.let { "${event.packageName}|$it" }
                 val importance = channelKey?.let { channelMap[it] } ?: -1
@@ -72,6 +77,16 @@ object NotificationEnricher {
                 fallbackDisplay(event)
             }
         }
+        val t4 = System.currentTimeMillis()
+
+        // Phase 29 profile log：定位 cold start / lazyload / archive 慢的瓶頸
+        ProfileLogger.append(
+            "Enricher",
+            "enrich(${events.size}) total=${t4 - t0}ms " +
+                "channels=${t2 - t1}ms ranking=${t3 - t2}ms map=${t4 - t3}ms " +
+                "channelsCount=${channelMap.size} keysCount=${keys.size} obsCount=${observations.size}"
+        )
+        return result
     }
 
     /**
