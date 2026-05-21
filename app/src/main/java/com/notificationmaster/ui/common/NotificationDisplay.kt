@@ -1,6 +1,7 @@
 package com.notificationmaster.ui.common
 
 import com.notificationmaster.core.NotificationSnapshotParser
+import com.notificationmaster.core.debug.ProfileLogger
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.data.model.NotificationSnapshot
@@ -118,13 +119,18 @@ data class NotificationDisplay(
             event: NotificationEventEntity,
             enrichment: Enrichment = Enrichment()
         ): NotificationDisplay {
+            // Phase 30：細部 profile — 拆 parse vs field extraction，slow path (>50ms) 才寫 log
+            val tParseStart = System.currentTimeMillis()
             val snap = NotificationSnapshotParser.parse(event.eventRawJson)
+            val tParseEnd = System.currentTimeMillis()
+
             val flags = snap?.flags ?: 0
             val notif = snap?.notification
             val extras = snap?.extras
             val template = extras?.optStringOrNull("android.template")
                 ?: notif?.optStringOrNull("template")
-            return NotificationDisplay(
+            val tFieldStart = System.currentTimeMillis()
+            val result = NotificationDisplay(
                 event = event,
                 // Phase 27：snap 是 local val，攤平後 function 結束 GC，display 不持有 reference
                 isRemoved = event.eventType == EventType.REMOVED,
@@ -179,6 +185,18 @@ data class NotificationDisplay(
                 hasFullScreenIntent = notif?.optJSONObject("fullScreenIntent") != null,
                 hasDeleteIntent = notif?.optJSONObject("deleteIntent") != null
             )
+            val tFieldEnd = System.currentTimeMillis()
+            // Phase 30：slow path log（>50ms）— 用於找 65ms/event 慢的真實瓶頸（parse vs fields）
+            val total = tFieldEnd - tParseStart
+            if (total > 50) {
+                ProfileLogger.append(
+                    "Display",
+                    "from event=${event.id} total=${total}ms " +
+                        "parse=${tParseEnd - tParseStart}ms fields=${tFieldEnd - tFieldStart}ms " +
+                        "rawSize=${event.eventRawJson.length}B"
+                )
+            }
+            return result
         }
 
         // Notification.flags bit 定義（從 framework 抄出，避免 import android.app.Notification）

@@ -9,17 +9,13 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Phase 29：Profile log，寫到 app data folder（不走 logcat — logcat 篩選擷取困難）。
+ * Phase 29：Profile log，寫到 external app-specific storage（與 MediaExtractor 同層，
+ * File Manager 直接可見：`/storage/emulated/0/Android/data/<pkg>/files/profile_log/`）。
+ * 不走 logcat — logcat 篩選擷取困難。
  *
- * 位置：`<context.filesDir>/profile_log/timeline.log`
  * 格式：`HH:mm:ss.SSS [TAG] message` per line
  *
  * Thread-safe append-only。Debug 用。
- *
- * 取出 log：
- * ```
- * adb shell run-as com.notificationmaster cat files/profile_log/timeline.log > timeline.log
- * ```
  */
 object ProfileLogger {
 
@@ -33,7 +29,9 @@ object ProfileLogger {
     fun init(context: Context) {
         if (initLock.compareAndSet(false, true)) {
             try {
-                val dir = File(context.filesDir, DIR_NAME).apply { mkdirs() }
+                // 對齊 MediaExtractor：優先 external app-specific（File Manager 可見），fallback 到 internal
+                val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
+                val dir = File(baseDir, DIR_NAME).apply { mkdirs() }
                 logFile = File(dir, FILE_NAME)
             } catch (e: Exception) {
                 Log.e(TAG, "init failed", e)
