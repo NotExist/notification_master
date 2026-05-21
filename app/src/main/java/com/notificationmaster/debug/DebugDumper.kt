@@ -10,6 +10,7 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.notificationmaster.BuildConfig
 import com.notificationmaster.core.RawSerializer
+import com.notificationmaster.core.debug.RawSizeAnalyzer
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.core.permission.PermissionDescriptions
 import com.notificationmaster.data.model.EnvironmentInfo
@@ -196,7 +197,11 @@ class DebugDumper(private val context: Context) {
                 put("environment", buildEnvironmentJson())
             }
 
-            File(dumpDir, filename).writeText(json.toString(2))
+            val jsonText = json.toString(2)
+            File(dumpDir, filename).writeText(jsonText)
+            // Phase 31a：sibling size breakdown 摘要（驗證 130KB raw 內容分佈）
+            val breakdownName = "${safePackageName}_${timestamp}_${eventType}_breakdown.txt"
+            File(dumpDir, breakdownName).writeText(RawSizeAnalyzer.analyze(jsonText))
             Log.d(TAG, "Dumped $eventType for ${sbn.packageName}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to dump $eventType", e)
@@ -232,7 +237,11 @@ class DebugDumper(private val context: Context) {
                 put("environment", buildEnvironmentJson())
             }
 
-            File(dumpDir, filename).writeText(json.toString(2))
+            val jsonText = json.toString(2)
+            File(dumpDir, filename).writeText(jsonText)
+            // Phase 31a：sibling breakdown 摘要（即便 ranking 通常較小也提供 breakdown 供對比參考）
+            val breakdownName = "system_${timestamp}_RANKING_breakdown.txt"
+            File(dumpDir, breakdownName).writeText(RawSizeAnalyzer.analyze(jsonText))
             Log.d(TAG, "Dumped RANKING (${rankingMap.orderedKeys.size} entries)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to dump ranking", e)
