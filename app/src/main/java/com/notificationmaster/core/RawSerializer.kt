@@ -106,10 +106,22 @@ object RawSerializer {
                 // Phase 31b：UserHandle 含 5 個 static field（OWNER/SYSTEM/ALL/CURRENT/
                 // CURRENT_OR_SELF）互相 reference，identityHashCode 各不同繞過循環偵測，
                 // reflection 5 層深度展開造成 5^5=3125x 序列化爆炸（單筆通知 119KB / 47% raw）。
-                // 只記 identifier 即可，UserHandle 內容對 user 不可見也不可變。
+                //
+                // UserHandle 對 app 唯一有意義的資訊是 user id（主用戶=0 / 工作 profile=10+ /
+                // ALL=-1 / CURRENT=-2 / CURRENT_OR_SELF=-3）。`hashCode()` 通常返回內部
+                // `mHandle` field = user id（Android framework 慣例，API 24+ 已驗證）。
                 is UserHandle -> JSONObject().apply {
                     put("_type", "UserHandle")
-                    put("identifier", obj.hashCode())
+                    val userId = obj.hashCode()
+                    put("userId", userId)
+                    put("label", when (userId) {
+                        0 -> "owner"           // 主用戶 / SYSTEM
+                        -1 -> "ALL"
+                        -2 -> "CURRENT"
+                        -3 -> "CURRENT_OR_SELF"
+                        in 10..99 -> "work_profile_or_secondary"  // 工作 profile / 次要用戶
+                        else -> "other"
+                    })
                 }
                 is Array<*> -> JSONArray().apply {
                     obj.forEach { put(serialize(it, depth + 1, visited)) }
