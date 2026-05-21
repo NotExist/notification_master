@@ -2,12 +2,14 @@ package com.notificationmaster.core
 
 import android.app.PendingIntent
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.os.UserHandle
+import android.util.Base64
 import android.widget.RemoteViews
 import org.json.JSONArray
 import org.json.JSONObject
@@ -38,13 +40,17 @@ object RawSerializer {
         "toString", "describeContents", "writeToParcel"
     )
 
-    /** 不追蹤回傳值的型別（持有 Context / IBinder 等不可序列化資源） */
+    /**
+     * 不追蹤回傳值的型別（持有 Context / IBinder 等不可序列化資源 + reflection 爆炸源）
+     *
+     * Phase 31c：ApplicationInfo 從 skip 改為 special handler（serializeApplicationInfo），
+     * 保留 packageName / labelRes / iconRes / SDK 等基本 metadata（~300B vs 完整反射 5KB）。
+     */
     private val SKIP_RETURN_TYPES: Set<Class<*>> = setOf(
         Context::class.java,
         android.content.res.Resources::class.java,
         ClassLoader::class.java,
         IBinder::class.java,
-        android.content.pm.ApplicationInfo::class.java,
         android.content.pm.PackageManager::class.java
     )
 
@@ -67,10 +73,13 @@ object RawSerializer {
             is Enum<*> -> return obj.name
         }
 
-        // Binary 型別：標示但不傾印內容
+        // Binary 型別：標示但不傾印內容（Bitmap / Drawable / Icon — 已由 MediaExtractor 另存）
         if (isBinaryType(obj)) return buildBinaryMetadata(obj)
+        // Phase 31c：ByteArray 加 base64 保留完整 bytes（事後分析用）。raw 多 1.33x byte 大小，
+        // 通常 < 1KB，可接受。size 仍保留供快速辨識。
         if (obj is ByteArray) return JSONObject().apply {
-            put("_type", "ByteArray"); put("_binary", true); put("size", obj.size)
+            put("_type", "ByteArray"); put("size", obj.size)
+            put("base64", Base64.encodeToString(obj, Base64.NO_WRAP))
         }
 
         // 基本陣列
@@ -123,6 +132,11 @@ object RawSerializer {
                         else -> "other"
                     })
                 }
+                // Phase 31c：ApplicationInfo special handler — 保留 minimal metadata（packageName /
+                // labelRes / iconRes / SDK 版本 / flags 等），避免完整反射爆炸（~5KB → ~300B）。
+                // ApplicationInfo 經 Notification 內部處理會嵌套（如 extras.android.appInfo），
+                // 每筆通知同 app 重複序列化太浪費。
+                is ApplicationInfo -> serializeApplicationInfo(obj)
                 is Array<*> -> JSONArray().apply {
                     obj.forEach { put(serialize(it, depth + 1, visited)) }
                 }
@@ -231,10 +245,13 @@ object RawSerializer {
 
     // === Binary 型別處理 ===
 
+    /**
+     * Phase 31c：RemoteViews 從 binary metadata-only 改走通用反射（actions 內容對事後分析有意義），
+     * 由 reflectObject 處理（深度上限 + 循環偵測仍保護）。
+     */
     private fun isBinaryType(obj: Any): Boolean {
         return obj is Bitmap ||
             obj is Drawable ||
-            obj is RemoteViews ||
             (Build.VERSION.SDK_INT >= 23 && obj is android.graphics.drawable.Icon)
     }
 
@@ -248,10 +265,6 @@ object RawSerializer {
                 put("config", obj.config?.toString())
                 put("byteCount", obj.byteCount)
             }
-            is RemoteViews -> {
-                put("package", obj.`package`)
-                put("layoutId", obj.layoutId)
-            }
         }
         if (Build.VERSION.SDK_INT >= 23 && obj is android.graphics.drawable.Icon) {
             if (Build.VERSION.SDK_INT >= 28) {
@@ -260,6 +273,34 @@ object RawSerializer {
                 put("resId", obj.resId)
             }
         }
+    }
+
+    /**
+     * Phase 31c：ApplicationInfo special handler。
+     * 完整反射展開 ~5KB（含 dataDir / nativeLibraryDir / resources 等大量內部欄位），
+     * user 通知記錄角度只需要識別 app + 基本屬性。保留：packageName / processName / 各種 resId /
+     * SDK 版本 / flags / category（Android 8+）。約 200-400B。
+     */
+    private fun serializeApplicationInfo(info: ApplicationInfo): JSONObject = JSONObject().apply {
+        put("_type", "ApplicationInfo")
+        put("packageName", info.packageName)
+        put("processName", info.processName)
+        put("labelRes", info.labelRes)
+        put("iconRes", info.icon)
+        put("logoRes", info.logo)
+        put("themeRes", info.theme)
+        put("targetSdkVersion", info.targetSdkVersion)
+        if (Build.VERSION.SDK_INT >= 24) {
+            put("minSdkVersion", info.minSdkVersion)
+        }
+        put("flags", info.flags)
+        if (Build.VERSION.SDK_INT >= 26) {
+            put("category", info.category)
+        }
+        put("enabled", info.enabled)
+        info.taskAffinity?.let { put("taskAffinity", it) }
+        info.permission?.let { put("permission", it) }
+        info.uid.takeIf { it != 0 }?.let { put("uid", it) }
     }
 
     private fun shouldSkipReturnType(type: Class<*>): Boolean {
