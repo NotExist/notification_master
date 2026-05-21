@@ -11,6 +11,7 @@ import android.util.Log
 import com.notificationmaster.BuildConfig
 import com.notificationmaster.core.RawSerializer
 import com.notificationmaster.core.debug.RawSizeAnalyzer
+import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.core.permission.PermissionDescriptions
 import com.notificationmaster.data.model.EnvironmentInfo
@@ -35,9 +36,12 @@ class DebugDumper(private val context: Context) {
         private const val DEBUG_DIR_NAME = "NotificationMaster/debug"
     }
 
-    @Volatile
-    var isEnabled = false
-        private set
+    /**
+     * Phase 31a fixup：用 SharedPreferences 跨 instance 共享（settings 端與 service 端各自
+     * 持有 instance，原本 var = false 不同步導致 settings 啟用後 service 不 dump events）。
+     */
+    val isEnabled: Boolean
+        get() = AppPreferences.isDebugDumperEnabled(context)
 
     private val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US)
 
@@ -59,7 +63,7 @@ class DebugDumper(private val context: Context) {
     }
 
     fun enable() {
-        isEnabled = true
+        AppPreferences.setDebugDumperEnabled(context, true)
         Log.i(TAG, "Debug mode enabled. Output dir: ${dumpDir.absolutePath}")
         dumpSystemInfo()
     }
@@ -138,7 +142,7 @@ class DebugDumper(private val context: Context) {
     }
 
     fun disable() {
-        isEnabled = false
+        AppPreferences.setDebugDumperEnabled(context, false)
         Log.i(TAG, "Debug mode disabled")
     }
 

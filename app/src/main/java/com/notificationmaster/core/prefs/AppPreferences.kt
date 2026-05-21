@@ -207,4 +207,19 @@ object AppPreferences {
             .putString(KEY_RULE_LAST_TRIGGERED, obj.toString())
             .apply()
     }
+
+    // === Debug mode (phase 31a fixup) ===
+
+    private const val KEY_DEBUG_DUMPER_ENABLED = "debug_dumper_enabled"
+
+    /**
+     * Phase 31a fixup：DebugDumper 是 instance（settings 一個、service 一個），
+     * isEnabled var 不同步 → 用 SharedPreferences 跨 instance 共享。
+     */
+    fun isDebugDumperEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_DEBUG_DUMPER_ENABLED, false)
+
+    fun setDebugDumperEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_DEBUG_DUMPER_ENABLED, enabled).apply()
+    }
 }
