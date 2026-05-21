@@ -257,8 +257,11 @@ class TimelineViewModel(
             total == null            -> TimelineLoadState.InitialLoading
             total == 0               -> TimelineLoadState.EmptyDb
             items.isEmpty()          -> TimelineLoadState.InitialLoading
-            loading                  -> TimelineLoadState.LoadingMore
+            // Phase 31c+：size >= total 優先於 loading — 即使 _isLoadingMore=true，已到底
+            // 就立刻 EndReached（避免 first 條件 race / timeout 期間 footer 卡 LoadingMore）。
+            // user 反饋「66/66 滾到底 lazyload footer 持續轉動數十秒」就是這個 priority bug。
             size >= total            -> TimelineLoadState.EndReached
+            loading                  -> TimelineLoadState.LoadingMore
             else                     -> TimelineLoadState.Ready(canLoadMore = true)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), TimelineLoadState.InitialLoading)
@@ -410,6 +413,14 @@ class TimelineViewModel(
         val st = state.value
         if (st !is TimelineLoadState.Ready || !st.canLoadMore) return
         if (_isLoadingMore.value) return
+        // Phase 31c+：預檢「pageSize 已 >= totalCount」直接 return（避免無謂觸發 LoadingMore footer）。
+        // state guard 已包含這個語意，但 state 在 fragment scroll 與 viewModel 之間有 race window，
+        // 加這層保險更穩。
+        val totalSnapshot = totalCount.value
+        if (totalSnapshot != null && _pageSize.value >= totalSnapshot) {
+            ProfileLogger.append("Timeline", "loadNextDay skip: pageSize=${_pageSize.value} >= total=$totalSnapshot")
+            return
+        }
 
         val target = _pageSize.value + PAGE_INCREMENT
         // Phase 28：以 displayedNotifications.value 為基準（user 實際看到的 list），
@@ -417,7 +428,8 @@ class TimelineViewModel(
         val beforeDisplayedSize = displayedNotifications.value.size
         ProfileLogger.append(
             "Timeline",
-            "loadNextDay trigger target=$target beforeDisplayed=$beforeDisplayedSize allItems=${allNotifications.value.size}"
+            "loadNextDay trigger target=$target beforeDisplayed=$beforeDisplayedSize " +
+                "allItems=${allNotifications.value.size} total=$totalSnapshot"
         )
         _isLoadingMore.value = true
         _pageSize.value = target
@@ -429,13 +441,18 @@ class TimelineViewModel(
             // 但每次 lazyload 100 raw events 通常會帶來 N unique events → size > before。
             // 極端 case（lazyload 100 raw events 全是同 key dedup）→ 10s timeout 兜底。
             // Phase 27：加 10s timeout safety net 防止極端例外（OOM）導致 _isLoadingMore 永久 true
-            withTimeoutOrNull(10_000L) {
+            val result = withTimeoutOrNull(10_000L) {
                 combine(displayedNotifications, allNotifications, totalCount) { displays, items, total ->
                     displays.size > beforeDisplayedSize ||
                         (total != null && items.size >= total)
                 }.first { it }
             }
             _isLoadingMore.value = false
+            ProfileLogger.append(
+                "Timeline",
+                "loadNextDay done reason=${if (result == null) "timeout" else "condition_met"} " +
+                    "afterDisplayed=${displayedNotifications.value.size} afterItems=${allNotifications.value.size}"
+            )
         }
     }
 
