@@ -264,6 +264,8 @@ class NotificationCaptureService : NotificationListenerService() {
 
             val rankingMap = try { getCurrentRanking() } catch (_: Exception) { null }
             rankingMap?.let { dumpRankingMap(it, "capture_active") }
+            // Phase 31b：補上 debug dump（之前漏寫，跟 onListenerConnected 對齊）
+            debugDumper.dumpActiveNotifications(notifications.toTypedArray(), rankingMap)
             // 有通知但 RankingMap 仍為空 → 補發 banner（OEM 提前綁定後授權再下拉的情境）
             if (Build.VERSION.SDK_INT >= 24 && !isRankingMapPopulated
                 && (rankingMap == null || rankingMap.orderedKeys.isEmpty())) {
