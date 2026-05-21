@@ -146,7 +146,17 @@ object RawSerializer {
         json.put("_type", "Bundle")
         for (key in bundle.keySet()) {
             try {
-                json.put(key, serialize(bundle.get(key), depth + 1, visited))
+                val value = bundle.get(key)
+                // Phase 31b：Bundle 內也檢查 SKIP_RETURN_TYPES（之前 reflectObject 才檢查，
+                // 但 Notification.extras 內 `android.appInfo` 是 ApplicationInfo，反射展開 5KB+
+                // 每筆通知重複）。直接 skip 跟 SKIP_RETURN_TYPES 一致。
+                if (value != null && shouldSkipReturnType(value.javaClass)) {
+                    json.put(key, JSONObject().apply {
+                        put("_type", value.javaClass.simpleName); put("_skipped", true)
+                    })
+                } else {
+                    json.put(key, serialize(value, depth + 1, visited))
+                }
             } catch (e: Exception) {
                 json.put(key, JSONObject().apply { put("_error", e.message) })
             }
