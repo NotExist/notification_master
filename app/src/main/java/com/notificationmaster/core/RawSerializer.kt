@@ -73,6 +73,10 @@ object RawSerializer {
             is Enum<*> -> return obj.name
         }
 
+        // Phase 31c+：SKIP type instance 本身進來時也要標位置（不只 reflectObject/reflectBundle
+        // 的 field/method skip）。保留痕跡 + className FQN + identityHash 供事後辨識同 instance 重複。
+        if (shouldSkipReturnType(obj.javaClass)) return buildSkippedMarker(obj)
+
         // Binary 型別：標示但不傾印內容（Bitmap / Drawable / Icon — 已由 MediaExtractor 另存）
         if (isBinaryType(obj)) return buildBinaryMetadata(obj)
         // Phase 31c：ByteArray 加 base64 保留完整 bytes（事後分析用）。raw 多 1.33x byte 大小，
@@ -165,9 +169,7 @@ object RawSerializer {
                 // 但 Notification.extras 內 `android.appInfo` 是 ApplicationInfo，反射展開 5KB+
                 // 每筆通知重複）。直接 skip 跟 SKIP_RETURN_TYPES 一致。
                 if (value != null && shouldSkipReturnType(value.javaClass)) {
-                    json.put(key, JSONObject().apply {
-                        put("_type", value.javaClass.simpleName); put("_skipped", true)
-                    })
+                    json.put(key, buildSkippedMarker(value))
                 } else {
                     json.put(key, serialize(value, depth + 1, visited))
                 }
@@ -194,10 +196,12 @@ object RawSerializer {
             seenNames.add(name)
             try {
                 val value = field.get(obj)
-                if (shouldSkipReturnType(field.type)) {
-                    json.put(name, JSONObject().apply {
-                        put("_type", field.type.simpleName); put("_skipped", true)
-                    })
+                // Phase 31c+：有 instance 時優先用 buildSkippedMarker（含 identityHash）
+                if (value != null && shouldSkipReturnType(value.javaClass)) {
+                    json.put(name, buildSkippedMarker(value))
+                } else if (shouldSkipReturnType(field.type)) {
+                    // declared type 是 SKIP 但 value 是 null（或同 type）— 用 type-only marker
+                    json.put(name, buildSkippedMarkerByType(field.type))
                 } else {
                     json.put(name, serialize(value, depth + 1, visited))
                 }
@@ -226,15 +230,19 @@ object RawSerializer {
                 if (propName in seenNames) continue
                 seenNames.add(propName)
 
+                // declared return type 已知為 SKIP — 直接寫 type-only marker，不 invoke 避免取到 instance 後反射
                 if (shouldSkipReturnType(returnType)) {
-                    json.put(propName, JSONObject().apply {
-                        put("_type", returnType.simpleName); put("_skipped", true)
-                    })
+                    json.put(propName, buildSkippedMarkerByType(returnType))
                     continue
                 }
 
                 val value = method.invoke(obj)
-                json.put(propName, serialize(value, depth + 1, visited))
+                // 也檢查 value 實際 type（可能 declared 是父 class，actual instance 是 SKIP 子 class）
+                if (value != null && shouldSkipReturnType(value.javaClass)) {
+                    json.put(propName, buildSkippedMarker(value))
+                } else {
+                    json.put(propName, serialize(value, depth + 1, visited))
+                }
             } catch (_: Exception) {
                 // API 版本不符 / SecurityException 等 — 靜默跳過
             }
@@ -305,5 +313,31 @@ object RawSerializer {
 
     private fun shouldSkipReturnType(type: Class<*>): Boolean {
         return SKIP_RETURN_TYPES.any { it.isAssignableFrom(type) }
+    }
+
+    /**
+     * Phase 31c+：skip 標記統一格式。保留：
+     * - `_type`：simpleName 快速辨識
+     * - `_className`：FQN，區分不同 ClassLoader / 內部 class
+     * - `_skipped`: true
+     * - `_identityHash`：System.identityHashCode，用於 grep 找同 instance 多處重複位置
+     *
+     * 用於三處：
+     * 1. serialize() 入口（obj 本身是 SKIP type instance）
+     * 2. reflectObject 內 field/method 回傳 SKIP type
+     * 3. reflectBundle 內 value 是 SKIP type
+     */
+    internal fun buildSkippedMarker(obj: Any): JSONObject = JSONObject().apply {
+        put("_type", obj.javaClass.simpleName)
+        put("_className", obj.javaClass.name)
+        put("_skipped", true)
+        put("_identityHash", System.identityHashCode(obj))
+    }
+
+    /** field/method 回傳 type 是 SKIP（沒有 instance 可拿 identityHash）— 仍記類別位置。 */
+    internal fun buildSkippedMarkerByType(type: Class<*>): JSONObject = JSONObject().apply {
+        put("_type", type.simpleName)
+        put("_className", type.name)
+        put("_skipped", true)
     }
 }
