@@ -7,6 +7,7 @@ import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.os.UserHandle
 import android.widget.RemoteViews
 import org.json.JSONArray
 import org.json.JSONObject
@@ -101,6 +102,14 @@ object RawSerializer {
                     put("_type", "PendingIntent")
                     put("creatorPackage", obj.creatorPackage)
                     put("creatorUid", obj.creatorUid)
+                }
+                // Phase 31b：UserHandle 含 5 個 static field（OWNER/SYSTEM/ALL/CURRENT/
+                // CURRENT_OR_SELF）互相 reference，identityHashCode 各不同繞過循環偵測，
+                // reflection 5 層深度展開造成 5^5=3125x 序列化爆炸（單筆通知 119KB / 47% raw）。
+                // 只記 identifier 即可，UserHandle 內容對 user 不可見也不可變。
+                is UserHandle -> JSONObject().apply {
+                    put("_type", "UserHandle")
+                    put("identifier", obj.hashCode())
                 }
                 is Array<*> -> JSONArray().apply {
                     obj.forEach { put(serialize(it, depth + 1, visited)) }
