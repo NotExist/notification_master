@@ -300,36 +300,24 @@ object ApiVersionHelper {
     // === Audible 推斷 ===
 
     /**
-     * 推斷通知是否產生聲響
+     * 推斷通知是否「意圖」發出聲響（adjective: would alert audibly）。
      *
-     * - API 29+：lastAudiblyAlertedMillis 是 NMS 維護的「該通知歷史上曾響過的最後時刻」，
-     *   只增不減（系統不會 reset 到 0）。
-     *   - `> 0` → 歷史上曾響過 → audible
-     *     （Phase 31q：移除 5 秒窗口判斷；INITIAL 事件 captureTime - lastAudibly 必然
-     *     > 5 秒，原 5 秒窗口會誤判為非 audible；改成「曾響過就算」更符合 chip
-     *     「響過」的自然語意。取捨：ongoing 通知首響後續 UPDATED 都標 audible，
-     *     即使更新本身無聲；可接受）
-     *   - `== 0` → 系統明確「從未響過」→ false
-     *   - `< 0` → caller sentinel（rankingMap 沒填）→ fallback API 26-28 邏輯
-     * - API 26-28：importance >= DEFAULT 且非 FLAG_ONLY_ALERT_ONCE 的 UPDATED → 推斷
-     * - Pre-26：soundUri 非 null → 推斷
+     * Phase 31r：語意校正 — 「audible」是「會發聲」(可能性 / 意圖)，而非「已發聲」
+     * (past)。改用 channel/notification 本身的設計判斷，不再靠 lastAudiblyAlertedMillis
+     * （那是「實際播放過」的證據，屬不同軸；保留在 RankingObservation 供 detail 頁顯示，
+     * 未來可加「實際響過」chip 對應）。
+     *
+     * - API 26+：channel importance >= DEFAULT 且非「FLAG_ONLY_ALERT_ONCE 且為
+     *   UPDATED」 → 該通知設計上會在 POSTED/UPDATED 時發出聲響或振動
+     * - Pre-26：沒有 channel 概念，回到 notification.sound 是否設定
      */
     fun isLikelyAudible(
-        lastAudiblyAlertedMillis: Long,
-        @Suppress("UNUSED_PARAMETER") captureTime: Long,
         importance: Int,
         flags: Int,
         soundUri: String?,
         isUpdate: Boolean
     ): Boolean {
-        if (Build.VERSION.SDK_INT >= API_AUDIBLE_ALERTED) { // API 29+
-            when {
-                lastAudiblyAlertedMillis > 0 -> return true
-                lastAudiblyAlertedMillis == 0L -> return false
-                // < 0 = sentinel → fall through to 26-28 fallback
-            }
-        }
-        return if (Build.VERSION.SDK_INT >= API_NOTIFICATION_CHANNEL) { // API 26+（含 29+ fallback）
+        return if (Build.VERSION.SDK_INT >= API_NOTIFICATION_CHANNEL) { // API 26+
             val isDefaultOrHigher = importance >= android.app.NotificationManager.IMPORTANCE_DEFAULT
             val isOnlyAlertOnce = (flags and Notification.FLAG_ONLY_ALERT_ONCE) != 0
             isDefaultOrHigher && !(isUpdate && isOnlyAlertOnce)

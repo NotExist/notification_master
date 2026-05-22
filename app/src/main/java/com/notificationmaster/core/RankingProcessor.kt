@@ -144,18 +144,14 @@ class RankingProcessor(private val database: NotificationDatabase) {
     private fun inferIsAudible(
         ranking: Ranking,
         sbn: StatusBarNotification?,
-        captureTime: Long
+        @Suppress("UNUSED_PARAMETER") captureTime: Long
     ): Boolean {
         if (sbn == null) return false
         val importance = if (ApiVersionHelper.supportsDirectReply()) ranking.importance else -1
-        val lastAudibly = if (ApiVersionHelper.supportsLastAudiblyAlerted())
-            ranking.lastAudiblyAlertedMillis else -1L
         return ApiVersionHelper.isLikelyAudible(
-            lastAudibly,
-            captureTime,
-            importance,
-            sbn.notification.flags,
-            sbn.notification.sound?.toString(),
+            importance = importance,
+            flags = sbn.notification.flags,
+            soundUri = sbn.notification.sound?.toString(),
             isUpdate = false
         )
     }

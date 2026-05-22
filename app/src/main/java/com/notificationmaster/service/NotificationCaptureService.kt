@@ -520,10 +520,10 @@ class NotificationCaptureService : NotificationListenerService() {
             flags = notifFlags,
             likelyHeadsup = ApiVersionHelper.isLikelyHeadsUp(sbn.notification, rankInfo.importance),
             isAudible = ApiVersionHelper.isLikelyAudible(
-                rankInfo.lastAudiblyAlertedMillis, captureTime,
-                rankInfo.importance ?: -1, notifFlags,
-                sbn.notification.sound?.toString(),
-                eventType == EventType.UPDATED
+                importance = rankInfo.importance ?: -1,
+                flags = notifFlags,
+                soundUri = sbn.notification.sound?.toString(),
+                isUpdate = eventType == EventType.UPDATED
             )
         )
         if (RuleEngine.matches(ActionType.SKIP_RECORD, matchCtx)) {
