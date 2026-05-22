@@ -71,6 +71,17 @@ interface ChannelDao {
     """)
     suspend fun getByPackageAndChannelId(packageName: String, channelId: String): ChannelEntity?
 
+    /**
+     * Phase 31m：Flow 版本，給 Detail 頁 observable 用。
+     * 新事件進來 service 更新 ChannelEntity 後 → Flow 自動 emit → UI 即時刷新。
+     */
+    @Query("""
+        SELECT * FROM channels
+        WHERE package_name = :packageName AND channel_id = :channelId
+        LIMIT 1
+    """)
+    fun getByPackageAndChannelIdFlow(packageName: String, channelId: String): Flow<ChannelEntity?>
+
     @Query("SELECT * FROM channels WHERE app_source_id = :appSourceId ORDER BY notification_count DESC")
     fun getChannelsByAppSourceId(appSourceId: Long): Flow<List<ChannelEntity>>
 

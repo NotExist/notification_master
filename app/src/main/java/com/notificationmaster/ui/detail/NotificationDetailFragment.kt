@@ -220,6 +220,20 @@ class NotificationDetailFragment : Fragment() {
                 }
                 displayNotification(display, channelEntity)
 
+                // Phase 31m：啟動 channel Flow collect，service 寫入新 channel 資料（如名稱）
+                // → DB 變動 → Flow emit → applyChannelInfo 重整 channel 區。
+                // 避免新事件進來時 detail 開著但 channel 名稱 stale，需 cold start 才更新。
+                display.channelId?.let { chId ->
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        database.channelDao()
+                            .getByPackageAndChannelIdFlow(display.packageName, chId)
+                            .collect { latest ->
+                                if (_binding == null) return@collect
+                                applyChannelInfo(display, latest)
+                            }
+                    }
+                }
+
                 // 載入動作按鈕與 Intent 資訊（FK 為 event_id，用 anchor event 查）
                 val actionDao = database.actionDao()
                 val actions = withContext(Dispatchers.IO) {
@@ -498,37 +512,14 @@ class NotificationDetailFragment : Fragment() {
         binding.textKey.text = notification.notificationKey
         binding.labelKey.setOnClickListener { showDescDialog(R.string.label_key, R.string.desc_notification_key) }
 
-        // 頻道資訊卡片（API 26+）
+        // 頻道資訊卡片（API 26+）— Phase 31m：拆出 applyChannelInfo，可隨 Flow 重整
         if (notification.channelId != null) {
             binding.cardChannel.visibility = View.VISIBLE
             binding.textChannel.text = notification.channelId
             binding.labelChannelId.setOnClickListener { showDescDialog(R.string.label_channel, R.string.desc_channel_id) }
-            binding.textChannelName.text = channelEntity?.channelName
-                ?: if (!NotificationCaptureService.isRankingMapPopulated) getString(R.string.channel_name_pending)
-                else getString(R.string.label_channel_name_unknown)
             binding.labelChannelName.setOnClickListener { showDescDialog(R.string.label_channel_name, R.string.desc_channel_name) }
-
-            // importance（優先 ChannelEntity，fallback display.importance — 來自 ranking observation）
-            val effectiveImportance = channelEntity?.importance?.takeIf { it >= 0 }
-                ?: notification.importance.takeIf { it >= 0 }
-            if (effectiveImportance != null) {
-                val importanceName = when (effectiveImportance) {
-                    0 -> "NONE"; 1 -> "MIN"; 2 -> "LOW"; 3 -> "DEFAULT"; 4 -> "HIGH"; 5 -> "MAX"
-                    else -> effectiveImportance.toString()
-                }
-                binding.textImportance.text = "$importanceName ($effectiveImportance)"
-            } else {
-                binding.textImportance.text = if (!NotificationCaptureService.isRankingMapPopulated)
-                    getString(R.string.channel_name_pending) else getString(R.string.label_channel_name_unknown)
-            }
             binding.labelImportance.setOnClickListener { showDescDialog(R.string.label_importance, R.string.desc_importance) }
-
-            // channel group
-            if (channelEntity?.groupId != null) {
-                binding.layoutChannelGroup.visibility = View.VISIBLE
-                binding.textChannelGroup.text = channelEntity.groupId
-                binding.labelChannelGroup.setOnClickListener { showDescDialog(R.string.label_channel_group, R.string.desc_channel_group) }
-            }
+            applyChannelInfo(notification, channelEntity)
         }
 
         // 分類 / 群組
@@ -627,6 +618,40 @@ class NotificationDetailFragment : Fragment() {
                 }
             }
             startActivity(intent)
+        }
+    }
+
+    /**
+     * Phase 31m：channel 區渲染拆出 — 隨 channel Flow emit 重整。
+     * notification 的 channelId 不會變，可 cache 第一次 displayNotification 的引用；
+     * channelEntity 由 Flow 提供，可能為 null（DB 未寫入或被刪）。
+     */
+    private fun applyChannelInfo(notification: NotificationDisplay, channelEntity: ChannelEntity?) {
+        binding.textChannelName.text = channelEntity?.channelName
+            ?: if (!NotificationCaptureService.isRankingMapPopulated) getString(R.string.channel_name_pending)
+            else getString(R.string.label_channel_name_unknown)
+
+        // importance（優先 ChannelEntity，fallback display.importance — 來自 ranking observation）
+        val effectiveImportance = channelEntity?.importance?.takeIf { it >= 0 }
+            ?: notification.importance.takeIf { it >= 0 }
+        if (effectiveImportance != null) {
+            val importanceName = when (effectiveImportance) {
+                0 -> "NONE"; 1 -> "MIN"; 2 -> "LOW"; 3 -> "DEFAULT"; 4 -> "HIGH"; 5 -> "MAX"
+                else -> effectiveImportance.toString()
+            }
+            binding.textImportance.text = "$importanceName ($effectiveImportance)"
+        } else {
+            binding.textImportance.text = if (!NotificationCaptureService.isRankingMapPopulated)
+                getString(R.string.channel_name_pending) else getString(R.string.label_channel_name_unknown)
+        }
+
+        // channel group
+        if (channelEntity?.groupId != null) {
+            binding.layoutChannelGroup.visibility = View.VISIBLE
+            binding.textChannelGroup.text = channelEntity.groupId
+            binding.labelChannelGroup.setOnClickListener { showDescDialog(R.string.label_channel_group, R.string.desc_channel_group) }
+        } else {
+            binding.layoutChannelGroup.visibility = View.GONE
         }
     }
 
