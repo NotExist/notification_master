@@ -150,4 +150,9 @@ class MainActivity : AppCompatActivity() {
         binding.toolbarCount.text = text ?: ""
         binding.toolbarCount.visibility = if (text.isNullOrEmpty()) View.GONE else View.VISIBLE
     }
+
+    /** Phase 31f：點 toolbar counter 跳載入詳情對話框（含 displayed/loaded/unique/raw 四視角）。 */
+    fun setToolbarCountClickListener(listener: (() -> Unit)?) {
+        binding.toolbarCount.setOnClickListener(if (listener == null) null else { _ -> listener() })
+    }
 }

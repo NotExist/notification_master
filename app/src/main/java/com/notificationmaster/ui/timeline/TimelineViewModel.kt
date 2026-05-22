@@ -247,6 +247,24 @@ class TimelineViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), null)
 
+    /**
+     * Phase 31f：DB raw events 數（無 dedup），給「載入詳情」對話框顯示用。
+     * [totalCount] 是 dedup-aware（跟 displays 視角同），此 flow 永遠是 raw count 作為對照。
+     */
+    val totalRawCount: StateFlow<Int?> = eventDao.count(EventFilterSpec.All)
+        .map<Int, Int?> { it }
+        .catch { emit(null) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), null)
+
+    /**
+     * Phase 31f：DB unique notification_key 數（dedup count），給對話框對照用。
+     * 與 [totalCount] 在 dedup ON 時相同；但 dedup OFF 時保留 unique 數供 user 對照。
+     */
+    val totalUniqueCount: StateFlow<Int?> = eventDao.count(EventFilterSpec.All.copy(deduplicate = true))
+        .map<Int, Int?> { it }
+        .catch { emit(null) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), null)
+
     private val _removedIds = MutableStateFlow<Set<String>>(emptySet())
     val removedIds: StateFlow<Set<String>> = _removedIds.asStateFlow()
 

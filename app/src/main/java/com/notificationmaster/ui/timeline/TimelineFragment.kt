@@ -165,12 +165,18 @@ class TimelineFragment : Fragment() {
         }
         bubbleHideRunnable?.let { _binding?.timeBubble?.removeCallbacks(it) }
         _binding?.timeBubble?.visibility = View.GONE
-        (activity as? MainActivity)?.setToolbarCount(null)
+        (activity as? MainActivity)?.apply {
+            setToolbarCount(null)
+            setToolbarCountClickListener(null)
+        }
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
-        (activity as? MainActivity)?.setToolbarCount(null)
+        (activity as? MainActivity)?.apply {
+            setToolbarCount(null)
+            setToolbarCountClickListener(null)
+        }
         _binding = null
     }
 
@@ -687,6 +693,33 @@ class TimelineFragment : Fragment() {
             input.totalCount ?: 0
         )
         (activity as? MainActivity)?.setToolbarCount(text)
+        // Phase 31f：點 toolbar counter 跳載入詳情對話框
+        (activity as? MainActivity)?.setToolbarCountClickListener { showLoadDetailDialog() }
+    }
+
+    /**
+     * Phase 31f：載入詳情對話框 — 列出四個視角的數字供 user 對照觀察。
+     * - 顯示中（displayed）：list 上實際看到的項目數
+     * - 已載入（loaded）：DAO 已 query 出的 raw events 數（受 pageSize limit）
+     * - DB 總計：unique notifications / raw events
+     */
+    private fun showLoadDetailDialog() {
+        if (_binding == null) return
+        val displays = viewModel.displayedNotifications.value.size
+        val loaded = viewModel.allNotifications.value.size
+        val totalUnique = viewModel.totalUniqueCount.value
+        val totalRaw = viewModel.totalRawCount.value
+        val msg = buildString {
+            append(getString(R.string.timeline_load_detail_displayed, displays)).append('\n')
+            append(getString(R.string.timeline_load_detail_loaded, loaded)).append('\n')
+            append(getString(R.string.timeline_load_detail_db_unique, totalUnique?.toString() ?: "—")).append('\n')
+            append(getString(R.string.timeline_load_detail_db_raw, totalRaw?.toString() ?: "—"))
+        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.timeline_load_detail_title)
+            .setMessage(msg)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     private fun filterNotifications(

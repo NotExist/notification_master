@@ -50,6 +50,11 @@
     <string name="timeline_error_snackbar">載入失敗：%1$s</string>
     <string name="timeline_error_dismiss">關閉</string>
     <string name="timeline_error_oom">記憶體不足，請關閉並重新開啟 App</string>
+    <string name="timeline_load_detail_title">載入詳情</string>
+    <string name="timeline_load_detail_displayed">顯示中：%1$d 項</string>
+    <string name="timeline_load_detail_loaded">已載入：%1$d 個事件（raw）</string>
+    <string name="timeline_load_detail_db_unique">DB 總計：%1$s 個獨立通知</string>
+    <string name="timeline_load_detail_db_raw">　　　　 %1$s 個事件（raw）</string>
     <string name="timeline_filter_hint">依標題、內容、App 名稱或包名過濾…</string>
     <string name="timeline_similar_count">+%d 筆相似</string>
     <string name="similar_notifications_title">相似通知</string>
