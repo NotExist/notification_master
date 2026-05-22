@@ -84,7 +84,14 @@ class SettingsFragment : Fragment() {
     private val mediaDirPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
-        uri?.let { handleMediaDirSelected(it) }
+        if (uri != null) {
+            handleMediaDirSelected(uri)
+        } else if (pendingStorageType != null) {
+            // Phase 31n：picker 取消（uri == null）但有 pending → 還原 radio + 清 pending
+            // 不然 radio 會卡在 PUBLIC_EXTERNAL 但 SAF 未選
+            pendingStorageType = null
+            refreshStorageRadioFromPrefs()
+        }
     }
 
     // 過濾規則匯出 SAF
@@ -590,6 +597,9 @@ class SettingsFragment : Fragment() {
         refreshStorageRadioFromPrefs()
 
         binding.radioMediaStorage.setOnCheckedChangeListener { _, checkedId ->
+            // Phase 31n：先依 radio 即時顯隱 SAF section（不論程式 sync 或 user 手動切換），
+            // user 切到 PUBLIC_EXTERNAL 瞬間就能看到當前 SAF 路徑做參考。
+            updateMediaDirDisplay()
             if (isUpdatingStorageRadio) return@setOnCheckedChangeListener
             val newType = when (checkedId) {
                 R.id.radio_media_internal -> MediaStorageType.INTERNAL
@@ -786,15 +796,17 @@ class SettingsFragment : Fragment() {
 
     /**
      * Phase 31l：更新 SAF section 顯示與按鈕狀態。
-     * 僅 PUBLIC_EXTERNAL 模式時顯示整個 SAF 區段。
+     *
+     * Phase 31n：改依 RadioGroup 當下 checkedId 顯隱（不依 prefs），這樣 user 切到
+     * PUBLIC_EXTERNAL 的瞬間（即使 prefs 尚未寫入）就能立刻看到當前 SAF 路徑做參考；
+     * 切換 confirm dialog 取消還原 radio 也會即時隱藏 SAF section。
      */
     private fun updateMediaDirDisplay() {
         val ctx = context ?: return
         val b = _binding ?: return
-        val type = AppPreferences.getMediaStorageType(ctx)
-        b.layoutMediaSafSection.visibility =
-            if (type == MediaStorageType.PUBLIC_EXTERNAL) View.VISIBLE else View.GONE
-        if (type != MediaStorageType.PUBLIC_EXTERNAL) return
+        val isPublic = b.radioMediaStorage.checkedRadioButtonId == R.id.radio_media_public_external
+        b.layoutMediaSafSection.visibility = if (isPublic) View.VISIBLE else View.GONE
+        if (!isPublic) return
 
         if (AppPreferences.isCustomMediaDirEnabled(ctx)) {
             val displayName = AppPreferences.getCustomMediaDirDisplay(ctx) ?: "..."
