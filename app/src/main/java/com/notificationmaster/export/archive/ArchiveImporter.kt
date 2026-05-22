@@ -191,7 +191,7 @@ class ArchiveImporter(private val context: Context) {
     private fun parseObservation(json: JSONObject): RankingObservationEntity {
         val notificationKey = json.getString("notificationKey")
         require(notificationKey.isNotBlank()) { "Observation notificationKey must not be blank" }
-        val rankRaw = if (json.has("rank")) json.optInt("rank", Int.MIN_VALUE) else Int.MIN_VALUE
+        // Phase 31t：rank 從 schema 移除（向後相容：舊匯出檔有 rank 欄位忽略）
         val lastAudiblyRaw = if (json.has("lastAudiblyAlertedMillis"))
             json.optLong("lastAudiblyAlertedMillis", Long.MIN_VALUE) else Long.MIN_VALUE
         return RankingObservationEntity(
@@ -200,7 +200,6 @@ class ArchiveImporter(private val context: Context) {
             observedAt = json.getLong("observedAt"),
             rankingSnapshotId = json.getLong("rankingSnapshotId"),
             source = ObservationSource.valueOf(json.getString("source")),
-            rank = if (rankRaw == Int.MIN_VALUE) null else rankRaw,
             lastAudiblyAlertedMillis = if (lastAudiblyRaw == Long.MIN_VALUE) null else lastAudiblyRaw
         )
     }

@@ -160,18 +160,12 @@ class NotificationEventAdapter(
             )
             binding.textEventTime.text = timeFormat.format(Date(row.observation.observedAt))
 
-            // 噪音欄位摺疊在小字（rank / lastAudibly）
-            val rank = row.observation.rank
+            // Phase 31t：rank 完全移除（不能準確記為時間序列 observation，顯示誤導）。
+            // 顯示 lastAudibly = 該觀察點對應「真的響過」的時刻
             val lastAudibly = row.observation.lastAudiblyAlertedMillis
-            if (rank != null || (lastAudibly != null && lastAudibly > 0)) {
+            if (lastAudibly != null && lastAudibly > 0) {
                 binding.textRemovalReason.visibility = View.VISIBLE
-                binding.textRemovalReason.text = buildString {
-                    if (rank != null) append("rank=$rank")
-                    if (lastAudibly != null && lastAudibly > 0) {
-                        if (isNotEmpty()) append(" · ")
-                        append("lastAudibly=$lastAudibly")
-                    }
-                }
+                binding.textRemovalReason.text = "lastAudibly=$lastAudibly"
                 binding.textRemovalReason.setOnClickListener(null)
             } else {
                 binding.textRemovalReason.visibility = View.GONE

@@ -22,9 +22,13 @@ enum class ObservationSource {
  *
  * 對應某個 callback 在某時刻對某 notificationKey 觀察到的 ranking 狀態：
  * - snapshot 部分（重複內容自動 dedup）→ 引用 RankingSnapshotEntity
- * - rank（噪音欄位，每次重排都變）獨立存於 observation 自身
- * - lastAudiblyAlertedMillis：phase 31s 後加入 snapshot hash，也存 observation
- *   給 merger 還原當下值；snapshot reuse 場景下 observation 值更準確
+ * - lastAudiblyAlertedMillis：phase 31s 起加入 snapshot hash（真的響過才會變動，
+ *   不會爆）；observation 同時存一份，snapshot reuse 時用 observation 值還原（snapshot
+ *   內可能是其他 observation 寫入時的舊值）
+ *
+ * Phase 31t：rank（排序）完全移除 — 既不入 hash 也不存 observation。原因：rank 變化
+ * 不能準確記錄為時間序列 observation，顯示 rank=x 反而誤導 user 以為某時刻 rank 變成
+ * 該值。徹底處理 = 不存不顯示。
  *
  * 寫入規則：
  *   POSTED / UPDATED / INITIAL / REMOVED → 對應事件同時寫一筆 observation
@@ -69,11 +73,10 @@ data class RankingObservationEntity(
     @ColumnInfo(name = "source")
     val source: ObservationSource,
 
-    /** 噪音欄位：rank（每個 RankingMap 都會變動） */
-    @ColumnInfo(name = "rank")
-    val rank: Int?,
-
-    /** 噪音欄位：lastAudiblyAlertedMillis（API 29+） */
+    /**
+     * lastAudiblyAlertedMillis（API 29+）— NMS 維護的「最後播放聲響時刻」。
+     * Phase 31s 起加入 snapshot hash；observation 仍存以還原當下準確值。
+     */
     @ColumnInfo(name = "last_audibly_alerted_millis")
     val lastAudiblyAlertedMillis: Long?
 )

@@ -232,7 +232,6 @@ class ArchiveExporter(
             put("observedAt", o.observedAt)
             put("rankingSnapshotId", o.rankingSnapshotId)
             put("source", o.source.name)
-            put("rank", o.rank)
             put("lastAudiblyAlertedMillis", o.lastAudiblyAlertedMillis)
         }
 

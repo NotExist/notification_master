@@ -18,7 +18,7 @@ import java.security.MessageDigest
  * 統一封裝：
  * 1. 從 RankingMap 抽出對應 sbn.key 的 Ranking entry
  * 2. 序列化為 JSON（透過 RawSerializer）
- * 3. 排除噪音欄位（rank / lastAudiblyAlertedMillis）→ 正規化 JSON + content hash
+ * 3. 排除噪音欄位（rank）→ 正規化 JSON + content hash（phase 31s lastAudibly 加回）
  * 4. RankingSnapshotDao.getByHash 命中則複用，否則 insert
  * 5. 寫一筆 RankingObservation
  * 6. 回傳當下推斷的 isAudible / likelyHeadsup（給呼叫端寫入 NotificationEvent column）
@@ -87,7 +87,6 @@ class RankingProcessor(private val database: NotificationDatabase) {
                 observedAt = observedAt,
                 rankingSnapshotId = finalSnapshotId,
                 source = source,
-                rank = ranking.rank.takeIf { it >= 0 },
                 lastAudiblyAlertedMillis = if (ApiVersionHelper.supportsLastAudiblyAlerted()) {
                     ranking.lastAudiblyAlertedMillis.takeIf { it > 0 }
                 } else null
@@ -127,14 +126,12 @@ class RankingProcessor(private val database: NotificationDatabase) {
     }
 
     /**
-     * 排除噪音欄位後的正規化版本（給 contentHash 用）。
+     * 排除噪音欄位後的正規化版本（給 contentHash 用，同時也是 snapshot.rankingJson 內容）。
      *
-     * Phase 31s：lastAudiblyAlertedMillis 從噪音清單**移除**（加回 hash 計算）。
-     * 它只在 NMS 真的播放聲響時才更新（沒響不變），所以加入 hash 不會造成
-     * 「每次 RANKING_UPDATE 都新增 observation」的爆炸；只會在「真的響過」時
-     * hash 變動 → 新增 observation → detail 時間軸即時看到 audibly alerted 痕跡。
-     *
-     * rank 仍排除：rank 是排序，user 排通知欄、新通知插入都會變，加入會爆。
+     * Phase 31s：lastAudiblyAlertedMillis 加回 hash 計算（真的響過才動，不會爆）。
+     * Phase 31t：rank 仍排除 hash（每次重排都變、會爆），且 observation entity 不再
+     * 存 rank — 既然 rank 變化不能被準確記錄為 observation，顯示 snapshot 內的 rank=x
+     * 反而誤導 user 以為「某時刻 rank 變成 x」。同步從 snapshot.rankingJson 也移除。
      */
     private fun normalizeForHash(rankingJson: JSONObject): JSONObject {
         return JSONObject(rankingJson.toString()).apply {
