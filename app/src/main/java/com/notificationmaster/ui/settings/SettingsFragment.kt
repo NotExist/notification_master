@@ -30,7 +30,9 @@ import com.notificationmaster.export.calendar.CalendarExportLog
 import com.notificationmaster.core.filter.ActionType
 import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.filter.RuleRepository
+import com.notificationmaster.core.media.MediaStorageMigrator
 import com.notificationmaster.core.prefs.AppPreferences
+import com.notificationmaster.core.prefs.AppPreferences.MediaStorageType
 import com.notificationmaster.databinding.FragmentSettingsBinding
 import com.notificationmaster.debug.DebugDumper
 import com.notificationmaster.service.NotificationCaptureService
@@ -570,6 +572,11 @@ class SettingsFragment : Fragment() {
 
     // === 媒體目錄設定 ===
 
+    // Phase 31l：防止程式設定 RadioGroup 觸發 onCheckedChange 迴圈
+    private var isUpdatingStorageRadio = false
+    // 待搬遷的目標 type（PUBLIC_EXTERNAL 流程需要等 SAF picker 回來才能正式切換）
+    private var pendingStorageType: MediaStorageType? = null
+
     private fun setupMediaDirSettings() {
         binding.btnChooseMediaDir.setOnClickListener {
             mediaDirPickerLauncher.launch(null)
@@ -579,41 +586,179 @@ class SettingsFragment : Fragment() {
             resetMediaDir()
         }
 
+        // 初始化 RadioGroup 選中當前 type
+        refreshStorageRadioFromPrefs()
+
+        binding.radioMediaStorage.setOnCheckedChangeListener { _, checkedId ->
+            if (isUpdatingStorageRadio) return@setOnCheckedChangeListener
+            val newType = when (checkedId) {
+                R.id.radio_media_internal -> MediaStorageType.INTERNAL
+                R.id.radio_media_app_external -> MediaStorageType.APP_EXTERNAL
+                R.id.radio_media_public_external -> MediaStorageType.PUBLIC_EXTERNAL
+                else -> return@setOnCheckedChangeListener
+            }
+            onStorageTypeSelected(newType)
+        }
+
         updateMediaDirDisplay()
     }
 
-    /**
-     * 處理使用者選擇的媒體目錄
-     */
-    private fun handleMediaDirSelected(treeUri: android.net.Uri) {
+    /** Phase 31l：依當前 prefs 設 RadioGroup checked，不觸發 listener */
+    private fun refreshStorageRadioFromPrefs() {
         val ctx = context ?: return
-        try {
-            // 取得持久性 URI 權限
-            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            ctx.contentResolver.takePersistableUriPermission(treeUri, flags)
-
-            // 驗證可寫入
-            val docFile = DocumentFile.fromTreeUri(ctx, treeUri)
-            if (docFile == null || !docFile.canWrite()) {
-                Toast.makeText(ctx, R.string.settings_media_dir_invalid, Toast.LENGTH_SHORT).show()
-                return
-            }
-
-            // 儲存設定
-            val displayName = docFile.name ?: treeUri.lastPathSegment ?: treeUri.toString()
-            AppPreferences.setCustomMediaDir(ctx, treeUri, displayName)
-
-            Toast.makeText(ctx, R.string.settings_media_dir_success, Toast.LENGTH_SHORT).show()
-            updateMediaDirDisplay()
-        } catch (e: SecurityException) {
-            Log.w(TAG, "Failed to take persistable URI permission", e)
-            Toast.makeText(ctx, R.string.settings_media_dir_invalid, Toast.LENGTH_SHORT).show()
+        val b = _binding ?: return
+        val current = AppPreferences.getMediaStorageType(ctx)
+        val targetId = when (current) {
+            MediaStorageType.INTERNAL -> R.id.radio_media_internal
+            MediaStorageType.APP_EXTERNAL -> R.id.radio_media_app_external
+            MediaStorageType.PUBLIC_EXTERNAL -> R.id.radio_media_public_external
+        }
+        if (b.radioMediaStorage.checkedRadioButtonId != targetId) {
+            isUpdatingStorageRadio = true
+            try { b.radioMediaStorage.check(targetId) }
+            finally { isUpdatingStorageRadio = false }
         }
     }
 
     /**
-     * 重設為預設媒體目錄
+     * Phase 31l：使用者選了新 storage type。
+     *
+     * - newType == current → no-op
+     * - newType == PUBLIC_EXTERNAL 且未設 SAF → 啟動 SAF picker，picker 完成後續走 onStorageTypeSelected
+     * - 其他 → confirm dialog + migrate
+     */
+    private fun onStorageTypeSelected(newType: MediaStorageType) {
+        val ctx = context ?: return
+        val current = AppPreferences.getMediaStorageType(ctx)
+        if (newType == current) return
+
+        if (newType == MediaStorageType.PUBLIC_EXTERNAL &&
+            !AppPreferences.isCustomMediaDirEnabled(ctx)
+        ) {
+            // 先請 user 選 SAF 目錄，picker 回來才正式切換
+            pendingStorageType = newType
+            Toast.makeText(ctx, R.string.settings_media_migrate_need_saf, Toast.LENGTH_SHORT).show()
+            mediaDirPickerLauncher.launch(null)
+            return
+        }
+
+        confirmAndMigrateStorageType(current, newType)
+    }
+
+    /** Phase 31l：confirm dialog + migrate */
+    private fun confirmAndMigrateStorageType(from: MediaStorageType, to: MediaStorageType) {
+        val ctx = context ?: return
+        // 估算 source 檔案數，給 confirm dialog 顯示
+        viewLifecycleOwner.lifecycleScope.launch {
+            val fileCount = withContext(Dispatchers.IO) {
+                countSourceFiles(ctx, from)
+            }
+            MaterialAlertDialogBuilder(ctx)
+                .setTitle(R.string.settings_media_migrate_title)
+                .setMessage(getString(R.string.settings_media_migrate_message, fileCount))
+                .setPositiveButton(R.string.ok) { _, _ ->
+                    executeMigration(from, to)
+                }
+                .setNegativeButton(R.string.cancel) { _, _ ->
+                    // 取消 → radio 還原為原 type
+                    refreshStorageRadioFromPrefs()
+                }
+                .setOnCancelListener { refreshStorageRadioFromPrefs() }
+                .show()
+        }
+    }
+
+    private fun executeMigration(from: MediaStorageType, to: MediaStorageType) {
+        val ctx = context ?: return
+        val progress = MaterialAlertDialogBuilder(ctx)
+            .setTitle(R.string.settings_media_migrate_title)
+            .setMessage(R.string.settings_media_migrate_in_progress)
+            .setCancelable(false)
+            .show()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = MediaStorageMigrator.migrate(ctx, from, to)
+            // 切換 prefs（搬運完才正式切換，這樣搬運中 NLS 寫入仍走舊位置；
+            // 若搬運中有新檔案產生，下次切換或 cross-type fallback 仍能命中）
+            AppPreferences.setMediaStorageType(ctx, to)
+            progress.dismiss()
+            Toast.makeText(
+                ctx,
+                getString(
+                    R.string.settings_media_migrate_done,
+                    result.copied, result.skipped, result.failed
+                ),
+                Toast.LENGTH_LONG
+            ).show()
+            refreshStorageRadioFromPrefs()
+            updateMediaDirDisplay()
+        }
+    }
+
+    /** 估算搬遷檔案數，給 confirm dialog 顯示 */
+    private fun countSourceFiles(ctx: Context, type: MediaStorageType): Int {
+        return try {
+            when (type) {
+                MediaStorageType.INTERNAL, MediaStorageType.APP_EXTERNAL -> {
+                    val dir = java.io.File(
+                        com.notificationmaster.core.media.MediaExtractor.getMediaBaseDir(ctx, type),
+                        com.notificationmaster.core.media.MediaExtractor.MEDIA_DIR
+                    )
+                    if (!dir.isDirectory) 0 else (dir.listFiles()?.count { it.isFile } ?: 0)
+                }
+                MediaStorageType.PUBLIC_EXTERNAL -> {
+                    val uri = AppPreferences.getCustomMediaDirUri(ctx) ?: return 0
+                    DocumentFile.fromTreeUri(ctx, uri)?.listFiles()
+                        ?.count { it.isFile && !it.name.isNullOrEmpty() } ?: 0
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "countSourceFiles failed for $type", e)
+            0
+        }
+    }
+
+    /**
+     * 處理使用者選擇的媒體目錄（SAF picker 回傳）
+     *
+     * Phase 31l：若 pendingStorageType == PUBLIC_EXTERNAL，picker 完成後正式觸發 migrate；
+     * 否則僅更新 SAF tree URI（user 在 PUBLIC_EXTERNAL 模式下換目錄）。
+     */
+    private fun handleMediaDirSelected(treeUri: android.net.Uri) {
+        val ctx = context ?: return
+        try {
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            ctx.contentResolver.takePersistableUriPermission(treeUri, flags)
+
+            val docFile = DocumentFile.fromTreeUri(ctx, treeUri)
+            if (docFile == null || !docFile.canWrite()) {
+                Toast.makeText(ctx, R.string.settings_media_dir_invalid, Toast.LENGTH_SHORT).show()
+                pendingStorageType = null
+                refreshStorageRadioFromPrefs()
+                return
+            }
+
+            val displayName = docFile.name ?: treeUri.lastPathSegment ?: treeUri.toString()
+            AppPreferences.setCustomMediaDir(ctx, treeUri, displayName)
+            Toast.makeText(ctx, R.string.settings_media_dir_success, Toast.LENGTH_SHORT).show()
+            updateMediaDirDisplay()
+
+            // 若是 PUBLIC_EXTERNAL pending → 接續 migrate 流程
+            val pending = pendingStorageType
+            pendingStorageType = null
+            if (pending == MediaStorageType.PUBLIC_EXTERNAL) {
+                confirmAndMigrateStorageType(AppPreferences.getMediaStorageType(ctx), pending)
+            }
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Failed to take persistable URI permission", e)
+            Toast.makeText(ctx, R.string.settings_media_dir_invalid, Toast.LENGTH_SHORT).show()
+            pendingStorageType = null
+            refreshStorageRadioFromPrefs()
+        }
+    }
+
+    /**
+     * 重設 PUBLIC_EXTERNAL 自訂 SAF 目錄（不切換 storage type，僅清掉 tree URI）。
      */
     private fun resetMediaDir() {
         val ctx = context ?: return
@@ -621,7 +766,6 @@ class SettingsFragment : Fragment() {
             .setTitle(R.string.settings_media_dir_reset)
             .setMessage(R.string.settings_media_dir_reset_confirm)
             .setPositiveButton(R.string.ok) { _, _ ->
-                // 釋放 persistable URI 權限
                 val oldUri = AppPreferences.getCustomMediaDirUri(ctx)
                 if (oldUri != null) {
                     try {
@@ -632,7 +776,6 @@ class SettingsFragment : Fragment() {
                         Log.w(TAG, "Failed to release persistable URI permission", e)
                     }
                 }
-
                 AppPreferences.clearCustomMediaDir(ctx)
                 Toast.makeText(ctx, R.string.settings_media_dir_reset_done, Toast.LENGTH_SHORT).show()
                 updateMediaDirDisplay()
@@ -642,11 +785,16 @@ class SettingsFragment : Fragment() {
     }
 
     /**
-     * 更新媒體目錄顯示狀態
+     * Phase 31l：更新 SAF section 顯示與按鈕狀態。
+     * 僅 PUBLIC_EXTERNAL 模式時顯示整個 SAF 區段。
      */
     private fun updateMediaDirDisplay() {
         val ctx = context ?: return
         val b = _binding ?: return
+        val type = AppPreferences.getMediaStorageType(ctx)
+        b.layoutMediaSafSection.visibility =
+            if (type == MediaStorageType.PUBLIC_EXTERNAL) View.VISIBLE else View.GONE
+        if (type != MediaStorageType.PUBLIC_EXTERNAL) return
 
         if (AppPreferences.isCustomMediaDirEnabled(ctx)) {
             val displayName = AppPreferences.getCustomMediaDirDisplay(ctx) ?: "..."

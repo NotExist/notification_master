@@ -82,38 +82,106 @@
                     android:text="@string/settings_media_dir"
                     android:textAppearance="?attr/textAppearanceBodyLarge" />
 
-                <TextView
-                    android:id="@+id/text_media_dir_path"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="@string/settings_media_dir_default"
-                    android:textAppearance="?attr/textAppearanceBodySmall"
-                    android:textColor="?android:attr/textColorSecondary" />
-
-                <LinearLayout
+                <!-- Phase 31l：三選一 storage type -->
+                <RadioGroup
+                    android:id="@+id/radio_media_storage"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:orientation="horizontal">
+                    android:orientation="vertical">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_choose_media_dir"
-                        android:layout_width="0dp"
+                    <com.google.android.material.radiobutton.MaterialRadioButton
+                        android:id="@+id/radio_media_internal"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginEnd="8dp"
-                        android:text="@string/settings_media_dir_choose"
-                        style="@style/Widget.Material3.Button.TonalButton" />
+                        android:text="@string/settings_media_storage_internal" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_reset_media_dir"
-                        android:layout_width="wrap_content"
+                    <TextView
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/settings_media_dir_reset"
-                        android:visibility="gone"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        tools:visibility="visible" />
+                        android:paddingStart="32dp"
+                        android:paddingEnd="0dp"
+                        android:text="@string/settings_media_storage_internal_desc"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                    <com.google.android.material.radiobutton.MaterialRadioButton
+                        android:id="@+id/radio_media_app_external"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/settings_media_storage_app_external" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="32dp"
+                        android:paddingEnd="0dp"
+                        android:text="@string/settings_media_storage_app_external_desc"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                    <com.google.android.material.radiobutton.MaterialRadioButton
+                        android:id="@+id/radio_media_public_external"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/settings_media_storage_public_external" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="32dp"
+                        android:paddingEnd="0dp"
+                        android:text="@string/settings_media_storage_public_external_desc"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                </RadioGroup>
+
+                <!-- 僅 PUBLIC_EXTERNAL 選中時顯示 -->
+                <LinearLayout
+                    android:id="@+id/layout_media_saf_section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
+                    <TextView
+                        android:id="@+id/text_media_dir_path"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_media_dir_default"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_choose_media_dir"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="8dp"
+                            android:text="@string/settings_media_dir_choose"
+                            style="@style/Widget.Material3.Button.TonalButton" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_reset_media_dir"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_media_dir_reset"
+                            android:visibility="gone"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            tools:visibility="visible" />
+
+                    </LinearLayout>
 
                 </LinearLayout>
 

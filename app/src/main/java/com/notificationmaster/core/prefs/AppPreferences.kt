@@ -10,6 +10,7 @@ import android.net.Uri
 object AppPreferences {
 
     private const val PREFS_NAME = "notification_master_prefs"
+    private const val KEY_MEDIA_STORAGE_TYPE = "media_storage_type"
     private const val KEY_CUSTOM_MEDIA_DIR_URI = "custom_media_dir_uri"
     private const val KEY_CUSTOM_MEDIA_DIR_DISPLAY = "custom_media_dir_display"
     private const val KEY_BACKUP_DIR_URI = "backup_dir_uri"
@@ -22,7 +23,33 @@ object AppPreferences {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     /**
-     * 取得自訂媒體目錄的 tree URI
+     * Phase 31l：媒體儲存類型三選一。
+     * - INTERNAL：context.filesDir/media/（App 私有，無法 File Manager 看）
+     * - APP_EXTERNAL：context.getExternalFilesDir(null)/media/（既有預設，File Manager 可見但 App 移除即清空）
+     * - PUBLIC_EXTERNAL：使用者 SAF 選擇的 tree URI（沿用 KEY_CUSTOM_MEDIA_DIR_URI）
+     *
+     * 預設 APP_EXTERNAL 維持向後相容（既有部署升級不會自動觸發搬運）。
+     */
+    enum class MediaStorageType { INTERNAL, APP_EXTERNAL, PUBLIC_EXTERNAL }
+
+    fun getMediaStorageType(context: Context): MediaStorageType {
+        val name = prefs(context).getString(KEY_MEDIA_STORAGE_TYPE, null)
+            ?: return MediaStorageType.APP_EXTERNAL
+        return try {
+            MediaStorageType.valueOf(name)
+        } catch (_: IllegalArgumentException) {
+            MediaStorageType.APP_EXTERNAL
+        }
+    }
+
+    fun setMediaStorageType(context: Context, type: MediaStorageType) {
+        prefs(context).edit()
+            .putString(KEY_MEDIA_STORAGE_TYPE, type.name)
+            .apply()
+    }
+
+    /**
+     * 取得自訂媒體目錄的 tree URI（PUBLIC_EXTERNAL 對應的具體 SAF 目錄）
      */
     fun getCustomMediaDirUri(context: Context): Uri? =
         prefs(context).getString(KEY_CUSTOM_MEDIA_DIR_URI, null)?.let { Uri.parse(it) }

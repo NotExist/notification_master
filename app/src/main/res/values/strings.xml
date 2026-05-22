@@ -166,6 +166,18 @@
     <string name="settings_media_dir_lost">自訂目錄已無法存取，新檔案將儲存到預設目錄</string>
     <string name="settings_media_dir_reset_confirm">確定要恢復使用預設目錄嗎？\n\n已儲存在自訂目錄的檔案不會被移動或刪除，仍可正常檢視。</string>
     <string name="settings_media_dir_reset_done">已恢復預設媒體目錄</string>
+    <!-- Phase 31l：媒體儲存類型三選一 -->
+    <string name="settings_media_storage_internal">Internal Storage</string>
+    <string name="settings_media_storage_internal_desc">App 內部儲存區，移除 App 即清空、File Manager 看不到</string>
+    <string name="settings_media_storage_app_external">App-specific External</string>
+    <string name="settings_media_storage_app_external_desc">App 私有外部儲存，File Manager 可見、移除 App 仍清空</string>
+    <string name="settings_media_storage_public_external">Public External</string>
+    <string name="settings_media_storage_public_external_desc">公開外部儲存，需透過 SAF 授權目錄；移除 App 不影響檔案</string>
+    <string name="settings_media_migrate_title">搬運媒體檔案</string>
+    <string name="settings_media_migrate_message">將搬運 %1$d 個媒體檔到新位置，可能需要幾秒到數十秒。</string>
+    <string name="settings_media_migrate_in_progress">正在搬運…</string>
+    <string name="settings_media_migrate_done">完成：複製 %1$d，跳過 %2$d，失敗 %3$d</string>
+    <string name="settings_media_migrate_need_saf">請先選擇 SAF 目錄</string>
 
     <!-- 通用 -->
     <string name="ok">確定</string>

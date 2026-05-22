@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.documentfile.provider.DocumentFile
 import com.notificationmaster.core.prefs.AppPreferences
+import com.notificationmaster.core.prefs.AppPreferences.MediaStorageType
 import com.notificationmaster.data.db.entity.MediaAttachmentEntity
 import com.notificationmaster.data.db.entity.MediaType
 import java.io.File
@@ -44,43 +45,68 @@ class MediaExtractor(private val context: Context) {
 
     companion object {
         private const val TAG = "MediaExtractor"
-        private const val MEDIA_DIR = "media"
+        const val MEDIA_DIR = "media"
 
         /**
-         * 取得媒體檔案的基底目錄（外部儲存）
-         * 回傳 getExternalFilesDir(null)，外部儲存不可用時 fallback 到 filesDir
+         * Phase 31l：取得指定 storage type 的媒體基底目錄（不含 MEDIA_DIR）。
+         * - INTERNAL → context.filesDir
+         * - APP_EXTERNAL → context.getExternalFilesDir(null)（fallback filesDir 若外部不可用）
+         * - PUBLIC_EXTERNAL → 由 SAF 處理，不走 File 路徑；此處仍回 fallback File 給呼叫端做最後保險
          */
-        fun getMediaBaseDir(context: Context): File {
-            return context.getExternalFilesDir(null) ?: context.filesDir
+        fun getMediaBaseDir(context: Context, type: MediaStorageType): File {
+            return when (type) {
+                MediaStorageType.INTERNAL -> context.filesDir
+                MediaStorageType.APP_EXTERNAL -> context.getExternalFilesDir(null) ?: context.filesDir
+                MediaStorageType.PUBLIC_EXTERNAL -> context.getExternalFilesDir(null) ?: context.filesDir
+            }
         }
 
+        /** 便利 overload：用當前設定的 storage type */
+        fun getMediaBaseDir(context: Context): File =
+            getMediaBaseDir(context, AppPreferences.getMediaStorageType(context))
+
         /**
-         * 依設定動態解析媒體檔案位置
-         * 自訂目錄啟用時優先查自訂目錄，fallback 預設目錄；反之亦然
+         * Phase 31l：依設定動態解析媒體檔案位置 — 三選一 + cross-type fallback。
+         *
+         * 先查當前 storage type；找不到時 fallback 查其他兩 type（搬運未完成 / 失敗 / 跨版本資料
+         * 存在於舊位置時仍能命中），全部找不到回 NotFound。
          *
          * @param fileName 媒體檔名（如 "com.example_PICTURE_abc123.png"）
          */
         fun resolveMediaFile(context: Context, fileName: String): ResolvedMedia {
             if (fileName.isEmpty()) return ResolvedMedia.NotFound
-            val customUri = AppPreferences.getCustomMediaDirUri(context)
-
-            if (customUri != null) {
-                // 優先自訂目錄 → fallback 預設
-                try {
-                    DocumentFile.fromTreeUri(context, customUri)
-                        ?.findFile(fileName)?.takeIf { it.exists() }
-                        ?.let { return ResolvedMedia.CustomDir(it.uri) }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Custom dir lookup failed for $fileName", e)
-                }
-                val file = File(File(getMediaBaseDir(context), MEDIA_DIR), fileName)
-                if (file.exists()) return ResolvedMedia.DefaultDir(file)
-            } else {
-                // 優先預設目錄（無自訂目錄時不需 fallback）
-                val file = File(File(getMediaBaseDir(context), MEDIA_DIR), fileName)
-                if (file.exists()) return ResolvedMedia.DefaultDir(file)
+            val current = AppPreferences.getMediaStorageType(context)
+            lookupInStorageType(context, current, fileName)?.let { return it }
+            for (other in MediaStorageType.values()) {
+                if (other == current) continue
+                lookupInStorageType(context, other, fileName)?.let { return it }
             }
             return ResolvedMedia.NotFound
+        }
+
+        private fun lookupInStorageType(
+            context: Context,
+            type: MediaStorageType,
+            fileName: String
+        ): ResolvedMedia? {
+            return when (type) {
+                MediaStorageType.INTERNAL, MediaStorageType.APP_EXTERNAL -> {
+                    val base = getMediaBaseDir(context, type)
+                    val file = File(File(base, MEDIA_DIR), fileName)
+                    if (file.exists()) ResolvedMedia.DefaultDir(file) else null
+                }
+                MediaStorageType.PUBLIC_EXTERNAL -> {
+                    val uri = AppPreferences.getCustomMediaDirUri(context) ?: return null
+                    try {
+                        DocumentFile.fromTreeUri(context, uri)
+                            ?.findFile(fileName)?.takeIf { it.exists() }
+                            ?.let { ResolvedMedia.CustomDir(it.uri) }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "PUBLIC_EXTERNAL lookup failed for $fileName", e)
+                        null
+                    }
+                }
+            }
         }
 
         /**
@@ -232,24 +258,29 @@ class MediaExtractor(private val context: Context) {
         }
     }
 
-    private val mediaDir: File by lazy {
-        File(getMediaBaseDir(context), MEDIA_DIR).apply { mkdirs() }
-    }
+    /**
+     * Phase 31l：移除 by lazy 並改成函式 — storage type toggle 後 instance 持續被
+     * Service 持有，lazy 已 fix 的 cache 不會更新。每次 query 直讀 SharedPreferences
+     * + File 物件 — 開銷可忽略，換來 toggle 後即時生效。
+     */
+    private fun currentMediaDir(): File =
+        File(getMediaBaseDir(context, AppPreferences.getMediaStorageType(context)), MEDIA_DIR)
+            .apply { mkdirs() }
 
-    /** 自訂媒體目錄的 DocumentFile（不可用時為 null） */
-    private val customMediaDocDir: DocumentFile? by lazy {
-        AppPreferences.getCustomMediaDirUri(context)?.let { treeUri ->
-            try {
-                DocumentFile.fromTreeUri(context, treeUri)?.takeIf { it.canWrite() }
-            } catch (e: Exception) {
-                Log.w(TAG, "Custom media dir unavailable", e)
-                null
-            }
+    /** SAF DocumentFile：僅 PUBLIC_EXTERNAL 模式且 URI 仍可寫時非 null */
+    private fun currentSafDocDir(): DocumentFile? {
+        if (AppPreferences.getMediaStorageType(context) != MediaStorageType.PUBLIC_EXTERNAL) return null
+        val uri = AppPreferences.getCustomMediaDirUri(context) ?: return null
+        return try {
+            DocumentFile.fromTreeUri(context, uri)?.takeIf { it.canWrite() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Custom media dir unavailable", e)
+            null
         }
     }
 
-    /** 是否使用自訂目錄 */
-    private val useCustomDir: Boolean by lazy { customMediaDocDir != null }
+    /** 是否使用 SAF（PUBLIC_EXTERNAL 啟用且有合法 tree URI）*/
+    private fun useSafDir(): Boolean = currentSafDocDir() != null
 
     /**
      * 提取通知中的所有媒體附件
@@ -445,7 +476,7 @@ class MediaExtractor(private val context: Context) {
 
         val uriString = uri.toString()
 
-        if (useCustomDir) {
+        if (useSafDir()) {
             saveBytesToCustomDir(bytes, hash, ext, mimeType, eventId, packageName,
                 MediaType.MESSAGE_MEDIA, captureTime,
                 bounds.outWidth, bounds.outHeight)?.let {
@@ -485,7 +516,7 @@ class MediaExtractor(private val context: Context) {
     ): MediaAttachmentEntity? {
         return try {
             val fileName = buildMediaFileName(packageName, mediaType, hash, ext)
-            val file = File(mediaDir, fileName)
+            val file = File(currentMediaDir(), fileName)
             if (!file.exists()) {
                 FileOutputStream(file).use { it.write(bytes) }
             }
@@ -513,7 +544,7 @@ class MediaExtractor(private val context: Context) {
         eventId: Long, packageName: String,
         mediaType: MediaType, captureTime: Long, width: Int, height: Int
     ): MediaAttachmentEntity? {
-        val docDir = customMediaDocDir ?: return null
+        val docDir = currentSafDocDir() ?: return null
         return try {
             val fileName = buildMediaFileName(packageName, mediaType, hash, ext)
             val existing = docDir.findFile(fileName)
@@ -617,7 +648,7 @@ class MediaExtractor(private val context: Context) {
     ): MediaAttachmentEntity? {
         val hash = bitmapHash(bitmap)
 
-        if (useCustomDir) {
+        if (useSafDir()) {
             saveBitmapToCustomDir(bitmap, hash, eventId, packageName, mediaType, captureTime)?.let {
                 return it
             }
@@ -639,7 +670,7 @@ class MediaExtractor(private val context: Context) {
         mediaType: MediaType,
         captureTime: Long
     ): MediaAttachmentEntity? {
-        val docDir = customMediaDocDir ?: return null
+        val docDir = currentSafDocDir() ?: return null
         return try {
             val fileName = buildMediaFileName(packageName, mediaType, hash, "png")
             val existing = docDir.findFile(fileName)
@@ -688,7 +719,7 @@ class MediaExtractor(private val context: Context) {
     ): MediaAttachmentEntity? {
         return try {
             val fileName = buildMediaFileName(packageName, mediaType, hash, "png")
-            val existingFile = File(mediaDir, fileName)
+            val existingFile = File(currentMediaDir(), fileName)
 
             if (!existingFile.exists()) {
                 FileOutputStream(existingFile).use { out ->
@@ -758,12 +789,17 @@ class MediaExtractor(private val context: Context) {
      * 取得媒體目錄大小（合計預設 + 自訂目錄）
      */
     fun getMediaDirSize(): Long {
-        val defaultSize = mediaDir.walkTopDown()
-            .filter { it.isFile }
-            .sumOf { it.length() }
+        val defaultSize = try {
+            currentMediaDir().walkTopDown()
+                .filter { it.isFile }
+                .sumOf { it.length() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to calculate default dir size", e)
+            0L
+        }
 
         val customSize = try {
-            customMediaDocDir?.listFiles()?.sumOf { it.length() } ?: 0L
+            currentSafDocDir()?.listFiles()?.sumOf { it.length() } ?: 0L
         } catch (e: Exception) {
             Log.w(TAG, "Failed to calculate custom dir size", e)
             0L
