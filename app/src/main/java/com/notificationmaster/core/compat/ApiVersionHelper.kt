@@ -301,21 +301,35 @@ object ApiVersionHelper {
 
     /**
      * 推斷通知是否產生聲響
-     * - API 29+：lastAudiblyAlertedMillis 與 captureTime 差距 ≤ 5 秒 → 確認
+     *
+     * - API 29+：lastAudiblyAlertedMillis 是 NMS 維護的「該通知歷史上曾響過的最後時刻」，
+     *   只增不減（系統不會 reset 到 0）。
+     *   - `> 0` → 歷史上曾響過 → audible
+     *     （Phase 31q：移除 5 秒窗口判斷；INITIAL 事件 captureTime - lastAudibly 必然
+     *     > 5 秒，原 5 秒窗口會誤判為非 audible；改成「曾響過就算」更符合 chip
+     *     「最近有聲」的自然語意。取捨：ongoing 通知首響後續 UPDATED 都標 audible，
+     *     即使更新本身無聲；可接受）
+     *   - `== 0` → 系統明確「從未響過」→ false
+     *   - `< 0` → caller sentinel（rankingMap 沒填）→ fallback API 26-28 邏輯
      * - API 26-28：importance >= DEFAULT 且非 FLAG_ONLY_ALERT_ONCE 的 UPDATED → 推斷
      * - Pre-26：soundUri 非 null → 推斷
      */
     fun isLikelyAudible(
         lastAudiblyAlertedMillis: Long,
-        captureTime: Long,
+        @Suppress("UNUSED_PARAMETER") captureTime: Long,
         importance: Int,
         flags: Int,
         soundUri: String?,
         isUpdate: Boolean
     ): Boolean {
-        return if (Build.VERSION.SDK_INT >= API_AUDIBLE_ALERTED) { // API 29+
-            lastAudiblyAlertedMillis > 0 && (captureTime - lastAudiblyAlertedMillis) <= 5000
-        } else if (Build.VERSION.SDK_INT >= API_NOTIFICATION_CHANNEL) { // API 26-28
+        if (Build.VERSION.SDK_INT >= API_AUDIBLE_ALERTED) { // API 29+
+            when {
+                lastAudiblyAlertedMillis > 0 -> return true
+                lastAudiblyAlertedMillis == 0L -> return false
+                // < 0 = sentinel → fall through to 26-28 fallback
+            }
+        }
+        return if (Build.VERSION.SDK_INT >= API_NOTIFICATION_CHANNEL) { // API 26+（含 29+ fallback）
             val isDefaultOrHigher = importance >= android.app.NotificationManager.IMPORTANCE_DEFAULT
             val isOnlyAlertOnce = (flags and Notification.FLAG_ONLY_ALERT_ONCE) != 0
             isDefaultOrHigher && !(isUpdate && isOnlyAlertOnce)
