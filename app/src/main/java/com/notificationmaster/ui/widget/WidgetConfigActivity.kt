@@ -152,18 +152,18 @@ class WidgetConfigActivity : AppCompatActivity() {
 
     /** 內建 rule 走 i18n 顯示名（與 Timeline chip / Shortcut 一致） */
     private fun ruleDisplayLabel(rule: Rule): String = when (rule.id) {
-        RuleRepository.builtInRuleIdAudible() -> getString(R.string.preset_recent_audible)
-        RuleRepository.builtInRuleIdHeadsup() -> getString(R.string.preset_recent_headsup)
-        RuleRepository.builtInRuleIdDismissed() -> getString(R.string.preset_recent_dismissed)
+        RuleRepository.builtInRuleIdAudible() -> getString(R.string.preset_audible)
+        RuleRepository.builtInRuleIdHeadsup() -> getString(R.string.preset_headsup)
+        RuleRepository.builtInRuleIdDismissed() -> getString(R.string.preset_dismissed)
         else -> rule.name ?: deriveLabel(rule.matchers)
     }
 
     private fun deriveLabel(matchers: List<Matcher>): String {
         val derived = matchers.filterIsInstance<Matcher.DerivedProperty>().firstOrNull()
         if (derived != null) {
-            if (derived.isAudible == true) return getString(R.string.preset_recent_audible)
-            if (derived.likelyHeadsup == true) return getString(R.string.preset_recent_headsup)
-            if (derived.isRemoved == true) return getString(R.string.preset_recent_dismissed)
+            if (derived.isAudible == true) return getString(R.string.preset_audible)
+            if (derived.likelyHeadsup == true) return getString(R.string.preset_headsup)
+            if (derived.isRemoved == true) return getString(R.string.preset_dismissed)
         }
         val pkg = matchers.filterIsInstance<Matcher.Package>().firstOrNull()
         if (pkg != null) return AppLabelCache.getLabel(this, pkg.packageName)

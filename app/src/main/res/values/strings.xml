@@ -346,23 +346,23 @@
     <string name="filter_rule_count_line">%1$s：%2$d 條</string>
 
     <!-- Audible / Shortcut -->
-    <string name="timeline_audible_only">有聲</string>
-    <string name="shortcut_audible_short">最近發聲</string>
-    <string name="shortcut_audible_long">最近發出聲音的通知</string>
-    <string name="shortcut_headsup_short">最近彈出</string>
-    <string name="shortcut_headsup_long">最近以 Heads-up 彈出的通知</string>
-    <string name="shortcut_audible_title">最近有聲通知</string>
-    <string name="shortcut_headsup_title">最近 Heads-up 通知</string>
-    <string name="shortcut_empty_audible">尚無有聲通知記錄</string>
+    <string name="timeline_audible_only">響過</string>
+    <string name="shortcut_audible_short">響過</string>
+    <string name="shortcut_audible_long">曾發出聲音的通知</string>
+    <string name="shortcut_headsup_short">彈出</string>
+    <string name="shortcut_headsup_long">以 Heads-up 彈出過的通知</string>
+    <string name="shortcut_audible_title">響過的通知</string>
+    <string name="shortcut_headsup_title">彈出過的通知</string>
+    <string name="shortcut_empty_audible">尚無響過的通知記錄</string>
     <string name="shortcut_empty_headsup">尚無 Heads-up 通知記錄</string>
     <string name="timeline_dismissed_only">已移除</string>
     <string name="timeline_headsup_only">彈出</string>
 
     <!-- 命名篩選 Preset -->
     <string name="timeline_preset_add">自訂篩選</string>
-    <string name="preset_recent_audible">最近有聲</string>
-    <string name="preset_recent_headsup">最近彈出</string>
-    <string name="preset_recent_dismissed">最近已移除</string>
+    <string name="preset_audible">響過</string>
+    <string name="preset_headsup">彈出</string>
+    <string name="preset_dismissed">已移除</string>
     <string name="preset_save_title">儲存為 Preset</string>
     <string name="preset_save_name_hint">Preset 名稱</string>
     <string name="preset_save_name_empty">請輸入名稱</string>

@@ -23,7 +23,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Audible Shortcut Activity — Dialog 風格置中浮動視窗
- * 顯示最近有聲通知列表，點擊項目跳轉到主 App 詳情頁
+ * 顯示響過的通知列表，點擊項目跳轉到主 App 詳情頁
  */
 class AudibleShortcutActivity : AppCompatActivity() {
 

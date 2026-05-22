@@ -225,7 +225,7 @@ data class SupportedFeatures(
                 androidVersion = androidVersionName(25),
                 supported = sdk >= 25,
                 features = listOf(
-                    FeatureItem("App Shortcut", "長按 App 圖示顯示快捷選單（如「最近發聲」）", implemented = true)
+                    FeatureItem("App Shortcut", "長按 App 圖示顯示快捷選單（如「響過」）", implemented = true)
                 )
             ),
             ApiFeatureGroup(

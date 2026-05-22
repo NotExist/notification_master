@@ -301,9 +301,9 @@ class TimelineFragment : Fragment() {
 
     /** 顯示名：內建 rule 用 strings 對照；user-defined 用 rule.name；fallback id */
     private fun ruleDisplayName(rule: Rule): String = when (rule.id) {
-        RuleRepository.builtInRuleIdAudible() -> getString(R.string.preset_recent_audible)
-        RuleRepository.builtInRuleIdHeadsup() -> getString(R.string.preset_recent_headsup)
-        RuleRepository.builtInRuleIdDismissed() -> getString(R.string.preset_recent_dismissed)
+        RuleRepository.builtInRuleIdAudible() -> getString(R.string.preset_audible)
+        RuleRepository.builtInRuleIdHeadsup() -> getString(R.string.preset_headsup)
+        RuleRepository.builtInRuleIdDismissed() -> getString(R.string.preset_dismissed)
         else -> rule.name ?: rule.id.take(8)
     }
 

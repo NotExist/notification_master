@@ -69,9 +69,9 @@ class NotificationMasterApp : Application() {
     }
 
     companion object {
-        private const val SHORTCUT_ID_AUDIBLE = "recent_audible"
-        private const val SHORTCUT_ID_HEADSUP = "recent_headsup"
-        private const val SHORTCUT_ID_DISMISSED = "recent_dismissed"
+        private const val SHORTCUT_ID_AUDIBLE = "shortcut_audible"
+        private const val SHORTCUT_ID_HEADSUP = "shortcut_headsup"
+        private const val SHORTCUT_ID_DISMISSED = "shortcut_dismissed"
 
         @Volatile
         private var instance: NotificationMasterApp? = null

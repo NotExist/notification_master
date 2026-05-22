@@ -307,7 +307,7 @@ object ApiVersionHelper {
      *   - `> 0` → 歷史上曾響過 → audible
      *     （Phase 31q：移除 5 秒窗口判斷；INITIAL 事件 captureTime - lastAudibly 必然
      *     > 5 秒，原 5 秒窗口會誤判為非 audible；改成「曾響過就算」更符合 chip
-     *     「最近有聲」的自然語意。取捨：ongoing 通知首響後續 UPDATED 都標 audible，
+     *     「響過」的自然語意。取捨：ongoing 通知首響後續 UPDATED 都標 audible，
      *     即使更新本身無聲；可接受）
      *   - `== 0` → 系統明確「從未響過」→ false
      *   - `< 0` → caller sentinel（rankingMap 沒填）→ fallback API 26-28 邏輯

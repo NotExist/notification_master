@@ -58,9 +58,9 @@ object RuleRepository {
     }
 
     /** 內建 LIST_FILTER rule 的固定 id（不可變） */
-    private const val BUILTIN_RECENT_AUDIBLE_ID = "builtin-list-recent-audible"
-    private const val BUILTIN_RECENT_HEADSUP_ID = "builtin-list-recent-headsup"
-    private const val BUILTIN_RECENT_DISMISSED_ID = "builtin-list-recent-dismissed"
+    private const val BUILTIN_AUDIBLE_ID = "builtin-list-audible"
+    private const val BUILTIN_HEADSUP_ID = "builtin-list-headsup"
+    private const val BUILTIN_DISMISSED_ID = "builtin-list-dismissed"
 
     /**
      * 確保內建 LIST_FILTER rules 存在；存在的對應 id 會被最新版本覆寫
@@ -76,32 +76,32 @@ object RuleRepository {
     private fun builtInListFilterRules(): List<Rule> = listOf(
         // 不帶 limit：Timeline 套用時走無限歷史（Shortcut 短覽端自己加 limit）
         Rule(
-            id = BUILTIN_RECENT_AUDIBLE_ID,
-            name = "RecentAudible",
+            id = BUILTIN_AUDIBLE_ID,
+            name = "Audible",
             matchers = listOf(Matcher.DerivedProperty(isAudible = true)),
             action = RuleAction.ListFilter(deduplicate = true),
             isBuiltIn = true
         ),
         Rule(
-            id = BUILTIN_RECENT_HEADSUP_ID,
-            name = "RecentHeadsup",
+            id = BUILTIN_HEADSUP_ID,
+            name = "Headsup",
             matchers = listOf(Matcher.DerivedProperty(likelyHeadsup = true)),
             action = RuleAction.ListFilter(deduplicate = true),
             isBuiltIn = true
         ),
         Rule(
-            id = BUILTIN_RECENT_DISMISSED_ID,
-            name = "RecentDismissed",
+            id = BUILTIN_DISMISSED_ID,
+            name = "Dismissed",
             matchers = listOf(Matcher.DerivedProperty(isRemoved = true)),
             action = RuleAction.ListFilter(deduplicate = true),
             isBuiltIn = true
         )
     )
 
-    /** 提供給 Shortcut / Widget 解析「最近有聲」等系統入口 */
-    fun builtInRuleIdAudible(): String = BUILTIN_RECENT_AUDIBLE_ID
-    fun builtInRuleIdHeadsup(): String = BUILTIN_RECENT_HEADSUP_ID
-    fun builtInRuleIdDismissed(): String = BUILTIN_RECENT_DISMISSED_ID
+    /** 提供給 Shortcut / Widget 解析「響過」等系統入口 */
+    fun builtInRuleIdAudible(): String = BUILTIN_AUDIBLE_ID
+    fun builtInRuleIdHeadsup(): String = BUILTIN_HEADSUP_ID
+    fun builtInRuleIdDismissed(): String = BUILTIN_DISMISSED_ID
 
     /**
      * 強制重新載入（規則被外部修改時使用）
