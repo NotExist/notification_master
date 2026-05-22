@@ -623,7 +623,19 @@ class TimelineFragment : Fragment() {
         val state: TimelineLoadState
     )
 
-    private fun renderList(input: ListRenderInput) {
+    /**
+     * Phase 31i：改 suspend 函式，移除內部 `viewLifecycleOwner.lifecycleScope.launch`。
+     *
+     * 之前 renderList 是 non-suspend，內部用 launch 啟新 coroutine 做 IO + submitList。
+     * 外層 `combine(...).collectLatest { renderList(it) }` 的 collectLatest 只 cancel
+     * collect block，不 cancel renderList 內 launch 出的 coroutine → lazyload 期間快速
+     * 多次 emit 會啟多個並行 coroutine，後啟動但先完成的 submitList 會被先啟動但後完成
+     * 的覆蓋（race），導致「新內容沒呈現 + footer 閃一下消失 + 鎖屏再亮才出現」。
+     *
+     * suspend 化後 IO 計算與 submitList 都在 collectLatest 控制下，最新 input 的處理
+     * 自然取代舊的。
+     */
+    private suspend fun renderList(input: ListRenderInput) {
         val binding = _binding ?: return
         val filtered = filterNotifications(input.allNotifications, input.filterText)
 
@@ -648,30 +660,33 @@ class TimelineFragment : Fragment() {
         binding.emptyState.visibility = View.GONE
         binding.recyclerView.visibility = View.VISIBLE
 
-        viewLifecycleOwner.lifecycleScope.launch {
-            val eventDao = NotificationMasterApp.getInstance().database.notificationEventDao()
-            // Phase 26：buildTimelineItemsWithSimilarCount 改為單一 IO 包覆（vs 之前每 item 一次
-            // withContext(IO) 切換），長 list 不再 N 次 thread hop 拖累 main thread
-            var timelineItems: List<TimelineItem> = withContext(Dispatchers.IO) {
-                if (input.spec.deduplicate) {
-                    buildTimelineItemsWithSimilarCountInIo(filtered, input.removedIds, eventDao)
-                } else {
-                    buildTimelineItems(filtered, input.removedIds)
-                }
+        val eventDao = NotificationMasterApp.getInstance().database.notificationEventDao()
+        // Phase 26：buildTimelineItemsWithSimilarCount 改為單一 IO 包覆（vs 之前每 item 一次
+        // withContext(IO) 切換），長 list 不再 N 次 thread hop 拖累 main thread
+        var timelineItems: List<TimelineItem> = withContext(Dispatchers.IO) {
+            if (input.spec.deduplicate) {
+                buildTimelineItemsWithSimilarCountInIo(filtered, input.removedIds, eventDao)
+            } else {
+                buildTimelineItems(filtered, input.removedIds)
             }
-            // Phase 26：footer 條件用 state（單一 source of truth）
-            val footer = when (input.state) {
-                is TimelineLoadState.LoadingMore -> TimelineItem.LoadingMore
-                is TimelineLoadState.EndReached -> TimelineItem.EndOfTimeline
-                else -> null
-            }
-            if (footer != null) timelineItems = timelineItems + footer
+        }
+        // Phase 26：footer 條件用 state（單一 source of truth）
+        val footer = when (input.state) {
+            is TimelineLoadState.LoadingMore -> TimelineItem.LoadingMore
+            is TimelineLoadState.EndReached -> TimelineItem.EndOfTimeline
+            else -> null
+        }
+        if (footer != null) timelineItems = timelineItems + footer
 
-            adapter?.submitList(timelineItems) {
-                pendingScrollRestore?.let {
-                    binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
-                    pendingScrollRestore = null
-                }
+        ProfileLogger.append(
+            "Fragment",
+            "renderList submit state=${input.state::class.simpleName} " +
+                "displays=${input.allNotifications.size} items=${timelineItems.size} footer=$footer"
+        )
+        adapter?.submitList(timelineItems) {
+            pendingScrollRestore?.let {
+                binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
+                pendingScrollRestore = null
             }
         }
     }
