@@ -662,13 +662,11 @@ class TimelineFragment : Fragment() {
 
         val eventDao = NotificationMasterApp.getInstance().database.notificationEventDao()
         // Phase 26：buildTimelineItemsWithSimilarCount 改為單一 IO 包覆（vs 之前每 item 一次
-        // withContext(IO) 切換），長 list 不再 N 次 thread hop 拖累 main thread
+        // withContext(IO) 切換），長 list 不再 N 次 thread hop 拖累 main thread。
+        // Phase 31j：similarCount 與 dedup chip 脫離連動，無論 dedup ON/OFF 都計算
+        // 「跨通知同內容」筆數（不同 notification_key 但同 content_hash）。
         var timelineItems: List<TimelineItem> = withContext(Dispatchers.IO) {
-            if (input.spec.deduplicate) {
-                buildTimelineItemsWithSimilarCountInIo(filtered, input.removedIds, eventDao)
-            } else {
-                buildTimelineItems(filtered, input.removedIds)
-            }
+            buildTimelineItemsWithSimilarCountInIo(filtered, input.removedIds, eventDao)
         }
         // Phase 26：footer 條件用 state（單一 source of truth）
         val footer = when (input.state) {
@@ -760,30 +758,12 @@ class TimelineFragment : Fragment() {
         return AppLabelCache.getLabel(ctx, packageName)
     }
 
-    private fun buildTimelineItems(
-        notifications: List<NotificationDisplay>,
-        removedIds: Set<String>
-    ): List<TimelineItem> {
-        val items = mutableListOf<TimelineItem>()
-        var lastDate: Long? = null
-        for (notification in notifications) {
-            val notificationDate = getStartOfDay(notification.postTime)
-            if (lastDate != notificationDate) {
-                items.add(TimelineItem.DateHeader(notificationDate))
-                lastDate = notificationDate
-            }
-            items.add(TimelineItem.NotificationItem(
-                notification = notification,
-                isRemoved = removedIds.contains(notification.notificationKey)
-            ))
-        }
-        return items
-    }
-
     /**
      * Phase 26：呼叫端負責 `withContext(Dispatchers.IO)`，本函式內不再 per-item 切 thread。
      * 對 100 筆 list 從 N 次 dispatcher hop 變 0 次，避免 main thread 等候 IO pool 排程。
      * 仍須是 suspend — `getDeduplicatedCount` 是 DAO suspend method。
+     *
+     * Phase 31j：「+N 同內容」與 dedup chip 脫離連動，唯一 list builder（移除 non-similar 版本）。
      */
     private suspend fun buildTimelineItemsWithSimilarCountInIo(
         notifications: List<NotificationDisplay>,
@@ -897,6 +877,11 @@ class TimelineFragment : Fragment() {
         }
     }
 
+    /**
+     * Phase 31j：dialog 改寫 — 排除自己、標示「列表內 / 列表外」。
+     * 「列表內」= 對應 key 已在 ViewModel.displayedNotifications.value（user 當下可滾到）；
+     * 「列表外」= 在當天但不在當前 displays（因為被 dedup 或不在 page 範圍）。
+     */
     private fun showSimilarNotifications(notification: NotificationDisplay) {
         val eventDao = NotificationMasterApp.getInstance().database.notificationEventDao()
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -907,13 +892,21 @@ class TimelineFragment : Fragment() {
                 eventDao.getSimilarEvents(notification.contentHash, dayStart, dayEnd)
             }
             if (_binding == null) return@launch
-            if (similarEvents.size <= 1) return@launch
+            // 排除自己（同 notification_key），剩下才是「其他同內容通知」
+            val others = similarEvents.filter { it.notificationKey != notification.notificationKey }
+            if (others.isEmpty()) return@launch
 
-            val similar = withContext(Dispatchers.IO) { similarEvents.map(NotificationDisplay::from) }
+            val displayedKeys = viewModel.displayedNotifications.value
+                .map { it.notificationKey }
+                .toSet()
+            val similar = withContext(Dispatchers.IO) { others.map(NotificationDisplay::from) }
+            val inListLabel = getString(R.string.similar_in_list)
+            val offListLabel = getString(R.string.similar_off_list)
             val items = similar.map { n ->
                 val appLabel = getAppLabel(n.packageName)
                 val time = timeFormat.format(Date(n.postTime))
-                "$appLabel · $time\n${n.notificationKey}"
+                val locationLabel = if (n.notificationKey in displayedKeys) inListLabel else offListLabel
+                "$appLabel · $time · $locationLabel\n${n.notificationKey}"
             }.toTypedArray<CharSequence>()
 
             MaterialAlertDialogBuilder(requireContext())
