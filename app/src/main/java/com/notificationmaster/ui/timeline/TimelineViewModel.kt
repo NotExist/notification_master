@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -225,11 +226,24 @@ class TimelineViewModel(
      * 之前用 viewModelScope.launch 內 collect 寫入 MutableStateFlow，會在 ViewModel.init 就啟動
      * → cold start 時 fragment 來看時可能已是 200，看不到 null/InitialLoading 中間態。
      */
-    val totalCount: StateFlow<Int?> = eventDao.count(EventFilterSpec.All)
-        .map<Int, Int?> { it }
-        .catch { e ->
-            _errorCh.value = e
-            emit(null)
+    /**
+     * Phase 31e：跟 dedup chip 同步。
+     * - dedup ON  → unique notification_key 總數（與 displayedNotifications.size 同視角）
+     * - dedup OFF → raw events 總數
+     *
+     * 之前固定用 raw count 造成 counter 「loaded（dedup 後）/ total（raw）」基準不同 —
+     * 新 UPDATE 事件進來時 total +1 但 loaded 不變（dedup 取代舊 event），user 看似「載入卡住」。
+     */
+    val totalCount: StateFlow<Int?> = _chipState
+        .map { it.dedupChecked }
+        .distinctUntilChanged()
+        .flatMapLatest { dedup ->
+            eventDao.count(EventFilterSpec.All.copy(deduplicate = dedup))
+                .map<Int, Int?> { it }
+                .catch { e ->
+                    _errorCh.value = e
+                    emit(null)
+                }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), null)
 
@@ -246,21 +260,23 @@ class TimelineViewModel(
      * _errorCh）任一變動觸發重算。combine 對 StateFlow 通常合併同 dispatch frame。
      */
     val state: StateFlow<TimelineLoadState> = combine(
-        allNotifications,
+        displayedNotifications,
         totalCount,
-        _pageSize,
         _isLoadingMore,
-        _errorCh
-    ) { items, total, size, loading, err ->
+        _errorCh,
+        allNotifications
+    ) { displays, total, loading, err, items ->
         when {
             err != null              -> TimelineLoadState.Error(err)
             total == null            -> TimelineLoadState.InitialLoading
             total == 0               -> TimelineLoadState.EmptyDb
+            // cold start 期間 items / displays 都 empty
             items.isEmpty()          -> TimelineLoadState.InitialLoading
             // Phase 31c+：size >= total 優先於 loading — 即使 _isLoadingMore=true，已到底
             // 就立刻 EndReached（避免 first 條件 race / timeout 期間 footer 卡 LoadingMore）。
-            // user 反饋「66/66 滾到底 lazyload footer 持續轉動數十秒」就是這個 priority bug。
-            size >= total            -> TimelineLoadState.EndReached
+            // Phase 31e：改用 displayedNotifications.size 比較（跟 dedup-aware totalCount 同視角）。
+            // dedup ON: displays unique 數 vs unique total；dedup OFF: displays.size = items.size vs raw total。
+            displays.size >= total   -> TimelineLoadState.EndReached
             loading                  -> TimelineLoadState.LoadingMore
             else                     -> TimelineLoadState.Ready(canLoadMore = true)
         }
@@ -413,12 +429,12 @@ class TimelineViewModel(
         val st = state.value
         if (st !is TimelineLoadState.Ready || !st.canLoadMore) return
         if (_isLoadingMore.value) return
-        // Phase 31c+：預檢「pageSize 已 >= totalCount」直接 return（避免無謂觸發 LoadingMore footer）。
-        // state guard 已包含這個語意，但 state 在 fragment scroll 與 viewModel 之間有 race window，
-        // 加這層保險更穩。
+        // Phase 31c+：預檢「displays 已 >= totalCount」直接 return（避免無謂觸發 LoadingMore footer）。
+        // Phase 31e：用 displays.size 跟 dedup-aware totalCount 比較，符合 state 公式同視角。
         val totalSnapshot = totalCount.value
-        if (totalSnapshot != null && _pageSize.value >= totalSnapshot) {
-            ProfileLogger.append("Timeline", "loadNextDay skip: pageSize=${_pageSize.value} >= total=$totalSnapshot")
+        val displaysSnapshot = displayedNotifications.value.size
+        if (totalSnapshot != null && displaysSnapshot >= totalSnapshot) {
+            ProfileLogger.append("Timeline", "loadNextDay skip: displays=$displaysSnapshot >= total=$totalSnapshot")
             return
         }
 
