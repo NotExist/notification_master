@@ -11,6 +11,7 @@ import android.os.IBinder
 import android.os.UserHandle
 import android.util.Base64
 import android.widget.RemoteViews
+import java.lang.reflect.Modifier
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -193,6 +194,11 @@ object RawSerializer {
         for (field in obj.javaClass.fields) {
             val name = field.name
             if (name.startsWith("$") || name.startsWith("CREATOR")) continue
+            // Phase 31g：跳過 static field（class-level constants 如 USER_SENTIMENT_*,
+            // PARCELABLE_*, USAGE_*, AUDIO_ATTRIBUTES_DEFAULT, INTENT_CATEGORY_*, EXTRA_* 等）。
+            // 這些是 public static final 常數，每個 instance reflection 都重複抓 → ranking dump
+            // 400KB / event raw 多 N KB 的隱性浪費。class 定義不變，正式分析時看 SDK 即可。
+            if (Modifier.isStatic(field.modifiers)) continue
             seenNames.add(name)
             try {
                 val value = field.get(obj)
@@ -215,6 +221,8 @@ object RawSerializer {
             try {
                 val name = method.name
                 if (method.parameterCount != 0) continue
+                // Phase 31g：跳 static method（同 static field 理由）
+                if (Modifier.isStatic(method.modifiers)) continue
                 if (name in UNSAFE_METHODS) continue
                 if (!name.startsWith("get") && !name.startsWith("is")) continue
 
