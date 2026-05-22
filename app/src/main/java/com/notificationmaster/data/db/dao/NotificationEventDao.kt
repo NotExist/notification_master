@@ -97,10 +97,21 @@ interface NotificationEventDao {
     @Query("SELECT MIN(post_time) FROM notification_events")
     suspend fun getEarliestPostTime(): Long?
 
-    /** 有過 REMOVED 事件的 notification_key 集合（Timeline 已移除淡化用） */
+    /**
+     * 當下為「已移除」的 notification_key 集合（Timeline 已移除淡化用）。
+     *
+     * Phase 31u：改為「最後一個 event 是 REMOVED」判定，跟 [getActiveRecordKeys]
+     * 對稱。原先用「曾經有 REMOVED」會把「POSTED → REMOVED → UPDATED」（系統允許
+     * dismiss 後再復活、Android 系統行為支援）也錯標為 removed → 即使該通知還在
+     * 通知欄、UI 仍顯示已移除。
+     */
     @Query("""
-        SELECT DISTINCT notification_key FROM notification_events
-        WHERE event_type = 'REMOVED'
+        SELECT r.notification_key FROM notification_records r
+        WHERE (
+            SELECT event_type FROM notification_events
+            WHERE notification_key = r.notification_key
+            ORDER BY event_time DESC LIMIT 1
+        ) = 'REMOVED'
     """)
     fun getRemovedNotificationKeysFlow(): Flow<List<String>>
 

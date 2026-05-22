@@ -13,7 +13,7 @@ import org.json.JSONObject
  * 觸發點：[com.notificationmaster.service.NotificationCaptureService.processInitialNotifications]
  * 完成 INITIAL upsert 後呼叫 [reconcile]。
  *
- * 邏輯：
+ * 邏輯（單向：active → REMOVED）：
  * 1. 取本機 active record key 集合（最後事件不是 REMOVED）
  * 2. 與 INITIAL callback 收到的 sbn key 集合做差集
  * 3. 差集 = 本機有但 INITIAL 沒有 = 漏接的 removal
@@ -21,6 +21,11 @@ import org.json.JSONObject
  *    eventRawJson 從該 record 最後一個 event 複製（保留最後已知狀態）
  *
  * 安全保護：OEM 早期綁定 sbn 為空時不執行（避免誤把所有 active 標移除）。
+ *
+ * 反向 reconciliation（REMOVED → 復活）：
+ * 由 [com.notificationmaster.service.NotificationCaptureService.processInitialNotifications]
+ * 內 lastEvent check 處理 — record 已存在但 lastEvent=REMOVED 且 sbn 仍在 INITIAL 內
+ * → 寫新 INITIAL event 復活。Phase 31u 加入。
  */
 class InitialReconciler(private val database: NotificationDatabase) {
 

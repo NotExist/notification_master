@@ -310,6 +310,7 @@ class NotificationCaptureService : NotificationListenerService() {
         var newCount = 0
         var skipCount = 0
         val initialKeys = mutableSetOf<String>()
+        var revivedCount = 0
         for (sbn in notifications) {
             try {
                 val key = ApiVersionHelper.getNotificationKey(sbn)
@@ -319,11 +320,22 @@ class NotificationCaptureService : NotificationListenerService() {
                 // 舊通知在 Detail 頁會全部顯示灰燈（即便 token 仍在 shade 中有效）。
                 cachePendingIntents(sbn)
 
-                if (database.notificationRecordDao().getByKey(key) != null) {
-                    skipCount++
-                    // 補齊 channel 資料（已存在的通知可能 channel name 為 null）
-                    if (ApiVersionHelper.supportsNotificationChannel() && rankingMap != null) {
-                        refreshChannelFromRanking(sbn, rankingMap, System.currentTimeMillis())
+                val existingRecord = database.notificationRecordDao().getByKey(key)
+                if (existingRecord != null) {
+                    // Phase 31u：record 已存在但檢查 lastEvent 是否 REMOVED — 若是表示
+                    // 本機認為已移除但 sbn 仍在系統內（重啟 / 沒電 / OEM 凍結後復活、
+                    // 或 Android 系統允許「dismiss 後同 key 又出現」）→ 寫新 INITIAL
+                    // event 「復活」，否則 timeline 永遠顯示已移除。
+                    val lastEvent = database.notificationEventDao().getLatestEventByKey(key)
+                    if (lastEvent?.eventType == EventType.REMOVED) {
+                        processNotification(sbn, EventType.INITIAL, rankingMap)
+                        revivedCount++
+                    } else {
+                        skipCount++
+                        // 補齊 channel 資料（已存在的通知可能 channel name 為 null）
+                        if (ApiVersionHelper.supportsNotificationChannel() && rankingMap != null) {
+                            refreshChannelFromRanking(sbn, rankingMap, System.currentTimeMillis())
+                        }
                     }
                 } else {
                     processNotification(sbn, EventType.INITIAL, rankingMap)
@@ -333,7 +345,7 @@ class NotificationCaptureService : NotificationListenerService() {
                 Log.e(TAG, "$caller: error processing ${sbn.packageName}", e)
             }
         }
-        Log.i(TAG, "$caller complete: $newCount new, $skipCount skipped")
+        Log.i(TAG, "$caller complete: $newCount new, $revivedCount revived (was REMOVED), $skipCount skipped")
 
         // Phase 31o：INITIAL 結束後全面同步 rankingMap 帶來的 channel（INITIAL 期間
         // rankingMap 可能有也可能沒 — 有的話這裡確保所有 record 對應 channel 都拿到最新
