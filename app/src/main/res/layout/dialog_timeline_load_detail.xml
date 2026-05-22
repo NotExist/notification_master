@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TableLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="24dp"
+    android:paddingEnd="24dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp"
+    android:stretchColumns="0,1,2">
+
+    <TableRow android:paddingBottom="8dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content" />
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:text="@string/timeline_load_detail_col_loaded"
+            android:textAppearance="?attr/textAppearanceLabelLarge" />
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:text="@string/timeline_load_detail_col_total"
+            android:textAppearance="?attr/textAppearanceLabelLarge" />
+    </TableRow>
+
+    <TableRow android:paddingBottom="4dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="@string/timeline_load_detail_row_dedup"
+            android:textAppearance="?attr/textAppearanceLabelLarge" />
+        <TextView
+            android:id="@+id/text_loaded_dedup"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:textAppearance="?attr/textAppearanceBodyLarge"
+            tools:text="67" />
+        <TextView
+            android:id="@+id/text_total_dedup"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:textAppearance="?attr/textAppearanceBodyLarge"
+            tools:text="66" />
+    </TableRow>
+
+    <TableRow>
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="@string/timeline_load_detail_row_raw"
+            android:textAppearance="?attr/textAppearanceLabelLarge" />
+        <TextView
+            android:id="@+id/text_loaded_raw"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:textAppearance="?attr/textAppearanceBodyLarge"
+            tools:text="80" />
+        <TextView
+            android:id="@+id/text_total_raw"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:textAppearance="?attr/textAppearanceBodyLarge"
+            tools:text="85" />
+    </TableRow>
+
+</TableLayout>

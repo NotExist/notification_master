@@ -698,26 +698,29 @@ class TimelineFragment : Fragment() {
     }
 
     /**
-     * Phase 31f：載入詳情對話框 — 列出四個視角的數字供 user 對照觀察。
-     * - 顯示中（displayed）：list 上實際看到的項目數
-     * - 已載入（loaded）：DAO 已 query 出的 raw events 數（受 pageSize limit）
-     * - DB 總計：unique notifications / raw events
+     * Phase 31f：載入詳情對話框 — 2x2 表格呈現「已載入 / 總數」× 「去重 / 未去重」。
+     *
+     * Phase 31h：四格直接對應 ViewModel 既有的 dedup-aware 對偶資料：
+     * - 已載入 × 去重 = displayedNotifications.size
+     * - 已載入 × 未去重 = allNotifications.size
+     * - 總數 × 去重 = totalUniqueCount
+     * - 總數 × 未去重 = totalRawCount
      */
     private fun showLoadDetailDialog() {
         if (_binding == null) return
-        val displays = viewModel.displayedNotifications.value.size
-        val loaded = viewModel.allNotifications.value.size
-        val totalUnique = viewModel.totalUniqueCount.value
-        val totalRaw = viewModel.totalRawCount.value
-        val msg = buildString {
-            append(getString(R.string.timeline_load_detail_displayed, displays)).append('\n')
-            append(getString(R.string.timeline_load_detail_loaded, loaded)).append('\n')
-            append(getString(R.string.timeline_load_detail_db_unique, totalUnique?.toString() ?: "—")).append('\n')
-            append(getString(R.string.timeline_load_detail_db_raw, totalRaw?.toString() ?: "—"))
-        }
+        val view = layoutInflater.inflate(R.layout.dialog_timeline_load_detail, null)
+        val placeholder = getString(R.string.timeline_load_detail_value_placeholder)
+        view.findViewById<android.widget.TextView>(R.id.text_loaded_dedup).text =
+            viewModel.displayedNotifications.value.size.toString()
+        view.findViewById<android.widget.TextView>(R.id.text_loaded_raw).text =
+            viewModel.allNotifications.value.size.toString()
+        view.findViewById<android.widget.TextView>(R.id.text_total_dedup).text =
+            viewModel.totalUniqueCount.value?.toString() ?: placeholder
+        view.findViewById<android.widget.TextView>(R.id.text_total_raw).text =
+            viewModel.totalRawCount.value?.toString() ?: placeholder
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.timeline_load_detail_title)
-            .setMessage(msg)
+            .setView(view)
             .setPositiveButton(android.R.string.ok, null)
             .show()
     }

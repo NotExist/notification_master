@@ -217,15 +217,30 @@ class TimelineViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), emptyList())
 
     /**
-     * Phase 26：DB 全 events 數。
-     * **`null` = count Flow 尚未首次 emit**（init 期間 → InitialLoading state）
-     * **`0` = 確認 DB 真空**（EmptyDb state）
-     * 不再用 0 代表「未知」，避免 init 競態。
+     * Phase 31h：DB raw events 數（無 dedup），Eagerly 訂閱作為 [totalCount] 的 base。
      *
-     * Phase 28：改為直接 stateIn Room count Flow，配合 WhileSubscribed 跟 fragment 訂閱同步啟動。
-     * 之前用 viewModelScope.launch 內 collect 寫入 MutableStateFlow，會在 ViewModel.init 就啟動
-     * → cold start 時 fragment 來看時可能已是 200，看不到 null/InitialLoading 中間態。
+     * 之前是 dialog-only flow 用 WhileSubscribed → 沒人 collect 時 stateIn 維持 null →
+     * dialog 開啟讀 .value 永遠 null。現在改成 chip 切換的 base，Eagerly 全程訂閱。
      */
+    val totalRawCount: StateFlow<Int?> = eventDao.count(EventFilterSpec.All)
+        .map<Int, Int?> { it }
+        .catch { e ->
+            _errorCh.value = e
+            emit(null)
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
+     * Phase 31h：DB unique notification_key 數，Eagerly 訂閱作為 [totalCount] 的 base。
+     */
+    val totalUniqueCount: StateFlow<Int?> = eventDao.count(EventFilterSpec.All.copy(deduplicate = true))
+        .map<Int, Int?> { it }
+        .catch { e ->
+            _errorCh.value = e
+            emit(null)
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     /**
      * Phase 31e：跟 dedup chip 同步。
      * - dedup ON  → unique notification_key 總數（與 displayedNotifications.size 同視角）
@@ -233,37 +248,17 @@ class TimelineViewModel(
      *
      * 之前固定用 raw count 造成 counter 「loaded（dedup 後）/ total（raw）」基準不同 —
      * 新 UPDATE 事件進來時 total +1 但 loaded 不變（dedup 取代舊 event），user 看似「載入卡住」。
+     *
+     * Phase 31h：從 flatMapLatest 新 query 改為 combine derive [totalRawCount] / [totalUniqueCount]。
+     * chip 切換瞬間無 null 中間態、無 query 往返延遲；同時 dialog 直接讀同一份預備資料。
      */
-    val totalCount: StateFlow<Int?> = _chipState
-        .map { it.dedupChecked }
-        .distinctUntilChanged()
-        .flatMapLatest { dedup ->
-            eventDao.count(EventFilterSpec.All.copy(deduplicate = dedup))
-                .map<Int, Int?> { it }
-                .catch { e ->
-                    _errorCh.value = e
-                    emit(null)
-                }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), null)
-
-    /**
-     * Phase 31f：DB raw events 數（無 dedup），給「載入詳情」對話框顯示用。
-     * [totalCount] 是 dedup-aware（跟 displays 視角同），此 flow 永遠是 raw count 作為對照。
-     */
-    val totalRawCount: StateFlow<Int?> = eventDao.count(EventFilterSpec.All)
-        .map<Int, Int?> { it }
-        .catch { emit(null) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), null)
-
-    /**
-     * Phase 31f：DB unique notification_key 數（dedup count），給對話框對照用。
-     * 與 [totalCount] 在 dedup ON 時相同；但 dedup OFF 時保留 unique 數供 user 對照。
-     */
-    val totalUniqueCount: StateFlow<Int?> = eventDao.count(EventFilterSpec.All.copy(deduplicate = true))
-        .map<Int, Int?> { it }
-        .catch { emit(null) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), null)
+    val totalCount: StateFlow<Int?> = combine(
+        _chipState.map { it.dedupChecked }.distinctUntilChanged(),
+        totalRawCount,
+        totalUniqueCount
+    ) { dedup, raw, unique ->
+        if (dedup) unique else raw
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), null)
 
     private val _removedIds = MutableStateFlow<Set<String>>(emptySet())
     val removedIds: StateFlow<Set<String>> = _removedIds.asStateFlow()
