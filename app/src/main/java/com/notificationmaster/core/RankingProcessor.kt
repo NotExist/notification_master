@@ -126,11 +126,19 @@ class RankingProcessor(private val database: NotificationDatabase) {
         return RawSerializer.serialize(ranking) as? JSONObject ?: JSONObject()
     }
 
-    /** 排除噪音欄位（rank / lastAudiblyAlertedMillis）後的正規化版本 */
+    /**
+     * 排除噪音欄位後的正規化版本（給 contentHash 用）。
+     *
+     * Phase 31s：lastAudiblyAlertedMillis 從噪音清單**移除**（加回 hash 計算）。
+     * 它只在 NMS 真的播放聲響時才更新（沒響不變），所以加入 hash 不會造成
+     * 「每次 RANKING_UPDATE 都新增 observation」的爆炸；只會在「真的響過」時
+     * hash 變動 → 新增 observation → detail 時間軸即時看到 audibly alerted 痕跡。
+     *
+     * rank 仍排除：rank 是排序，user 排通知欄、新通知插入都會變，加入會爆。
+     */
     private fun normalizeForHash(rankingJson: JSONObject): JSONObject {
         return JSONObject(rankingJson.toString()).apply {
             remove("rank")
-            remove("lastAudiblyAlertedMillis")
         }
     }
 

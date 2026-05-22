@@ -22,7 +22,9 @@ enum class ObservationSource {
  *
  * 對應某個 callback 在某時刻對某 notificationKey 觀察到的 ranking 狀態：
  * - snapshot 部分（重複內容自動 dedup）→ 引用 RankingSnapshotEntity
- * - 噪音欄位（rank / lastAudiblyAlertedMillis）獨立存於 observation 自身
+ * - rank（噪音欄位，每次重排都變）獨立存於 observation 自身
+ * - lastAudiblyAlertedMillis：phase 31s 後加入 snapshot hash，也存 observation
+ *   給 merger 還原當下值；snapshot reuse 場景下 observation 值更準確
  *
  * 寫入規則：
  *   POSTED / UPDATED / INITIAL / REMOVED → 對應事件同時寫一筆 observation
