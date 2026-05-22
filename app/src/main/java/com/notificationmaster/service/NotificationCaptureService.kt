@@ -335,6 +335,11 @@ class NotificationCaptureService : NotificationListenerService() {
         }
         Log.i(TAG, "$caller complete: $newCount new, $skipCount skipped")
 
+        // Phase 31o：INITIAL 結束後全面同步 rankingMap 帶來的 channel（INITIAL 期間
+        // rankingMap 可能有也可能沒 — 有的話這裡確保所有 record 對應 channel 都拿到最新
+        // metadata，不需等之後 RANKING_UPDATE）
+        syncRankingMapChannels(rankingMap, System.currentTimeMillis())
+
         // Reconciliation：補登錄漏接的 REMOVED（OEM 凍結 / 服務瞬斷情境）
         // 安全保護在 InitialReconciler 內：activeKeys 非空但 initialKeys 為空時跳過
         try {
@@ -367,6 +372,51 @@ class NotificationCaptureService : NotificationListenerService() {
         val ranking = Ranking()
         if (rankingMap.getRanking(ApiVersionHelper.getNotificationKey(sbn), ranking)) {
             ranking.channel?.let { updateChannel(sbn.packageName, channelId, captureTime, it) }
+        }
+    }
+
+    /**
+     * Phase 31o：任何 callback 拿到 rankingMap 就全面同步 ChannelEntity metadata。
+     *
+     * rankingMap 是系統持續更新的 — 含所有活躍通知的 channel 即時 metadata（name /
+     * importance / sound 等）。先前設計只在「當前 sbn 的 channelId」更新 + RANKING_UPDATE
+     * 才補 channelName==null 的記錄，導致 INITIAL 期間 rankingMap 為空（OEM 早期綁定）
+     * 後寫入的「無 name」channel，要等同 channelId 的新通知或下拉刷新才補。
+     *
+     * 改成：所有 callback 拿到 rankingMap → 對 rankingMap 內每個 key 對應的 record
+     * → 全面同步 channel metadata（不限 channelName==null；importance 等也即時跟著系統）。
+     * 用 syncChannelInfo（不增 count），避免誤增非當前 channel 的 notification_count。
+     */
+    private suspend fun syncRankingMapChannels(rankingMap: RankingMap?, captureTime: Long) {
+        if (!ApiVersionHelper.supportsNotificationChannel() || rankingMap == null) return
+        for (key in rankingMap.orderedKeys) {
+            val ranking = Ranking()
+            if (!rankingMap.getRanking(key, ranking)) continue
+            val ch = ranking.channel ?: continue
+            val rec = database.notificationRecordDao().getByKey(key) ?: continue
+            val pkgName = rec.packageName
+            val chId = rec.channelId ?: continue
+            val existing = database.channelDao().getByPackageAndChannelId(pkgName, chId) ?: continue
+            database.channelDao().syncChannelInfo(
+                packageName = pkgName,
+                channelId = chId,
+                channelName = ch.name?.toString(),
+                description = ch.description,
+                importance = ch.importance,
+                groupId = ch.group,
+                showBadge = ch.canShowBadge(),
+                canBubble = if (ApiVersionHelper.supportsBubbles()) ch.canBubble() else false,
+                soundUri = ch.sound?.toString(),
+                vibratePattern = ch.vibrationPattern?.let {
+                    org.json.JSONArray(it.toList()).toString()
+                },
+                lightColor = ch.lightColor,
+                lockScreenVisibility = ch.lockscreenVisibility,
+                isBlocked = ch.importance == android.app.NotificationManager.IMPORTANCE_NONE,
+                updateTime = captureTime
+            )
+            // ChannelEntity 不存在的 key 由各自 callback 的 processNotification 路徑負責新建；
+            // 此 helper 只 sync 既存 entity，避免重複 insert 邏輯
         }
     }
 
@@ -596,6 +646,10 @@ class NotificationCaptureService : NotificationListenerService() {
 
         Log.d(TAG, "Saved event: $eventDbId, type: $eventType")
 
+        // Phase 31o：全面同步 rankingMap 帶來的所有 channel metadata（不只當前 sbn 對應的）。
+        // 在當前 sbn 的 channel update + Widget notify 之後，避免影響主流程時序。
+        syncRankingMapChannels(rankingMap, captureTime)
+
         // 通知 Widget 更新
         NotificationWidgetProvider.notifyUpdate(this@NotificationCaptureService)
     }
@@ -691,6 +745,9 @@ class NotificationCaptureService : NotificationListenerService() {
 
         PendingIntentCache.remove(key)
 
+        // Phase 31o：rankingMap 在 REMOVED 期間可能仍含其他活躍 key → 順手同步
+        syncRankingMapChannels(rankingMap, captureTime)
+
         // 通知 Widget 更新
         NotificationWidgetProvider.notifyUpdate(this@NotificationCaptureService)
     }
@@ -710,21 +767,9 @@ class NotificationCaptureService : NotificationListenerService() {
         val written = rankingProcessor.processRankingMap(rankingMap, captureTime)
         if (written > 0) Log.d(TAG, "Ranking observations written: $written")
 
-        // Channel 補齊（只補 channelName 為 null 的記錄）
-        if (!ApiVersionHelper.supportsNotificationChannel()) return
-        for (key in rankingMap.orderedKeys) {
-            val ranking = Ranking()
-            if (!rankingMap.getRanking(key, ranking)) continue
-            val ch = ranking.channel ?: continue
-            // 從新 schema 的 record 取 package/channel 資訊（單一 source）
-            val rec = database.notificationRecordDao().getByKey(key) ?: continue
-            val pkgName = rec.packageName
-            val chId = rec.channelId ?: continue
-            val existing = database.channelDao().getByPackageAndChannelId(pkgName, chId)
-            if (existing != null && existing.channelName == null) {
-                updateChannel(pkgName, chId, captureTime, ch)
-            }
-        }
+        // Phase 31o：改全面同步（取代原本「只補 channelName==null」的限制邏輯），
+        // rankingMap 內 importance / sound 等也都會更新跟著系統最新。
+        syncRankingMapChannels(rankingMap, captureTime)
     }
 
     /**

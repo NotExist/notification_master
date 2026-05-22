@@ -50,6 +50,33 @@ interface ChannelDao {
         lightColor: Int, lockScreenVisibility: Int, isBlocked: Boolean, updateTime: Long
     )
 
+    /**
+     * Phase 31o：同步 metadata only，不增 notificationCount。
+     *
+     * 給「rankingMap 帶來的全表 channel 同步」用 — 該 channel 本身可能不對應當前 sbn，
+     * 不該因為 sync metadata 而誤增該 channel 的計數。
+     */
+    @Query("""
+        UPDATE channels
+        SET channel_name = COALESCE(:channelName, channel_name),
+            description = COALESCE(:description, description),
+            importance = CASE WHEN :importance >= 0 THEN :importance ELSE importance END,
+            group_id = COALESCE(:groupId, group_id),
+            show_badge = :showBadge, can_bubble = :canBubble,
+            sound_uri = COALESCE(:soundUri, sound_uri),
+            vibrate_pattern = COALESCE(:vibratePattern, vibrate_pattern),
+            light_color = :lightColor,
+            lock_screen_visibility = :lockScreenVisibility, is_blocked = :isBlocked,
+            last_updated = :updateTime
+        WHERE package_name = :packageName AND channel_id = :channelId
+    """)
+    suspend fun syncChannelInfo(
+        packageName: String, channelId: String,
+        channelName: String?, description: String?, importance: Int, groupId: String?,
+        showBadge: Boolean, canBubble: Boolean, soundUri: String?, vibratePattern: String?,
+        lightColor: Int, lockScreenVisibility: Int, isBlocked: Boolean, updateTime: Long
+    )
+
     // === 查詢 ===
 
     @Query("SELECT * FROM channels ORDER BY notification_count DESC")

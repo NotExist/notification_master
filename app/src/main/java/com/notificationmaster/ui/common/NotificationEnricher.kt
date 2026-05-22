@@ -1,7 +1,6 @@
 package com.notificationmaster.ui.common
 
 import android.util.Log
-import android.util.LruCache
 import com.notificationmaster.core.RankingSnapshotMerger
 import com.notificationmaster.core.debug.ProfileLogger
 import com.notificationmaster.data.db.dao.ChannelDao
@@ -28,18 +27,15 @@ object NotificationEnricher {
     private const val TAG = "NotificationEnricher"
 
     /**
-     * Phase 30：NotificationDisplay cache by event.id。
+     * Phase 31o：移除 LruCache。
      *
-     * event 是 immutable（PK autoGenerate Long），同 event.id 的 NotificationDisplay 結果穩定。
-     * Lazyload 連續觸發或 service 寫入造成的多次 invalidation 重 emit 時，已 enrich 過的 events
-     * 直接從 cache 取出，避免每次都重 parse JSON。
+     * 原因：cache 的 NotificationDisplay 含 channelImportance / isAmbient / isConversation
+     * 等 channel/ranking-derived 欄位，cache 命中時拿到 stale 值 → channel 補資料後
+     * Timeline chip 不會更新（importance chip 仍舊、conversation chip 仍未出現等）。
      *
-     * 容量 500：每個 display ~2KB（phase 27 釋放 snapshot reference 後），500 × 2KB = ~1MB。
-     *
-     * Trade-off：enrichment（channelImportance / isAmbient / isSuspended / isConversation）
-     * 變動時 cache 不會自動更新（accept stale，ranking/channel 變動頻率低）。
+     * Phase 31b 後 raw JSON 已從 ~250KB 縮減到 ~12-17KB（15-20x），per-event parse
+     * 從 ~130ms 降到 sub-millisecond，已無 cache 必要。SSOT 優先於少量 parse 開銷。
      */
-    private val displayCache = LruCache<Long, NotificationDisplay>(500)
 
     suspend fun enrich(
         events: List<NotificationEventEntity>,
@@ -75,67 +71,49 @@ object NotificationEnricher {
         }
         val t3 = System.currentTimeMillis()
 
-        // Phase 30：cache by event.id，per-event timing stats（不 per-event log，per-batch summary）
-        var cacheHits = 0
-        var cacheMisses = 0
-        val fromTimings = mutableListOf<Int>()  // 每個 cache miss 的 NotificationDisplay.from 耗時 (ms)
+        // Phase 31o：取消 cache，每次 enrich 都重 parse + 用最新 channelMap / rankingJsonMap
+        val fromTimings = mutableListOf<Int>()
         var totalRawSize = 0L
         var maxRawSize = 0
         val result = events.map { event ->
-            displayCache.get(event.id)?.also { cacheHits++ } ?: run {
-                cacheMisses++
-                val tFromStart = System.currentTimeMillis()
-                val rawSize = event.eventRawJson.length
-                totalRawSize += rawSize
-                if (rawSize > maxRawSize) maxRawSize = rawSize
-                val display = runCatching {
-                    val channelKey = event.channelId?.let { "${event.packageName}|$it" }
-                    val importance = channelKey?.let { channelMap[it] } ?: -1
-                    val mergedJson = rankingJsonMap[event.notificationKey]
-                    NotificationDisplay.from(
-                        event,
-                        NotificationDisplay.Enrichment(
-                            channelImportance = importance,
-                            mergedRankingJson = mergedJson
-                        )
+            val tFromStart = System.currentTimeMillis()
+            val rawSize = event.eventRawJson.length
+            totalRawSize += rawSize
+            if (rawSize > maxRawSize) maxRawSize = rawSize
+            val display = runCatching {
+                val channelKey = event.channelId?.let { "${event.packageName}|$it" }
+                val importance = channelKey?.let { channelMap[it] } ?: -1
+                val mergedJson = rankingJsonMap[event.notificationKey]
+                NotificationDisplay.from(
+                    event,
+                    NotificationDisplay.Enrichment(
+                        channelImportance = importance,
+                        mergedRankingJson = mergedJson
                     )
-                }.getOrElse { e ->
-                    Log.e(TAG, "enrich failed for event id=${event.id} key=${event.notificationKey}", e)
-                    fallbackDisplay(event)
-                }
-                fromTimings += (System.currentTimeMillis() - tFromStart).toInt()
-                displayCache.put(event.id, display)
-                display
+                )
+            }.getOrElse { e ->
+                Log.e(TAG, "enrich failed for event id=${event.id} key=${event.notificationKey}", e)
+                fallbackDisplay(event)
             }
+            fromTimings += (System.currentTimeMillis() - tFromStart).toInt()
+            display
         }
         val t4 = System.currentTimeMillis()
 
-        // Phase 29 profile log + Phase 30 cache stats
+        // Phase 29 profile log
         val sorted = fromTimings.sorted()
         val p50 = sorted.getOrNull(sorted.size / 2) ?: 0
         val p99 = sorted.getOrNull(((sorted.size - 1) * 99 / 100).coerceAtLeast(0)) ?: 0
-        val avgRawSize = if (cacheMisses > 0) (totalRawSize / cacheMisses).toInt() else 0
+        val avgRawSize = if (events.isNotEmpty()) (totalRawSize / events.size).toInt() else 0
         ProfileLogger.append(
             "Enricher",
             "enrich(${events.size}) total=${t4 - t0}ms " +
                 "channels=${t2 - t1}ms ranking=${t3 - t2}ms map=${t4 - t3}ms " +
-                "hit=$cacheHits miss=$cacheMisses " +
                 "fromTotal=${fromTimings.sum()}ms p50=${p50}ms p99=${p99}ms max=${sorted.lastOrNull() ?: 0}ms " +
                 "avgRawSize=${avgRawSize}B maxRawSize=${maxRawSize}B " +
                 "channelsCount=${channelMap.size} obsCount=${observations.size}"
         )
         return result
-    }
-
-    /** Phase 30：給 service 端寫入時主動 invalidate（事件更新後 cache stale）。目前不主動呼叫，accept stale。 */
-    @Suppress("unused")
-    fun invalidate(eventId: Long) {
-        displayCache.remove(eventId)
-    }
-
-    @Suppress("unused")
-    fun clearCache() {
-        displayCache.evictAll()
     }
 
     /**
