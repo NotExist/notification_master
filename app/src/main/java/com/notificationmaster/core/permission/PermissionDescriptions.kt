@@ -77,7 +77,10 @@ object PermissionDescriptions {
             displayName = "讀取日曆",
             type = "危險權限",
             relatedFeature = "日曆匯出功能（預設關閉）",
-            rationale = "讀取可用的日曆清單，讓使用者選擇匯出目標日曆。",
+            rationale = "讀取可用的日曆清單，讓使用者選擇匯出目標日曆。\n\n" +
+                "註：READ_CALENDAR / WRITE_CALENDAR 同屬 Android CALENDAR permission group，" +
+                "系統行為上授權任一即兩者通過授權（同一個 dialog），但 UI 仍需點選各別項目觸發" +
+                "系統請求一次才會更新顯示狀態。此為 Android 標準行為，非 OEM 調整。",
             deniedImpact = "無法使用日曆匯出功能。",
             isRequired = false
         ),
@@ -86,7 +89,10 @@ object PermissionDescriptions {
             displayName = "寫入日曆",
             type = "危險權限",
             relatedFeature = "日曆匯出功能（預設關閉）",
-            rationale = "將通知記錄寫入系統日曆作為事件。",
+            rationale = "將通知記錄寫入系統日曆作為事件。\n\n" +
+                "註：READ_CALENDAR / WRITE_CALENDAR 同屬 Android CALENDAR permission group，" +
+                "系統行為上授權任一即兩者通過授權（同一個 dialog），但 UI 仍需點選各別項目觸發" +
+                "系統請求一次才會更新顯示狀態。此為 Android 標準行為，非 OEM 調整。",
             deniedImpact = "無法使用日曆匯出功能。",
             isRequired = false
         ),

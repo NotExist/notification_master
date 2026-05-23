@@ -91,10 +91,12 @@ class HomeFragment : Fragment() {
 
             val itemBinding = ItemPermissionInfoBinding.inflate(layoutInflater, container, false)
 
-            itemBinding.textPermissionName.text = buildString {
-                if (p.isRequired) append("[必要] ")
-                append(p.displayName)
-            }
+            // Phase 31w：主標 = Android permission 常數名（去 android.permission. 前綴），
+            // monospace 等寬 + 可選取複製；副標 = 中文顯示名稱。移除 [必要] 標示（主畫面已有
+            // 引導完成必要授權）。
+            itemBinding.textPermissionName.text =
+                p.permission.substringAfter("android.permission.", p.permission)
+            itemBinding.textPermissionDisplayName.text = p.displayName
 
             itemBinding.textPermissionStatus.text = when {
                 granted -> getString(R.string.permission_status_granted)
@@ -106,11 +108,12 @@ class HomeFragment : Fragment() {
                     if (granted) R.color.status_enabled else R.color.status_disabled)
             )
 
-            itemBinding.textPermissionDesc.text = buildString {
-                append(p.relatedFeature)
-                if (!granted) {
-                    append("\n拒絕影響：${p.deniedImpact}")
-                }
+            // 簡短說明：relatedFeature
+            itemBinding.textPermissionDesc.text = p.relatedFeature
+
+            // Phase 31w：info icon 觸發詳細說明 dialog（rationale + deniedImpact + 類型等完整資訊）
+            itemBinding.btnPermissionInfo.setOnClickListener {
+                showPermissionDetailDialog(p, granted)
             }
 
             if (actionable) {
@@ -126,6 +129,29 @@ class HomeFragment : Fragment() {
 
             container.addView(itemBinding.root)
         }
+    }
+
+    /**
+     * Phase 31w：權限詳細說明 dialog — 顯示完整 permission constant、類型、相關功能、
+     * 用途說明、拒絕影響、API 限制等。篇幅放在 dialog 內，主畫面 row 保持精簡。
+     */
+    private fun showPermissionDetailDialog(p: PermissionInfo, granted: Boolean) {
+        val ctx = requireContext()
+        val msg = buildString {
+            append("Permission: ${p.permission}\n\n")
+            append("類型：${p.type}\n")
+            append("狀態：${if (granted) "已授權" else "未授權"}\n")
+            if (p.minApi > 0) append("最低 API：${p.minApi}\n")
+            if (p.maxApi >= 0) append("最高 API：${p.maxApi}\n")
+            append("\n相關功能：${p.relatedFeature}\n\n")
+            append("用途說明：\n${p.rationale}\n\n")
+            append("拒絕影響：\n${p.deniedImpact}")
+        }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+            .setTitle(p.displayName)
+            .setMessage(msg)
+            .setPositiveButton(R.string.ok, null)
+            .show()
     }
 
     @SuppressLint("InlinedApi")

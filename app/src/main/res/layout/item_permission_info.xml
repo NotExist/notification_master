@@ -13,31 +13,58 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
+        <!-- Phase 31w：主標改 Android permission 常數名（去 android.permission. 前綴），
+             monospace 等寬 + selectable 方便長按複製 -->
         <TextView
             android:id="@+id/text_permission_name"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textAppearance="?attr/textAppearanceBodyLarge"
+            android:fontFamily="monospace"
+            android:textAppearance="?attr/textAppearanceBodyMedium"
             android:textStyle="bold"
-            tools:text="[必要] 通知存取權" />
+            android:textIsSelectable="true"
+            tools:text="BIND_NOTIFICATION_LISTENER_SERVICE" />
+
+        <ImageButton
+            android:id="@+id/btn_permission_info"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="8dp"
+            android:padding="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_info_details"
+            android:contentDescription="@string/permission_info_dialog_title"
+            app:tint="?android:attr/textColorSecondary"
+            xmlns:app="http://schemas.android.com/apk/res-auto" />
 
         <TextView
             android:id="@+id/text_permission_status"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
             android:textAppearance="?attr/textAppearanceLabelMedium"
             tools:text="已授權" />
 
     </LinearLayout>
 
+    <!-- Phase 31w：副標 = 中文顯示名稱（原主標位置） -->
+    <TextView
+        android:id="@+id/text_permission_display_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:textAppearance="?attr/textAppearanceBodySmall"
+        android:textColor="?android:attr/textColorSecondary"
+        tools:text="通知存取權" />
+
     <TextView
         android:id="@+id/text_permission_desc"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="2dp"
         android:textAppearance="?attr/textAppearanceBodySmall"
         android:textColor="?android:attr/textColorSecondary"
-        tools:text="核心通知監聽功能\n拒絕影響：App 將無法擷取任何通知" />
+        tools:text="核心通知監聽功能" />
 
 </LinearLayout>
