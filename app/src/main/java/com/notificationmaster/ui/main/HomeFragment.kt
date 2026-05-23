@@ -42,10 +42,14 @@ class HomeFragment : Fragment() {
     private var _binding: FragmentHomeBinding? = null
     private val binding get() = _binding!!
 
-    // 權限請求回來後 onResume() 會自動更新清單
+    // Phase 31x：權限 callback / 任何切換或更新事件都應該立即 reload 所有權限狀態，
+    // 確保 UI 反映系統當下真實狀態。callback 內無條件 reload — 不只限同 group 場景，
+    // 也涵蓋 user 在系統設定改完授權後切回 App 等情境（onResume 也會 reload）。
     private val generalPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { _ -> }
+    ) { _ ->
+        if (_binding != null) displayPermissions()
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,

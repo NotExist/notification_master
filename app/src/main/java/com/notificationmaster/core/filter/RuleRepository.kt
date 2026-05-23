@@ -42,7 +42,7 @@ object RuleRepository {
             listOf(createSelfFilterRule(context))
         }
 
-        // 確保內建 LIST_FILTER rules（RecentAudible/Headsup/Dismissed）存在且為最新版本
+        // 確保內建 LIST_FILTER rules（Audible/Headsup/Dismissed）存在且為最新版本
         val rules = ensureBuiltInListFilterRules(parsed)
         val builtInsChanged = rules != parsed
 
