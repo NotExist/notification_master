@@ -420,9 +420,9 @@
     <string name="field_post_time">post_time</string>
     <string name="field_capture_time">capture_time</string>
     <string name="field_when_time">when_time</string>
-    <string name="shortcut_dismissed_short">最近移除</string>
-    <string name="shortcut_dismissed_long">最近被移除的通知</string>
-    <string name="shortcut_dismissed_title">最近移除的通知</string>
+    <string name="shortcut_dismissed_short">已移除</string>
+    <string name="shortcut_dismissed_long">已移除的通知</string>
+    <string name="shortcut_dismissed_title">已移除的通知</string>
     <string name="shortcut_empty_dismissed">尚無已移除通知記錄</string>
     <!-- 過濾規則自動備份 -->
     <string name="settings_filter_backup_dir">過濾規則自動備份</string>

@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Dismissed Shortcut BottomSheet — 從底部滑入顯示最近被移除的通知列表
+ * Dismissed Shortcut BottomSheet — 從底部滑入顯示已移除的通知列表
  */
 class DismissedBottomSheetFragment : BottomSheetDialogFragment() {
 

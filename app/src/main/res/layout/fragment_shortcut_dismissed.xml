@@ -12,7 +12,7 @@
         android:layout_height="wrap_content"
         android:layout_marginBottom="12dp"
         android:textAppearance="?attr/textAppearanceTitleMedium"
-        tools:text="最近移除的通知" />
+        tools:text="已移除的通知" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recycler_view"
