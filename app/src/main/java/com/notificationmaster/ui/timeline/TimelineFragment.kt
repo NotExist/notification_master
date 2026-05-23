@@ -641,7 +641,7 @@ class TimelineFragment : Fragment() {
 
         if (filtered.isEmpty()) {
             // Phase 31ae：分清 EmptyDb / InitialLoading / 篩選無結果三場景。
-            // 原本 else → return 把「篩選後無結果」也擋住，user 看到舊 list 沒被淨空。
+            // Phase 31af：篩選後 0 結果 + 仍可 lazyload → 自動繼續往後找
             when (input.state) {
                 is TimelineLoadState.EmptyDb -> {
                     binding.emptyState.visibility = View.VISIBLE
@@ -653,9 +653,17 @@ class TimelineFragment : Fragment() {
                     // cold start 期間：保留舊 list 不動，避免閃白頁；等首次 emit 後再更新
                     return
                 }
+                is TimelineLoadState.Ready -> {
+                    // 篩選後 0 結果：淨空 list；若 canLoadMore 還可載入更多，自動觸發
+                    // lazyload 繼續往後找符合篩選的事件（loading 期間 state=LoadingMore
+                    // 自動 guard 不會重觸發；hit EndReached 或找到結果即停止）
+                    adapter?.submitList(emptyList())
+                    if (input.state.canLoadMore) {
+                        viewModel.loadNextDay()
+                    }
+                }
                 else -> {
-                    // Ready / LoadingMore / EndReached / Error 但 filtered.isEmpty：
-                    // 通常是 user 篩選後 0 結果 — 淨空 list
+                    // LoadingMore / EndReached / Error 但 filtered.isEmpty：淨空
                     adapter?.submitList(emptyList())
                 }
             }
