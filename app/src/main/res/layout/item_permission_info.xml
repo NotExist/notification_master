@@ -37,35 +37,20 @@
 
     </LinearLayout>
 
-    <!-- Phase 31ac：subtitle 移除 displayName（constant 已 self-explain），
-         保留 desc 顯示精簡簡介；info icon 從主標移到 desc 左側，省主標空間 -->
-    <LinearLayout
+    <!-- Phase 31ad：對齊 Detail 頁 pattern — info icon 用 drawableEndCompat 內嵌
+         在 desc TextView 右側，自動跟文字行高匹配；整個 TextView 可點觸發詳情 dialog。
+         省獨立 ImageButton 的大 touch target / padding 空間。 -->
+    <TextView
+        android:id="@+id/text_permission_desc"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <ImageButton
-            android:id="@+id/btn_permission_info"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_marginEnd="6dp"
-            android:padding="2dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_info_details"
-            android:contentDescription="@string/permission_info_dialog_title"
-            app:tint="?android:attr/textColorSecondary" />
-
-        <TextView
-            android:id="@+id/text_permission_desc"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?android:attr/textColorSecondary"
-            tools:text="核心通知監聽功能" />
-
-    </LinearLayout>
+        android:drawablePadding="4dp"
+        app:drawableEndCompat="@drawable/ic_info_outline"
+        android:background="?attr/selectableItemBackground"
+        android:textAppearance="?attr/textAppearanceBodySmall"
+        android:textColor="?android:attr/textColorSecondary"
+        tools:text="核心通知監聽功能" />
 
 </LinearLayout>

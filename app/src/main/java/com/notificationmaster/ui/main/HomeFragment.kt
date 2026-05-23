@@ -115,8 +115,9 @@ class HomeFragment : Fragment() {
             // 簡短說明：relatedFeature
             itemBinding.textPermissionDesc.text = p.relatedFeature
 
-            // Phase 31w：info icon 觸發詳細說明 dialog（rationale + deniedImpact + 類型等完整資訊）
-            itemBinding.btnPermissionInfo.setOnClickListener {
+            // Phase 31ad：desc TextView 自身可點（drawableEndCompat 內嵌 info icon），
+            // 觸發詳細說明 dialog（rationale + deniedImpact + 類型等完整資訊）
+            itemBinding.textPermissionDesc.setOnClickListener {
                 showPermissionDetailDialog(p, granted)
             }
 
