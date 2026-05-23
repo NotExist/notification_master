@@ -195,7 +195,8 @@ data class SupportedFeatures(
                     FeatureItem("可見性", "鎖屏顯示策略（PUBLIC / PRIVATE / SECRET）", implemented = true),
                     FeatureItem("分類", "通知類別標記（msg / email / call / alarm 等）", implemented = true),
                     FeatureItem("視覺屬性", "通知強調色、大小圖示", implemented = true),
-                    FeatureItem("Heads-up 推斷", "依 priority + 音效/振動推斷是否彈出 heads-up", implemented = true)
+                    FeatureItem("Heads-up 推斷", "依 priority + 音效/振動推斷是否彈出 heads-up", implemented = true),
+                    FeatureItem("SAF Document Tree URI", "透過 ACTION_OPEN_DOCUMENT_TREE 取得使用者選擇的目錄持久權限，媒體儲存三選一的 Public External 模式以此寫入", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -240,7 +241,8 @@ data class SupportedFeatures(
                     FeatureItem("Ranking 擴充", "overrideGroupKey", implemented = true),
                     FeatureItem("Heads-up 推斷（importance）", "Channel importance ≥ HIGH 推斷 heads-up", implemented = true),
                     FeatureItem("發聲推斷（importance）", "Channel importance ≥ DEFAULT 推斷可感知提示", implemented = true),
-                    FeatureItem("Ranking Channel 物件", "ranking.channel 取得通知所屬頻道的完整資訊（名稱、重要性等）", implemented = true)
+                    FeatureItem("Ranking Channel 物件", "ranking.channel 取得通知所屬頻道的完整資訊（名稱、重要性等）", implemented = true),
+                    FeatureItem("Channel metadata 完整記錄", "ChannelEntity 記錄頻道名稱、描述、importance、group、聲音 URI、振動 pattern、燈光顏色、鎖屏可見性、showBadge、canBubble、isBlocked 等所有 metadata", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -275,7 +277,8 @@ data class SupportedFeatures(
                 supported = sdk >= 30,
                 features = listOf(
                     FeatureItem("氣泡自動展開", "bubbleAutoExpand 控制氣泡出現時是否自動展開", implemented = true),
-                    FeatureItem("氣泡通知抑制", "isNotificationSuppressed 氣泡顯示時隱藏通知列", implemented = true)
+                    FeatureItem("氣泡通知抑制", "isNotificationSuppressed 氣泡顯示時隱藏通知列", implemented = true),
+                    FeatureItem("Scoped Storage 強制", "Public External 存取走 MediaStore 或 SAF；本 App 的「Public External 媒體目錄」模式即透過 SAF Tree URI 持久權限寫入，避開 WRITE_EXTERNAL_STORAGE 在 API 30+ 失效的限制", implemented = true)
                 )
             ),
             ApiFeatureGroup(
@@ -306,6 +309,11 @@ data class SupportedFeatures(
                     FeatureItem(
                         "BAL Hardening / Activity Launch 限制",
                         "Android 14 (API 34) 起，跨 UID 透過 PendingIntent 啟動 Activity 預設禁止；呼叫端若不在前景或未顯式授權，target Activity 啟動會被靜默丟棄（PendingIntent.send 不丟例外）。Detail 頁觸發第三方 contentIntent 時已加 ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED 帶 BAL 允許。OEM 自啟動 / 背景活動管理（MIUI / EMUI / OneUI 等）為廠商客製攔截，無法以程式繞過，需引導使用者於系統設定放行該 App 的背景活動權限",
+                        implemented = true
+                    ),
+                    FeatureItem(
+                        "canUseFullScreenIntent runtime 檢查",
+                        "Android 14 起 USE_FULL_SCREEN_INTENT 變為「特殊權限」需使用者於設定主動授權，App 透過 NotificationManager.canUseFullScreenIntent() 檢查當下是否可用。持續提醒鎖屏全螢幕模式依此判定退回一般 heads-up",
                         implemented = true
                     )
                 )
