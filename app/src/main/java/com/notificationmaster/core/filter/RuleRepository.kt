@@ -63,14 +63,17 @@ object RuleRepository {
     private const val BUILTIN_DISMISSED_ID = "builtin-list-dismissed"
 
     /**
-     * 確保內建 LIST_FILTER rules 存在；存在的對應 id 會被最新版本覆寫
-     * （讓內建 rule 的 matchers/action 升級不被舊持久化卡住）。
+     * 確保內建 LIST_FILTER rules 為當前版本：剝離所有 isBuiltIn=true 的 rule
+     * （不論 id / name 為何版本的），再加當前版本的 builtin。
+     *
+     * Phase 31aa：改用 isBuiltIn flag 判定（取代之前按 id 對照的方式）— 通用、
+     * 不需 obsolete id 名單，未來 rename builtin id / name 也自動相容。Rule.toJson
+     * 有序列化 isBuiltIn，匯入 / 合併備份場景也能正確識別舊內建並剔除。
      */
     private fun ensureBuiltInListFilterRules(existing: List<Rule>): List<Rule> {
         val builtIns = builtInListFilterRules()
-        val builtInIds = builtIns.map { it.id }.toSet()
-        val withoutOldBuiltIns = existing.filter { it.id !in builtInIds }
-        return withoutOldBuiltIns + builtIns
+        val nonBuiltIn = existing.filter { !it.isBuiltIn }
+        return nonBuiltIn + builtIns
     }
 
     private fun builtInListFilterRules(): List<Rule> = listOf(
@@ -163,10 +166,18 @@ object RuleRepository {
     /**
      * 匯入 JSON 字串（v2 格式）
      *
+     * Phase 31aa：import 後跑 ensureBuiltInListFilterRules —
+     * RuleEngine.importAllFromJson 完全覆蓋 rules（直接 replace），新版內建會被
+     * 舊備份的舊內建 整批覆寫。重跑 ensure 後：所有 isBuiltIn=true 的 rule 被剝離，
+     * 寫入當前版本的 builtin，避免新舊並存。
+     *
      * @return 各 ActionType 匯入的規則數
      */
     fun importAllFromJson(context: Context, json: String): Map<ActionType, Int> {
         val result = RuleEngine.importAllFromJson(json)
+        val imported = RuleEngine.getRules()
+        val cleaned = ensureBuiltInListFilterRules(imported)
+        if (cleaned != imported) RuleEngine.setRules(cleaned)
         save(context)
         Log.d(TAG, "Imported ${RuleEngine.getRules().size} rules")
         return result
@@ -182,7 +193,11 @@ object RuleRepository {
      */
     fun mergeFromJson(context: Context, json: String): Map<ActionType, Int> {
         val result = RuleEngine.mergeFromJson(json)
-        if (result.isNotEmpty()) {
+        // Phase 31aa：同 importAllFromJson — 合併備份後也需 cleanup obsolete builtin id
+        val merged = RuleEngine.getRules()
+        val cleaned = ensureBuiltInListFilterRules(merged)
+        if (cleaned != merged) RuleEngine.setRules(cleaned)
+        if (result.isNotEmpty() || cleaned != merged) {
             save(context)
         }
         Log.d(TAG, "Merged rules: $result")
