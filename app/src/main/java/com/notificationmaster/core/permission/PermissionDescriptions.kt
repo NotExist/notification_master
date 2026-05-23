@@ -76,7 +76,7 @@ object PermissionDescriptions {
             permission = Manifest.permission.READ_CALENDAR,
             displayName = "讀取日曆",
             type = "危險權限",
-            relatedFeature = "日曆匯出功能（預設關閉）",
+            relatedFeature = "列出可用日曆供選擇匯出目標",
             rationale = "讀取可用的日曆清單，讓使用者選擇匯出目標日曆。",
             deniedImpact = "無法使用日曆匯出功能。",
             isRequired = false
@@ -85,7 +85,7 @@ object PermissionDescriptions {
             permission = Manifest.permission.WRITE_CALENDAR,
             displayName = "寫入日曆",
             type = "危險權限",
-            relatedFeature = "日曆匯出功能（預設關閉）",
+            relatedFeature = "寫入通知事件到指定日曆",
             rationale = "將通知記錄寫入系統日曆作為事件。",
             deniedImpact = "無法使用日曆匯出功能。",
             isRequired = false
@@ -113,9 +113,9 @@ object PermissionDescriptions {
             permission = "android.permission.USE_FULL_SCREEN_INTENT",
             displayName = "全螢幕通知",
             type = "特殊權限",
-            relatedFeature = "持續提醒功能（鎖屏全螢幕顯示）",
-            rationale = "持續提醒觸發時以全螢幕 Activity 顯示，鎖屏時喚醒螢幕，確保使用者不會錯過提醒。API 34 以前自動授予，API 34+ 需使用者手動授權。",
-            deniedImpact = "鎖屏時無法顯示全螢幕提醒，退回一般 heads-up 通知（約 5 秒後自動縮回）。",
+            relatedFeature = "持續提醒功能（螢幕鎖定下全螢幕顯示）",
+            rationale = "持續提醒觸發時以全螢幕 Activity 顯示，螢幕鎖定下喚醒螢幕，確保使用者不會錯過提醒。API 34 以前自動授予，API 34+ 需使用者手動授權。",
+            deniedImpact = "螢幕鎖定下無法顯示全螢幕提醒，退回一般 heads-up 通知（約 5 秒後自動縮回）。",
             isRequired = false
         )
     )

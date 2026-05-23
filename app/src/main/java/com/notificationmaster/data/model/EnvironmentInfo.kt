@@ -313,7 +313,7 @@ data class SupportedFeatures(
                     ),
                     FeatureItem(
                         "canUseFullScreenIntent runtime 檢查",
-                        "Android 14 起 USE_FULL_SCREEN_INTENT 變為「特殊權限」需使用者於設定主動授權，App 透過 NotificationManager.canUseFullScreenIntent() 檢查當下是否可用。持續提醒鎖屏全螢幕模式依此判定退回一般 heads-up",
+                        "Android 14 起 USE_FULL_SCREEN_INTENT 變為「特殊權限」需使用者於設定主動授權，App 透過 NotificationManager.canUseFullScreenIntent() 檢查當下是否可用。持續提醒螢幕鎖定下全螢幕模式依此判定退回一般 heads-up",
                         implemented = true
                     )
                 )

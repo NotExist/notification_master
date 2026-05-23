@@ -96,11 +96,11 @@ class HomeFragment : Fragment() {
             val itemBinding = ItemPermissionInfoBinding.inflate(layoutInflater, container, false)
 
             // Phase 31w：主標 = Android permission 常數名（去 android.permission. 前綴），
-            // monospace 等寬 + 可選取複製；副標 = 中文顯示名稱。移除 [必要] 標示（主畫面已有
-            // 引導完成必要授權）。
+            // monospace 等寬 + 可選取複製。移除 [必要] 標示（主畫面已有引導完成必要授權）。
+            // Phase 31ac：移除 displayName subtitle（constant 已 self-explain，中文版在 dialog
+            // 標題提供）。
             itemBinding.textPermissionName.text =
                 p.permission.substringAfter("android.permission.", p.permission)
-            itemBinding.textPermissionDisplayName.text = p.displayName
 
             itemBinding.textPermissionStatus.text = when {
                 granted -> getString(R.string.permission_status_granted)

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -7,14 +8,14 @@
     android:paddingHorizontal="24dp"
     android:paddingVertical="12dp">
 
+    <!-- Phase 31w：主標 Android permission 常數名（去 android.permission. 前綴），
+         monospace 等寬 + selectable 方便長按複製 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <!-- Phase 31w：主標改 Android permission 常數名（去 android.permission. 前綴），
-             monospace 等寬 + selectable 方便長按複製 -->
         <TextView
             android:id="@+id/text_permission_name"
             android:layout_width="0dp"
@@ -26,18 +27,6 @@
             android:textIsSelectable="true"
             tools:text="BIND_NOTIFICATION_LISTENER_SERVICE" />
 
-        <ImageButton
-            android:id="@+id/btn_permission_info"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_marginStart="8dp"
-            android:padding="4dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_info_details"
-            android:contentDescription="@string/permission_info_dialog_title"
-            app:tint="?android:attr/textColorSecondary"
-            xmlns:app="http://schemas.android.com/apk/res-auto" />
-
         <TextView
             android:id="@+id/text_permission_status"
             android:layout_width="wrap_content"
@@ -48,23 +37,35 @@
 
     </LinearLayout>
 
-    <!-- Phase 31w：副標 = 中文顯示名稱（原主標位置） -->
-    <TextView
-        android:id="@+id/text_permission_display_name"
+    <!-- Phase 31ac：subtitle 移除 displayName（constant 已 self-explain），
+         保留 desc 顯示精簡簡介；info icon 從主標移到 desc 左側，省主標空間 -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
-        android:textAppearance="?attr/textAppearanceBodySmall"
-        android:textColor="?android:attr/textColorSecondary"
-        tools:text="通知存取權" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-    <TextView
-        android:id="@+id/text_permission_desc"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:textAppearance="?attr/textAppearanceBodySmall"
-        android:textColor="?android:attr/textColorSecondary"
-        tools:text="核心通知監聽功能" />
+        <ImageButton
+            android:id="@+id/btn_permission_info"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginEnd="6dp"
+            android:padding="2dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_info_details"
+            android:contentDescription="@string/permission_info_dialog_title"
+            app:tint="?android:attr/textColorSecondary" />
+
+        <TextView
+            android:id="@+id/text_permission_desc"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:textColor="?android:attr/textColorSecondary"
+            tools:text="核心通知監聽功能" />
+
+    </LinearLayout>
 
 </LinearLayout>
