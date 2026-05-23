@@ -640,9 +640,8 @@ class TimelineFragment : Fragment() {
         val filtered = filterNotifications(input.allNotifications, input.filterText)
 
         if (filtered.isEmpty()) {
-            // Phase 26：emptyState 只在 state 確認 DB 空時顯示；
-            // InitialLoading / LoadingMore 期間保留 list 渲染（avoid emptyState 閃爍）；
-            // Error 維持現有 list（Snackbar 已給反饋，不切空頁）
+            // Phase 31ae：分清 EmptyDb / InitialLoading / 篩選無結果三場景。
+            // 原本 else → return 把「篩選後無結果」也擋住，user 看到舊 list 沒被淨空。
             when (input.state) {
                 is TimelineLoadState.EmptyDb -> {
                     binding.emptyState.visibility = View.VISIBLE
@@ -650,9 +649,14 @@ class TimelineFragment : Fragment() {
                     updateEmptyStateForPermission()
                     adapter?.submitList(emptyList())
                 }
-                else -> {
-                    // 不切到 emptyState，避免 InitialLoading 時閃白頁
+                is TimelineLoadState.InitialLoading -> {
+                    // cold start 期間：保留舊 list 不動，避免閃白頁；等首次 emit 後再更新
                     return
+                }
+                else -> {
+                    // Ready / LoadingMore / EndReached / Error 但 filtered.isEmpty：
+                    // 通常是 user 篩選後 0 結果 — 淨空 list
+                    adapter?.submitList(emptyList())
                 }
             }
             return
