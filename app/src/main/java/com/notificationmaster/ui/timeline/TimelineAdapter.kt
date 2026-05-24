@@ -150,7 +150,10 @@ class TimelineAdapter(
             val context = binding.root.context
 
             // 已移除通知淡化（alpha=0.55）
-            binding.root.alpha = if (item.isRemoved) 0.55f else 1.0f
+            // Phase 31ag：先強制 reset alpha 為 1.0f 再走條件式，防 ViewHolder pool
+            // 回收殘留前次 dimmed 值；無 isRemoved 場景應該 100% 全亮
+            binding.root.alpha = 1.0f
+            if (item.isRemoved) binding.root.alpha = 0.55f
 
             // 標題
             binding.textTitle.text = display.title ?: context.getString(R.string.no_title)
