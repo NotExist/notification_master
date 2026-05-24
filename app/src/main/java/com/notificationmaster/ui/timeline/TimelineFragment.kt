@@ -250,6 +250,15 @@ class TimelineFragment : Fragment() {
                 renderRuleChips()
             }
         }
+        // Phase 31aj：activeRuleId Flow 訂閱 — 每次 viewModel 改 activeRuleId（chip
+        // click / detail 返回 / 任何 state 變化）→ applyChipStateFromViewModel sync UI。
+        // 解 Bug #6（detail 返回 chip 選定外觀消失）+ #8（chip 不互斥，多個視覺 checked）。
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.activeRuleId.collect {
+                if (_binding == null) return@collect
+                applyChipStateFromViewModel()
+            }
+        }
         renderRuleChips()
         binding.chipAddPreset.setOnClickListener {
             openListFilterEditor(initial = EventFilterSpec.All, editingRuleId = null)
