@@ -641,63 +641,68 @@ class TimelineFragment : Fragment() {
 
         if (filtered.isEmpty()) {
             // Phase 31ae：分清 EmptyDb / InitialLoading / 篩選無結果三場景。
-            // Phase 31af：篩選後 0 結果 + 仍可 lazyload → 自動繼續往後找
+            // Phase 31ai：lazyload 條件移到 renderList 末尾統一檢查，這裡只負責 list 渲染
             when (input.state) {
                 is TimelineLoadState.EmptyDb -> {
                     binding.emptyState.visibility = View.VISIBLE
                     binding.recyclerView.visibility = View.GONE
                     updateEmptyStateForPermission()
                     adapter?.submitList(emptyList())
+                    return
                 }
                 is TimelineLoadState.InitialLoading -> {
                     // cold start 期間：保留舊 list 不動，避免閃白頁；等首次 emit 後再更新
                     return
                 }
-                is TimelineLoadState.Ready -> {
-                    // 篩選後 0 結果：淨空 list；若 canLoadMore 還可載入更多，自動觸發
-                    // lazyload 繼續往後找符合篩選的事件（loading 期間 state=LoadingMore
-                    // 自動 guard 不會重觸發；hit EndReached 或找到結果即停止）
-                    adapter?.submitList(emptyList())
-                    if (input.state.canLoadMore) {
-                        viewModel.loadNextDay()
-                    }
-                }
                 else -> {
-                    // LoadingMore / EndReached / Error 但 filtered.isEmpty：淨空
+                    // Ready / LoadingMore / EndReached / Error 但 filtered.isEmpty：淨空 list
+                    // fall-through 到末尾 lazyload 檢查（湊滿 INITIAL_PAGE_SIZE）
                     adapter?.submitList(emptyList())
                 }
             }
-            return
-        }
-        binding.emptyState.visibility = View.GONE
-        binding.recyclerView.visibility = View.VISIBLE
+        } else {
+            binding.emptyState.visibility = View.GONE
+            binding.recyclerView.visibility = View.VISIBLE
 
-        val eventDao = NotificationMasterApp.getInstance().database.notificationEventDao()
-        // Phase 26：buildTimelineItemsWithSimilarCount 改為單一 IO 包覆（vs 之前每 item 一次
-        // withContext(IO) 切換），長 list 不再 N 次 thread hop 拖累 main thread。
-        // Phase 31j：similarCount 與 dedup chip 脫離連動，無論 dedup ON/OFF 都計算
-        // 「跨通知同內容」筆數（不同 notification_key 但同 content_hash）。
-        var timelineItems: List<TimelineItem> = withContext(Dispatchers.IO) {
-            buildTimelineItemsWithSimilarCountInIo(filtered, input.removedIds, eventDao)
-        }
-        // Phase 26：footer 條件用 state（單一 source of truth）
-        val footer = when (input.state) {
-            is TimelineLoadState.LoadingMore -> TimelineItem.LoadingMore
-            is TimelineLoadState.EndReached -> TimelineItem.EndOfTimeline
-            else -> null
-        }
-        if (footer != null) timelineItems = timelineItems + footer
-
-        ProfileLogger.append(
-            "Fragment",
-            "renderList submit state=${input.state::class.simpleName} " +
-                "displays=${input.allNotifications.size} items=${timelineItems.size} footer=$footer"
-        )
-        adapter?.submitList(timelineItems) {
-            pendingScrollRestore?.let {
-                binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
-                pendingScrollRestore = null
+            val eventDao = NotificationMasterApp.getInstance().database.notificationEventDao()
+            // Phase 26：buildTimelineItemsWithSimilarCount 改為單一 IO 包覆（vs 之前每 item 一次
+            // withContext(IO) 切換），長 list 不再 N 次 thread hop 拖累 main thread。
+            // Phase 31j：similarCount 與 dedup chip 脫離連動，無論 dedup ON/OFF 都計算
+            // 「跨通知同內容」筆數（不同 notification_key 但同 content_hash）。
+            var timelineItems: List<TimelineItem> = withContext(Dispatchers.IO) {
+                buildTimelineItemsWithSimilarCountInIo(filtered, input.removedIds, eventDao)
             }
+            // Phase 26：footer 條件用 state（單一 source of truth）
+            val footer = when (input.state) {
+                is TimelineLoadState.LoadingMore -> TimelineItem.LoadingMore
+                is TimelineLoadState.EndReached -> TimelineItem.EndOfTimeline
+                else -> null
+            }
+            if (footer != null) timelineItems = timelineItems + footer
+
+            ProfileLogger.append(
+                "Fragment",
+                "renderList submit state=${input.state::class.simpleName} " +
+                    "displays=${input.allNotifications.size} items=${timelineItems.size} footer=$footer"
+            )
+            adapter?.submitList(timelineItems) {
+                pendingScrollRestore?.let {
+                    binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
+                    pendingScrollRestore = null
+                }
+            }
+        }
+
+        // Phase 31ai：renderList 末尾統一 lazyload 檢查 —
+        // filtered 不足 INITIAL_PAGE_SIZE 且仍可 lazyload → loadNextDay。
+        // 對 chip / keyword filter 都通用觸發；widget 帶 filter 回 App 場景也能自動湊滿一頁。
+        // 天然停止：filtered >= INITIAL_PAGE_SIZE / state EndReached / state LoadingMore
+        // （loadNextDay guard 拒絕重觸發）。
+        if (filtered.size < TimelineViewModel.INITIAL_PAGE_SIZE &&
+            input.state is TimelineLoadState.Ready &&
+            input.state.canLoadMore
+        ) {
+            viewModel.loadNextDay()
         }
     }
 
