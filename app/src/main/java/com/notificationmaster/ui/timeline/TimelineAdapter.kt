@@ -79,6 +79,22 @@ class TimelineAdapter(
         }
     }
 
+    /**
+     * Phase 31al：onViewAttachedToWindow 補強 alpha — DiffUtil 跳 bind 的 ViewHolder
+     * 從 pool 取出 attach 到畫面時，依當下 item.isRemoved 強制重設 alpha，避免殘留
+     * 前一個 item 的 alpha 值（user 觀察「開關響過/彈出後 removed card 恢復全亮」
+     * 場景的解法）。
+     */
+    override fun onViewAttachedToWindow(holder: RecyclerView.ViewHolder) {
+        super.onViewAttachedToWindow(holder)
+        if (holder is NotificationViewHolder) {
+            val pos = holder.bindingAdapterPosition
+            if (pos == RecyclerView.NO_POSITION) return
+            val item = getItem(pos) as? TimelineItem.NotificationItem ?: return
+            holder.itemView.alpha = if (item.isRemoved) 0.55f else 1.0f
+        }
+    }
+
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (val item = getItem(position)) {
             is TimelineItem.DateHeader -> (holder as DateHeaderViewHolder).bind(item)
@@ -150,10 +166,7 @@ class TimelineAdapter(
             val context = binding.root.context
 
             // 已移除通知淡化（alpha=0.55）
-            // Phase 31ag：先強制 reset alpha 為 1.0f 再走條件式，防 ViewHolder pool
-            // 回收殘留前次 dimmed 值；無 isRemoved 場景應該 100% 全亮
-            binding.root.alpha = 1.0f
-            if (item.isRemoved) binding.root.alpha = 0.55f
+            binding.root.alpha = if (item.isRemoved) 0.55f else 1.0f
 
             // 標題
             binding.textTitle.text = display.title ?: context.getString(R.string.no_title)
