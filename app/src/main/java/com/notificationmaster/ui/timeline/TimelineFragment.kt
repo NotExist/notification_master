@@ -267,6 +267,10 @@ class TimelineFragment : Fragment() {
 
     /** 只顯示使用者命名（非內建）的 LIST_FILTER rule；內建留給 Shortcut / 4 chip 對應 */
     private fun renderRuleChips() {
+        ProfileLogger.append(
+            "Chip",
+            "renderRuleChips activeRuleId=${viewModel.activeRuleId.value ?: "null"}"
+        )
         val group = binding.chipGroupPresets
         val addChip = binding.chipAddPreset
         val toRemove = (0 until group.childCount).mapNotNull { i ->
@@ -289,6 +293,10 @@ class TimelineFragment : Fragment() {
             chip.isChecked = (activeRuleId == rule.id)
             chip.setOnClickListener {
                 if (suppressChipListener) return@setOnClickListener
+                ProfileLogger.append(
+                    "Chip",
+                    "click rule=${rule.id} checked=${chip.isChecked}"
+                )
                 // Phase 15：不再強制 SwipeRefresh.isRefreshing；走 SYSTEM origin 由光條顯示
                 if (chip.isChecked) {
                     viewModel.applyRule(rule)
@@ -648,11 +656,20 @@ class TimelineFragment : Fragment() {
         val binding = _binding ?: return
         val filtered = filterNotifications(input.allNotifications, input.filterText)
 
+        // Phase 31ak：renderList entry log — 對應 ListRenderInput 各 source 當下值
+        ProfileLogger.append(
+            "Fragment",
+            "renderList entry state=${input.state::class.simpleName} " +
+                "allDisplays=${input.allNotifications.size} filtered=${filtered.size} " +
+                "filterText='${input.filterText}' removedIds=${input.removedIds.size}"
+        )
+
         if (filtered.isEmpty()) {
             // Phase 31ae：分清 EmptyDb / InitialLoading / 篩選無結果三場景。
             // Phase 31ai：lazyload 條件移到 renderList 末尾統一檢查，這裡只負責 list 渲染
             when (input.state) {
                 is TimelineLoadState.EmptyDb -> {
+                    ProfileLogger.append("Fragment", "renderList isEmpty case=EmptyDb")
                     binding.emptyState.visibility = View.VISIBLE
                     binding.recyclerView.visibility = View.GONE
                     updateEmptyStateForPermission()
@@ -661,11 +678,16 @@ class TimelineFragment : Fragment() {
                 }
                 is TimelineLoadState.InitialLoading -> {
                     // cold start 期間：保留舊 list 不動，避免閃白頁；等首次 emit 後再更新
+                    ProfileLogger.append("Fragment", "renderList isEmpty case=InitialLoading return")
                     return
                 }
                 else -> {
                     // Ready / LoadingMore / EndReached / Error 但 filtered.isEmpty：淨空 list
                     // fall-through 到末尾 lazyload 檢查（湊滿 INITIAL_PAGE_SIZE）
+                    ProfileLogger.append(
+                        "Fragment",
+                        "renderList isEmpty case=other(${input.state::class.simpleName}) submitEmpty"
+                    )
                     adapter?.submitList(emptyList())
                 }
             }
@@ -711,6 +733,10 @@ class TimelineFragment : Fragment() {
             input.state is TimelineLoadState.Ready &&
             input.state.canLoadMore
         ) {
+            ProfileLogger.append(
+                "Fragment",
+                "renderList autoLazyload filtered=${filtered.size} < ${TimelineViewModel.INITIAL_PAGE_SIZE}"
+            )
             viewModel.loadNextDay()
         }
     }

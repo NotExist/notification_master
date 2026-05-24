@@ -215,7 +215,14 @@ class TimelineViewModel(
     val displayedNotifications: StateFlow<List<NotificationDisplay>> = combine(
         allNotifications, _chipState
     ) { base, chip ->
-        applyClientSideOverlay(base, chip.dedupChecked, chip.activeRuleId)
+        val result = applyClientSideOverlay(base, chip.dedupChecked, chip.activeRuleId)
+        // Phase 31ak：log overlay compute — base/chip/result 對齊
+        ProfileLogger.append(
+            "Displays",
+            "overlay base=${base.size} dedup=${chip.dedupChecked} " +
+                "ruleId=${chip.activeRuleId ?: "null"} result=${result.size}"
+        )
+        result
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), emptyList())
 
     /**
@@ -281,7 +288,7 @@ class TimelineViewModel(
         _errorCh,
         allNotifications
     ) { displays, total, loading, err, items ->
-        when {
+        val s = when {
             err != null              -> TimelineLoadState.Error(err)
             total == null            -> TimelineLoadState.InitialLoading
             total == 0               -> TimelineLoadState.EmptyDb
@@ -295,6 +302,13 @@ class TimelineViewModel(
             loading                  -> TimelineLoadState.LoadingMore
             else                     -> TimelineLoadState.Ready(canLoadMore = true)
         }
+        // Phase 31ak：log state 公式各 input + 結果
+        ProfileLogger.append(
+            "State",
+            "emit=${s::class.simpleName} displays=${displays.size} items=${items.size} " +
+                "total=${total ?: "null"} loading=$loading err=${err != null}"
+        )
+        s
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), TimelineLoadState.InitialLoading)
 
     /**
@@ -327,7 +341,10 @@ class TimelineViewModel(
         viewModelScope.launch {
             eventDao.getRemovedNotificationKeysFlow()
                 .catch { /* removed overlay 非關鍵，例外吞掉避免影響 state */ }
-                .collectLatest { ids -> _removedIds.value = ids.toSet() }
+                .collectLatest { ids ->
+                    _removedIds.value = ids.toSet()
+                    ProfileLogger.append("Removed", "emit size=${ids.size}")
+                }
         }
     }
 
@@ -335,6 +352,7 @@ class TimelineViewModel(
         if (_chipState.value.dedupChecked == checked) return
         _chipState.value = _chipState.value.copy(dedupChecked = checked)
         savedState[KEY_DEDUP_CHECKED] = checked
+        ProfileLogger.append("Chip", "setDedupChecked=$checked")
     }
 
     fun applyRule(rule: Rule) {
@@ -351,6 +369,7 @@ class TimelineViewModel(
         )
         savedState[KEY_ACTIVE_RULE_ID] = rule.id
         savedState[KEY_DEDUP_CHECKED] = ruleSpec.deduplicate
+        ProfileLogger.append("Chip", "applyRule id=${rule.id} dedup=${ruleSpec.deduplicate}")
     }
 
     fun deactivateRule() {
@@ -365,6 +384,7 @@ class TimelineViewModel(
         )
         savedState[KEY_ACTIVE_RULE_ID] = null
         savedState[KEY_DEDUP_CHECKED] = restore
+        ProfileLogger.append("Chip", "deactivateRule restoreDedup=$restore")
     }
 
     fun setFilterText(text: String) {
