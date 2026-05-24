@@ -514,7 +514,7 @@ class TimelineViewModel(
     private suspend fun enrichAndMap(events: List<NotificationEventEntity>): List<NotificationDisplay> =
         NotificationEnricher.enrich(events, channelDao, rankingObsDao, rankingSnapDao)
 
-    private companion object {
+    companion object {
         const val KEY_DEDUP_CHECKED = "timeline.dedupChecked"
         const val KEY_ACTIVE_RULE_ID = "timeline.activeRuleId"
         const val KEY_FILTER_TEXT = "timeline.filterText"
