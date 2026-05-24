@@ -134,7 +134,7 @@
     <string name="tag_inbox_style_desc">使用 InboxStyle 的通知，展開時顯示多行條目清單。\n\nextras 中包含 android.textLines 文字行陣列。\n\n判斷依據：extras 中 EXTRA_TEMPLATE 尾綴為 InboxStyle。\n\n常見於多封郵件摘要。</string>
     <string name="tag_media_style_desc">使用 MediaStyle 的通知，提供媒體播放控制介面。\n\nextras 中包含 android.mediaSession 媒體工作階段。\n\n判斷依據：extras 中 EXTRA_TEMPLATE 尾綴為 MediaStyle 或 DecoratedMediaCustomViewStyle。\n\n常見於音樂播放器。</string>
     <string name="tag_call_style_desc">使用 CallStyle 的通知 (API 31+)，提供通話專用介面。\n\n包含來電/去電/進行中通話的操作按鈕。\n\n判斷依據：extras 中 EXTRA_TEMPLATE 尾綴為 CallStyle。</string>
-    <string name="tag_audible_desc">推斷此通知產生了可感知的提示（聲音或振動）。\n\n判斷依據（因 API 級別而異）：\n• API 29+：系統回報 lastAudiblyAlertedMillis 接近通知到達時間（確認）。涵蓋聲音和振動，靜音模式下不會更新\n• API 26–28：Channel importance ≥ DEFAULT（推斷）。無法排除勿擾/靜音模式的影響\n• API 21–25：通知設有音效 URI（推斷）。無法排除勿擾/靜音模式的影響</string>
+    <string name="tag_audible_desc">推斷此通知「意圖」會發出聲響或振動（adjective：would alert audibly），依 channel / notification 本身設計判斷，與系統是否真的播放（如勿擾 / 靜音 / lastAudiblyAlertedMillis）無關。\n\n判斷依據：\n• API 26+：Channel importance ≥ DEFAULT 且非（FLAG_ONLY_ALERT_ONCE 且為 UPDATED）\n• API 21–25：通知設有音效 URI</string>
     <string name="tag_no_clear_desc">FLAG_NO_CLEAR：此通知無法被使用者滑動清除，也不受「全部清除」按鈕影響。\n與 Ongoing 獨立，可同時或單獨出現。\n\n判斷依據：Notification flags 包含 FLAG_NO_CLEAR。</string>
     <string name="tag_high_priority_desc">FLAG_HIGH_PRIORITY：高優先度旗標（API 16–25 時代）。\nAPI 26+ 已被 Channel importance 取代，但仍可能被設定。\n\n判斷依據：Notification flags 包含 FLAG_HIGH_PRIORITY。</string>
     <string name="tag_local_only_desc">FLAG_LOCAL_ONLY：此通知不透過 Android Wear 或配對裝置同步。\n僅在本機顯示。\n\n判斷依據：Notification flags 包含 FLAG_LOCAL_ONLY。</string>
