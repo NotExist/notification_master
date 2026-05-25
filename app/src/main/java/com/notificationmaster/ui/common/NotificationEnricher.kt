@@ -45,6 +45,9 @@ object NotificationEnricher {
     ): List<NotificationDisplay> {
         if (events.isEmpty()) return emptyList()
         val t0 = System.currentTimeMillis()
+        // Plan 1-zippy-thunder W7：enter log 對齊 exit log，方便 ANR / 卡死定位
+        // （若卡在 enrich 內，profile log 只會見到 start 沒有 total → 可知阻塞位置）
+        ProfileLogger.append("Enricher", "enrich(${events.size}) start")
 
         // Channel enrichment：API 26+ 用 channels.importance；API <26 沒 channel 概念，map 拿到 -1
         val t1 = System.currentTimeMillis()

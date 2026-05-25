@@ -38,8 +38,10 @@ object ProfileLogger {
         if (!AppPreferences.isDebugDumperEnabled(ctx)) return
         val file = resolveLogFile(ctx) ?: return
         try {
+            val ts = timeFmt.format(Date())
+            val thread = Thread.currentThread().name
             synchronized(this) {
-                file.appendText("${timeFmt.format(Date())} [$tag] $message\n")
+                file.appendText("$ts [$tag/T:$thread] $message\n")
             }
         } catch (e: Exception) {
             Log.e(TAG, "append failed", e)

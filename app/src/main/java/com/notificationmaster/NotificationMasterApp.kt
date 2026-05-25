@@ -6,6 +6,9 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import com.notificationmaster.core.alert.PersistentAlertManager
+import com.notificationmaster.core.debug.DebugCrashHandler
+import com.notificationmaster.core.debug.DebugPaths
+import com.notificationmaster.core.debug.MainThreadWatchdog
 import com.notificationmaster.core.debug.ProfileLogger
 import com.notificationmaster.service.NlsKeepaliveService
 import com.notificationmaster.data.db.NotificationDatabase
@@ -28,6 +31,13 @@ class NotificationMasterApp : Application() {
         super.onCreate()
         instance = this
         ProfileLogger.init(this)
+        // Plan 1-zippy-thunder W7：debug mode 開啟時掛 main thread watchdog + uncaught crash log
+        // 用於診斷啟動卡死 / ANR / FC 等不易從 logcat 回追的問題
+        if (DebugPaths.isEnabled(this)) {
+            DebugCrashHandler.install()
+            MainThreadWatchdog.start()
+            ProfileLogger.append("App", "onCreate diagnostics installed (watchdog + crash handler)")
+        }
         PersistentAlertManager.createNotificationChannel(this)
         NlsKeepaliveService.createNotificationChannel(this)
         setupShortcuts()
