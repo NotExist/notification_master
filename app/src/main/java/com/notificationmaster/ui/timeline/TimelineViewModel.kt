@@ -277,23 +277,23 @@ class TimelineViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /**
-     * Phase 31e：跟 dedup chip 同步。
-     * - dedup ON  → unique notification_key 總數（與 displayedNotifications.size 同視角）
-     * - dedup OFF → raw events 總數
+     * Plan 1-zippy-thunder W2.a：chip-aware 全 DB 符合篩選的數量。
      *
-     * 之前固定用 raw count 造成 counter 「loaded（dedup 後）/ total（raw）」基準不同 —
-     * 新 UPDATE 事件進來時 total +1 但 loaded 不變（dedup 取代舊 event），user 看似「載入卡住」。
+     * 取代之前的「dedup ? unique : raw」derive — 改用 coreSpec.flatMapLatest 直接
+     * query count，spec 同步包含 chip + rule + dedup，與 displayedNotifications.size
+     * 同視角，讓 state.EndReached 公式 `displays.size >= total` 在 chip-filtered 場景
+     * 也能正確觸發（修前 total 永遠是全表 unique 數 → chip ON 時 displays < total →
+     * 永不 EndReached → footer 永遠不顯示「沒有更多」）。
      *
-     * Phase 31h：從 flatMapLatest 新 query 改為 combine derive [totalRawCount] / [totalUniqueCount]。
-     * chip 切換瞬間無 null 中間態、無 query 往返延遲；同時 dialog 直接讀同一份預備資料。
+     * Dialog 仍可讀 [totalRawCount] / [totalUniqueCount] 取得「不套 chip 的整體數量」。
      */
-    val totalCount: StateFlow<Int?> = combine(
-        _chipState.map { it.dedupChecked }.distinctUntilChanged(),
-        totalRawCount,
-        totalUniqueCount
-    ) { dedup, raw, unique ->
-        if (dedup) unique else raw
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), null)
+    val totalCount: StateFlow<Int?> = coreSpec
+        .flatMapLatest { spec -> eventDao.count(spec).map<Int, Int?> { it } }
+        .catch { e ->
+            _errorCh.value = e
+            emit(null)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), null)
 
     private val _removedIds = MutableStateFlow<Set<String>>(emptySet())
     val removedIds: StateFlow<Set<String>> = _removedIds.asStateFlow()
@@ -307,32 +307,43 @@ class TimelineViewModel(
      * 派生時序：所有 source（allNotifications / totalCount / _pageSize / _isLoadingMore /
      * _errorCh）任一變動觸發重算。combine 對 StateFlow 通常合併同 dispatch frame。
      */
+    /**
+     * Phase 26 / W2.a 重寫：頂層載入狀態。Fragment 觀察此值用單一 `when` 映射所有 indicator
+     * （SwipeRefresh 圓圈 / progress 光條 / footer / emptyState / Snackbar）。
+     *
+     * W2.a：引入 totalRawCount 區分「DB 真為空（EmptyDb）」與「chip 篩到 0（EndReached）」；
+     * 6 個 source 用巢狀 combine 拆 Triple 規避 stdlib combine 最多 5 元的限制。
+     */
     val state: StateFlow<TimelineLoadState> = combine(
         displayedNotifications,
         totalCount,
         _isLoadingMore,
-        _errorCh,
-        allNotifications
-    ) { displays, total, loading, err, items ->
+        combine(allNotifications, totalRawCount) { items, totalRaw -> items to totalRaw },
+        _errorCh
+    ) { displays, total, loading, itemsAndRaw, err ->
+        val items = itemsAndRaw.first
+        val totalRaw = itemsAndRaw.second
         val s = when {
             err != null              -> TimelineLoadState.Error(err)
+            // W2.a：DB 真為空才算 EmptyDb（與 chip 篩 0 區別）
+            totalRaw == 0            -> TimelineLoadState.EmptyDb
             total == null            -> TimelineLoadState.InitialLoading
-            total == 0               -> TimelineLoadState.EmptyDb
+            // W2.a：chip 篩到 0（DB 非空）→ list 立即可空、無 more
+            total == 0               -> TimelineLoadState.EndReached
             // cold start 期間 items / displays 都 empty
             items.isEmpty()          -> TimelineLoadState.InitialLoading
-            // Phase 31c+：size >= total 優先於 loading — 即使 _isLoadingMore=true，已到底
-            // 就立刻 EndReached（避免 first 條件 race / timeout 期間 footer 卡 LoadingMore）。
-            // Phase 31e：改用 displayedNotifications.size 比較（跟 dedup-aware totalCount 同視角）。
-            // dedup ON: displays unique 數 vs unique total；dedup OFF: displays.size = items.size vs raw total。
+            // Phase 31c+：size >= total 優先於 loading
+            // W2.a：totalCount 已是 chip-aware，chip-filtered 場景也能 EndReached
             displays.size >= total   -> TimelineLoadState.EndReached
             loading                  -> TimelineLoadState.LoadingMore
             else                     -> TimelineLoadState.Ready(canLoadMore = true)
         }
-        // Phase 31ak：log state 公式各 input + 結果
+        // Phase 31ak / W2.a：log state 公式各 input + 結果
         ProfileLogger.append(
             "State",
             "emit=${s::class.simpleName} displays=${displays.size} items=${items.size} " +
-                "total=${total ?: "null"} loading=$loading err=${err != null}"
+                "total=${total ?: "null"} totalRaw=${totalRaw ?: "null"} " +
+                "loading=$loading err=${err != null}"
         )
         s
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), TimelineLoadState.InitialLoading)
