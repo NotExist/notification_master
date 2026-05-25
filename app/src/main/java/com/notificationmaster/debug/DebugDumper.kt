@@ -3,13 +3,13 @@ package com.notificationmaster.debug
 import android.app.Notification
 import android.content.Context
 import android.os.Build
-import android.os.Environment
 import android.service.notification.NotificationListenerService.RankingMap
 import android.service.notification.NotificationListenerService.Ranking
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.notificationmaster.BuildConfig
 import com.notificationmaster.core.RawSerializer
+import com.notificationmaster.core.debug.DebugPaths
 import com.notificationmaster.core.debug.RawSizeAnalyzer
 import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.core.compat.ApiVersionHelper
@@ -33,7 +33,6 @@ class DebugDumper(private val context: Context) {
 
     companion object {
         private const val TAG = "DebugDumper"
-        private const val DEBUG_DIR_NAME = "NotificationMaster/debug"
     }
 
     /**
@@ -46,21 +45,13 @@ class DebugDumper(private val context: Context) {
     private val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US)
 
     /**
-     * Debug 輸出目錄
-     * 優先使用外部儲存讓其他工具可存取
+     * Event dump 輸出目錄（Documents/NotificationMaster/debug/event_dump/）
+     *
+     * Plan 1-zippy-thunder W4：原本平鋪在 `NotificationMaster/debug/` root，現由
+     * [DebugPaths] 統一改派生到 `event_dump/` 子資料夾，與 channel ranking dump
+     * 合併互參、與 profile_log 區隔。
      */
-    val dumpDir: File by lazy {
-        val publicDir = Environment.getExternalStoragePublicDirectory(
-            Environment.DIRECTORY_DOCUMENTS
-        )
-        val debugDir = File(publicDir, DEBUG_DIR_NAME)
-
-        if (debugDir.mkdirs() || debugDir.isDirectory) {
-            debugDir
-        } else {
-            File(context.getExternalFilesDir(null), "debug").apply { mkdirs() }
-        }
-    }
+    val dumpDir: File by lazy { DebugPaths.resolve(context, DebugPaths.Sink.EVENT_DUMP) }
 
     fun enable() {
         AppPreferences.setDebugDumperEnabled(context, true)

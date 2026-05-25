@@ -170,9 +170,10 @@ class NotificationCaptureService : NotificationListenerService() {
                         dumpRankingMap(probeMap, "probe_${elapsed}ms")
                         break
                     } else {
-                        val dumpDir = java.io.File(getExternalFilesDir(null) ?: filesDir, "channel_dump").apply { mkdirs() }
+                        val dumpDir = com.notificationmaster.core.debug.DebugPaths
+                            .resolve(this@NotificationCaptureService, com.notificationmaster.core.debug.DebugPaths.Sink.EVENT_DUMP)
                         val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
-                        java.io.File(dumpDir, "probe_${elapsed}ms_$ts.txt")
+                        java.io.File(dumpDir, "channel_probe_${elapsed}ms_$ts.txt")
                             .writeText("source=probe #$i\nelapsed=${elapsed}ms\nisConnected=$connected\ngetCurrentRanking()=$status\n")
                     }
                 }
@@ -881,7 +882,8 @@ class NotificationCaptureService : NotificationListenerService() {
     private fun dumpRankingMap(rankingMap: RankingMap, source: String) {
         if (!debugDumper.isEnabled) return
         try {
-            val dumpDir = java.io.File(getExternalFilesDir(null) ?: filesDir, "channel_dump").apply { mkdirs() }
+            val dumpDir = com.notificationmaster.core.debug.DebugPaths
+                .resolve(this, com.notificationmaster.core.debug.DebugPaths.Sink.EVENT_DUMP)
             val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
             val sb = StringBuilder()
             val keys = rankingMap.orderedKeys
@@ -899,7 +901,7 @@ class NotificationCaptureService : NotificationListenerService() {
                 }
                 sb.appendLine()
             }
-            java.io.File(dumpDir, "${source}_$ts.txt").writeText(sb.toString())
+            java.io.File(dumpDir, "channel_${source}_$ts.txt").writeText(sb.toString())
         } catch (_: Exception) { }
     }
 
