@@ -664,31 +664,32 @@ class TimelineFragment : Fragment() {
                 "filterText='${input.filterText}' removedIds=${input.removedIds.size}"
         )
 
+        // W2.c：任 state 下 filtered.isEmpty() 都明確走 submit，不再 early return（避免
+        // 「submit 沒真的執行 → 留下 stale list」的 bug）。InitialLoading 例外：cold start
+        // 保留舊內容避免閃白頁。
         if (filtered.isEmpty()) {
-            // Phase 31ae：分清 EmptyDb / InitialLoading / 篩選無結果三場景。
-            // Phase 31ai：lazyload 條件移到 renderList 末尾統一檢查，這裡只負責 list 渲染
             when (input.state) {
                 is TimelineLoadState.EmptyDb -> {
                     ProfileLogger.append("Fragment", "renderList isEmpty case=EmptyDb")
                     binding.emptyState.visibility = View.VISIBLE
                     binding.recyclerView.visibility = View.GONE
                     updateEmptyStateForPermission()
-                    adapter?.submitList(emptyList())
-                    return
+                    submitWithFooter(emptyList(), input.state)
                 }
                 is TimelineLoadState.InitialLoading -> {
-                    // cold start 期間：保留舊 list 不動，避免閃白頁；等首次 emit 後再更新
-                    ProfileLogger.append("Fragment", "renderList isEmpty case=InitialLoading return")
-                    return
+                    ProfileLogger.append("Fragment", "renderList isEmpty case=InitialLoading hold")
+                    // cold start：保留舊 list；不 submit empty 避免閃白
                 }
                 else -> {
-                    // Ready / LoadingMore / EndReached / Error 但 filtered.isEmpty：淨空 list
-                    // fall-through 到末尾 lazyload 檢查（湊滿 INITIAL_PAGE_SIZE）
+                    // Ready / LoadingMore / EndReached / Error：list 確該空（chip 篩 0 或
+                    // search 0 結果）— 明確 submit empty + footer 反映 loading / end-of-list 狀態
                     ProfileLogger.append(
                         "Fragment",
                         "renderList isEmpty case=other(${input.state::class.simpleName}) submitEmpty"
                     )
-                    adapter?.submitList(emptyList())
+                    binding.emptyState.visibility = View.GONE
+                    binding.recyclerView.visibility = View.VISIBLE
+                    submitWithFooter(emptyList(), input.state)
                 }
             }
         } else {
@@ -700,44 +701,54 @@ class TimelineFragment : Fragment() {
             // withContext(IO) 切換），長 list 不再 N 次 thread hop 拖累 main thread。
             // Phase 31j：similarCount 與 dedup chip 脫離連動，無論 dedup ON/OFF 都計算
             // 「跨通知同內容」筆數（不同 notification_key 但同 content_hash）。
-            var timelineItems: List<TimelineItem> = withContext(Dispatchers.IO) {
+            val timelineItems: List<TimelineItem> = withContext(Dispatchers.IO) {
                 buildTimelineItemsWithSimilarCountInIo(filtered, input.removedIds, eventDao)
             }
-            // Phase 26：footer 條件用 state（單一 source of truth）
-            val footer = when (input.state) {
-                is TimelineLoadState.LoadingMore -> TimelineItem.LoadingMore
-                is TimelineLoadState.EndReached -> TimelineItem.EndOfTimeline
-                else -> null
-            }
-            if (footer != null) timelineItems = timelineItems + footer
-
-            ProfileLogger.append(
-                "Fragment",
-                "renderList submit state=${input.state::class.simpleName} " +
-                    "displays=${input.allNotifications.size} items=${timelineItems.size} footer=$footer"
-            )
-            adapter?.submitList(timelineItems) {
-                pendingScrollRestore?.let {
-                    binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
-                    pendingScrollRestore = null
-                }
-            }
+            submitWithFooter(timelineItems, input.state)
         }
 
-        // Phase 31ai：renderList 末尾統一 lazyload 檢查 —
-        // filtered 不足 INITIAL_PAGE_SIZE 且仍可 lazyload → loadNextDay。
-        // 對 chip / keyword filter 都通用觸發；widget 帶 filter 回 App 場景也能自動湊滿一頁。
-        // 天然停止：filtered >= INITIAL_PAGE_SIZE / state EndReached / state LoadingMore
-        // （loadNextDay guard 拒絕重觸發）。
-        if (filtered.size < TimelineViewModel.INITIAL_PAGE_SIZE &&
+        // W2.d：末尾自動 lazyload 條件改善
+        // - 用 displays.size 不用 filtered.size（與 ViewModel guard 同視角；filtered 受 text
+        //   filter 影響會發生「篩到 0 但 DB 還很多」的假觸發）
+        // - filterText 非空時不自動 lazyload（user 主動 search 不應觸發無限 paging）
+        // - state.canLoadMore guard 配合 W2.b loadNextDay 內 DB-exhausted 判定，能 hard 截斷
+        //   chip 篩 0 + DB 載完的無限迴圈
+        val displaysSize = input.allNotifications.size
+        if (input.filterText.isEmpty() &&
+            displaysSize < TimelineViewModel.INITIAL_PAGE_SIZE &&
             input.state is TimelineLoadState.Ready &&
             input.state.canLoadMore
         ) {
             ProfileLogger.append(
                 "Fragment",
-                "renderList autoLazyload filtered=${filtered.size} < ${TimelineViewModel.INITIAL_PAGE_SIZE}"
+                "renderList autoLazyload displays=$displaysSize < ${TimelineViewModel.INITIAL_PAGE_SIZE}"
             )
             viewModel.loadNextDay()
+        }
+    }
+
+    /**
+     * W2.c：抽 helper 統一 submit 路徑，避免 isEmpty / non-empty 各走一條導致漏 submit。
+     * Footer 由 state 派生（LoadingMore / EndReached）放在 items 末尾，配合 W2.e
+     * loadNextDay 末尾 delay 200ms，user 能穩定看到 footer。
+     */
+    private fun submitWithFooter(items: List<TimelineItem>, state: TimelineLoadState) {
+        val binding = _binding ?: return
+        val footer = when (state) {
+            is TimelineLoadState.LoadingMore -> TimelineItem.LoadingMore
+            is TimelineLoadState.EndReached -> TimelineItem.EndOfTimeline
+            else -> null
+        }
+        val withFooter = if (footer != null) items + footer else items
+        ProfileLogger.append(
+            "Fragment",
+            "renderList submit state=${state::class.simpleName} items=${withFooter.size} footer=${footer?.javaClass?.simpleName ?: "none"}"
+        )
+        adapter?.submitList(withFooter) {
+            pendingScrollRestore?.let {
+                binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
+                pendingScrollRestore = null
+            }
         }
     }
 

@@ -19,6 +19,7 @@ import com.notificationmaster.data.filter.toFilterSpec
 import com.notificationmaster.ui.common.NotificationDisplay
 import com.notificationmaster.ui.common.NotificationEnricher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -505,28 +506,46 @@ class TimelineViewModel(
     }
 
     /**
-     * Phase 26：lazyload 改為 sealed state guard + first 確定條件。
+     * Phase 26 + W2.b/e 重寫：lazyload 改為多層 guard + footer 防閃。
      *
-     * - guard 直接讀 state.value，state 已是單一 source of truth
-     * - 完成判斷：「items.size 達 target」OR「total 確認 size==total」 — 確定數字無 timing race
-     * - **不再有** `withTimeoutOrNull(3000)` 強制放行（C/D 根因）
+     * Guard 順序（任何一條成立即 skip 不重複觸發無意義 +50）：
+     * 1. state 非 Ready / canLoadMore=false
+     * 2. _isLoadingMore=true（重入防護）
+     * 3. displays.size >= totalCount（chip-filtered 已全顯示）
+     * 4. **W2.b 新**：allNotifications.size < _pageSize（上次 query.size < limit
+     *    表示 DB 內已沒更多 events 可載；ranking 未就緒時 chip 篩 0 的無限迴圈在
+     *    此截斷）
+     * 5. **W2.b 新**：_pageSize >= [MAX_PAGE_SIZE] hard cap，防意外失控
+     *
+     * Footer 防閃（**W2.e**）：condition_met 後 delay 200ms 才 reset
+     * _isLoadingMore，確保 LoadingMore footer 至少可見 200ms 給 user 視覺回饋。
      */
     fun loadNextDay() {
         val st = state.value
         if (st !is TimelineLoadState.Ready || !st.canLoadMore) return
         if (_isLoadingMore.value) return
-        // Phase 31c+：預檢「displays 已 >= totalCount」直接 return（避免無謂觸發 LoadingMore footer）。
-        // Phase 31e：用 displays.size 跟 dedup-aware totalCount 比較，符合 state 公式同視角。
         val totalSnapshot = totalCount.value
         val displaysSnapshot = displayedNotifications.value.size
         if (totalSnapshot != null && displaysSnapshot >= totalSnapshot) {
             ProfileLogger.append("Timeline", "loadNextDay skip: displays=$displaysSnapshot >= total=$totalSnapshot")
             return
         }
+        // W2.b：DB 已載完（上次 query 回傳 size < 當前 limit）
+        val lastQuerySize = allNotifications.value.size
+        if (lastQuerySize < _pageSize.value) {
+            ProfileLogger.append(
+                "Timeline",
+                "loadNextDay skip: lastQuery=$lastQuerySize < pageSize=${_pageSize.value} (DB exhausted)"
+            )
+            return
+        }
+        // W2.b：hard cap 防失控（chip 篩 0 + lastQuery 巧合等於 pageSize 的邊界）
+        if (_pageSize.value >= MAX_PAGE_SIZE) {
+            ProfileLogger.append("Timeline", "loadNextDay skip: pageSize=${_pageSize.value} >= MAX_PAGE_SIZE=$MAX_PAGE_SIZE")
+            return
+        }
 
-        val target = _pageSize.value + PAGE_INCREMENT
-        // Phase 28：以 displayedNotifications.value 為基準（user 實際看到的 list），
-        // 等 size 增長才 reset isLoadingMore，避免「圓圈消失但內容沒呈現」空檔。
+        val target = (_pageSize.value + PAGE_INCREMENT).coerceAtMost(MAX_PAGE_SIZE)
         val beforeDisplayedSize = displayedNotifications.value.size
         ProfileLogger.append(
             "Timeline",
@@ -535,20 +554,18 @@ class TimelineViewModel(
         )
         _isLoadingMore.value = true
         _pageSize.value = target
-        // Phase 27：pageSize 不持久化（避免重 enrich 大量 events 造成 OOM）
 
         viewModelScope.launch {
-            // Phase 28：reset 條件改為「user 實際看到的 list 變大」OR「DB 全載完」。
-            // dedup 模式下 displayedNotifications.size 可能不會達 _pageSize（被去重）
-            // 但每次 lazyload 100 raw events 通常會帶來 N unique events → size > before。
-            // 極端 case（lazyload 100 raw events 全是同 key dedup）→ 10s timeout 兜底。
-            // Phase 27：加 10s timeout safety net 防止極端例外（OOM）導致 _isLoadingMore 永久 true
             val result = withTimeoutOrNull(10_000L) {
                 combine(displayedNotifications, allNotifications, totalCount) { displays, items, total ->
                     displays.size > beforeDisplayedSize ||
-                        (total != null && items.size >= total)
+                        (total != null && items.size >= total) ||
+                        // W2.b：query 回傳 size < pageSize 也算完成（DB 不會再多 items）
+                        items.size < _pageSize.value
                 }.first { it }
             }
+            // W2.e：condition_met 後 delay 200ms 讓 LoadingMore footer 可見
+            if (result != null) delay(FOOTER_MIN_VISIBLE_MS)
             _isLoadingMore.value = false
             ProfileLogger.append(
                 "Timeline",
@@ -592,5 +609,15 @@ class TimelineViewModel(
 
         /** Phase 25：每次 lazyload 擴張的 events 數量。Phase 29：100 → 50 配合 INITIAL 縮小。 */
         const val PAGE_INCREMENT = 50
+
+        /**
+         * W2.b：lazyload pageSize hard cap，防 chip 篩 0 + lastQuery 巧合等於 pageSize
+         * 等邊界導致的 +50 失控。5000 對應約 1.7 年 events（按 8 events/day 估算）通常已遠
+         * 超過實際使用，達上限後 user 仍可手動清資料或調大此值。
+         */
+        const val MAX_PAGE_SIZE = 5000
+
+        /** W2.e：LoadingMore footer 至少可見時間（ms），防 Ready↔LoadingMore 切換太快閃過。 */
+        const val FOOTER_MIN_VISIBLE_MS = 200L
     }
 }
