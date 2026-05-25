@@ -250,11 +250,11 @@ class TimelineFragment : Fragment() {
                 renderRuleChips()
             }
         }
-        // Phase 31aj：activeRuleId Flow 訂閱 — 每次 viewModel 改 activeRuleId（chip
+        // Phase 31aj：activeRuleIds Flow 訂閱 — 每次 viewModel 改 set（chip
         // click / detail 返回 / 任何 state 變化）→ applyChipStateFromViewModel sync UI。
         // 解 Bug #6（detail 返回 chip 選定外觀消失）+ #8（chip 不互斥，多個視覺 checked）。
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.activeRuleId.collect {
+            viewModel.activeRuleIds.collect {
                 if (_binding == null) return@collect
                 applyChipStateFromViewModel()
             }
@@ -267,9 +267,10 @@ class TimelineFragment : Fragment() {
 
     /** 只顯示使用者命名（非內建）的 LIST_FILTER rule；內建留給 Shortcut / 4 chip 對應 */
     private fun renderRuleChips() {
+        val activeIds = viewModel.activeRuleIds.value
         ProfileLogger.append(
             "Chip",
-            "renderRuleChips activeRuleId=${viewModel.activeRuleId.value ?: "null"}"
+            "renderRuleChips activeRuleIds=${activeIds.joinToString(",").ifEmpty { "none" }}"
         )
         val group = binding.chipGroupPresets
         val addChip = binding.chipAddPreset
@@ -283,14 +284,13 @@ class TimelineFragment : Fragment() {
             .sortedWith(compareByDescending<Rule> { it.isBuiltIn }.thenBy { it.createdAt })
         val inflater = LayoutInflater.from(requireContext())
         val chipSpacing = (8 * resources.displayMetrics.density).toInt()
-        val activeRuleId = viewModel.activeRuleId.value
         for ((i, rule) in rules.withIndex()) {
             val chip = inflater.inflate(R.layout.chip_preset, group, false) as Chip
             (chip.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.marginStart =
                 if (i == 0) 0 else chipSpacing
             chip.text = ruleDisplayName(rule)
             chip.tag = rule.id
-            chip.isChecked = (activeRuleId == rule.id)
+            chip.isChecked = activeIds.contains(rule.id)
             chip.setOnClickListener {
                 if (suppressChipListener) return@setOnClickListener
                 ProfileLogger.append(
@@ -325,21 +325,21 @@ class TimelineFragment : Fragment() {
     }
 
     /**
-     * 從 ViewModel 狀態同步 chip 視覺：activeRuleId 對應的 chip checked；dedup chip 在 rule
-     * 模式下顯示 spec 的 dedup 值並 disable。
+     * 從 ViewModel 狀態同步 chip 視覺：activeRuleIds 中的 rule chip checked；dedup chip 在
+     * rule 模式下顯示 spec 的 dedup 值並 disable。
      */
     private fun applyChipStateFromViewModel() {
         suppressChipListener = true
         try {
             val group = binding.chipGroupPresets
-            val activeRuleId = viewModel.activeRuleId.value
+            val activeIds = viewModel.activeRuleIds.value
             for (i in 0 until group.childCount) {
                 val c = group.getChildAt(i) as? Chip ?: continue
                 if (c.id == R.id.chip_add_preset) continue
-                c.isChecked = (c.tag == activeRuleId)
+                c.isChecked = activeIds.contains(c.tag)
             }
             binding.chipDeduplicated.isChecked = viewModel.dedupChecked.value
-            val ruleMode = activeRuleId != null
+            val ruleMode = activeIds.isNotEmpty()
             binding.chipDeduplicated.isEnabled = !ruleMode
             binding.chipDeduplicated.alpha = if (ruleMode) 0.4f else 1f
         } finally {
@@ -410,7 +410,7 @@ class TimelineFragment : Fragment() {
             .setMessage(getString(R.string.preset_delete_confirm_message, rule.name ?: rule.id))
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 RuleRepository.removeRule(requireContext(), rule.id)
-                if (viewModel.activeRuleId.value == rule.id) {
+                if (viewModel.activeRuleIds.value.contains(rule.id)) {
                     viewModel.deactivateRule()
                 }
                 renderRuleChips()
@@ -447,7 +447,7 @@ class TimelineFragment : Fragment() {
                     val existing = RuleEngine.getRule(editingRuleId) ?: return@showAddRuleDialog
                     val updated = existing.copy(matchers = matchers, action = listFilter)
                     RuleRepository.updateRule(requireContext(), updated)
-                    if (viewModel.activeRuleId.value == editingRuleId) viewModel.applyRule(updated)
+                    if (viewModel.activeRuleIds.value.contains(editingRuleId)) viewModel.applyRule(updated)
                     renderRuleChips()
                 } else {
                     promptNewRuleName(matchers, listFilter)

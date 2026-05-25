@@ -115,10 +115,13 @@ class TimelineViewModel(
     /**
      * Phase 24：chip 狀態原子化封裝。
      * 兩個 field 同時改的情境用單一 .copy(...) emit，避免 combine 看到中間態。
+     *
+     * Plan 1-zippy-thunder W6：`activeRuleId` 改 `activeRuleIds: Set<String>`，為未來多
+     * filter 串聯（取交集）預留。UI 仍維持單選（chip click 取代為單元素 set）。
      */
     private data class ChipState(
         val dedupChecked: Boolean,
-        val activeRuleId: String?
+        val activeRuleIds: Set<String>
     )
 
     // === chip state（單一 source）===
@@ -126,7 +129,8 @@ class TimelineViewModel(
     private val _chipState = MutableStateFlow(
         ChipState(
             dedupChecked = savedState[KEY_DEDUP_CHECKED] ?: true,
-            activeRuleId = savedState[KEY_ACTIVE_RULE_ID]
+            activeRuleIds = (savedState.get<ArrayList<String>>(KEY_ACTIVE_RULE_IDS))
+                ?.toSet().orEmpty()
         )
     )
 
@@ -134,9 +138,9 @@ class TimelineViewModel(
         .map { it.dedupChecked }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), _chipState.value.dedupChecked)
 
-    val activeRuleId: StateFlow<String?> = _chipState
-        .map { it.activeRuleId }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), _chipState.value.activeRuleId)
+    val activeRuleIds: StateFlow<Set<String>> = _chipState
+        .map { it.activeRuleIds }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), _chipState.value.activeRuleIds)
 
     /** 套 rule 前 user 自選的去重狀態，rule 取消後還原 */
     private var userDedupBeforeRule: Boolean? = savedState[KEY_USER_DEDUP_BEFORE_RULE]
@@ -149,15 +153,36 @@ class TimelineViewModel(
      * 由 chip state 衍生而成，**不參與 DB query**。
      *
      * Phase 31j：similarCount 已脫離 deduplicate（永遠顯示「+N 同內容」）。
+     * W6：多 ruleIds 場景把所有 rule.matchers concat（AND），單 rule 行為與舊版等價。
      */
     val coreSpec: StateFlow<EventFilterSpec> = _chipState.map { chip ->
-        val rule = chip.activeRuleId?.let { RuleEngine.getRule(it) }
-        rule?.toFilterSpec() ?: EventFilterSpec(deduplicate = chip.dedupChecked)
+        combineRulesToSpec(chip.activeRuleIds, chip.dedupChecked)
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS),
         EventFilterSpec(deduplicate = _chipState.value.dedupChecked)
     )
+
+    /**
+     * W6：把多個 rule.matchers concat AND，list filter 控制欄位用合理 reduce
+     * （limit 取最小、timeFrom 取最大、timeTo 取最小、orderBy / deduplicate 取第一個 rule）。
+     * 0 rule → 純 dedup spec；1 rule → 等價 [Rule.toFilterSpec]。
+     */
+    private fun combineRulesToSpec(ruleIds: Set<String>, dedupChecked: Boolean): EventFilterSpec {
+        val rules = ruleIds.mapNotNull { RuleEngine.getRule(it) }
+        if (rules.isEmpty()) return EventFilterSpec(deduplicate = dedupChecked)
+        if (rules.size == 1) return rules[0].toFilterSpec()
+        val listFilters = rules.mapNotNull { it.action as? com.notificationmaster.core.filter.RuleAction.ListFilter }
+        val first = listFilters.firstOrNull()
+        return EventFilterSpec(
+            matchers = rules.flatMap { it.matchers },
+            orderBy = first?.orderBy ?: com.notificationmaster.core.filter.OrderBy.PostTimeDesc,
+            limit = listFilters.mapNotNull { it.limit }.minOrNull(),
+            deduplicate = first?.deduplicate ?: dedupChecked,
+            timeFrom = listFilters.mapNotNull { it.timeFrom }.maxOrNull(),
+            timeTo = listFilters.mapNotNull { it.timeTo }.minOrNull()
+        )
+    }
 
     // === pageSize 載入控制 ===
 
@@ -215,12 +240,13 @@ class TimelineViewModel(
     val displayedNotifications: StateFlow<List<NotificationDisplay>> = combine(
         allNotifications, _chipState
     ) { base, chip ->
-        val result = applyClientSideOverlay(base, chip.dedupChecked, chip.activeRuleId)
+        val result = applyClientSideOverlay(base, chip.dedupChecked, chip.activeRuleIds)
         // Phase 31ak：log overlay compute — base/chip/result 對齊
         ProfileLogger.append(
             "Displays",
             "overlay base=${base.size} dedup=${chip.dedupChecked} " +
-                "ruleId=${chip.activeRuleId ?: "null"} result=${result.size}"
+                "ruleIds=${chip.activeRuleIds.joinToString(",").ifEmpty { "none" }} " +
+                "result=${result.size}"
         )
         result
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), emptyList())
@@ -322,15 +348,18 @@ class TimelineViewModel(
     var scrollState: Parcelable? = null
 
     init {
-        // RuleEngine 內容可能還沒載入；冪等呼叫保證 activeRuleId 對應的 rule 能讀到
+        // RuleEngine 內容可能還沒載入；冪等呼叫保證 activeRuleIds 對應的 rule 能讀到
         RuleRepository.load(application)
-        // 若持久化的 ruleId 在 RuleEngine 已不存在，清掉避免後續找不到
-        val ruleId = _chipState.value.activeRuleId
-        if (ruleId != null && RuleEngine.getRule(ruleId) == null) {
-            _chipState.value = _chipState.value.copy(activeRuleId = null)
-            savedState[KEY_ACTIVE_RULE_ID] = null
-            userDedupBeforeRule = null
-            savedState[KEY_USER_DEDUP_BEFORE_RULE] = null
+        // 若持久化的 ruleIds 在 RuleEngine 已不存在，清掉避免後續找不到
+        val ids = _chipState.value.activeRuleIds
+        val surviving = ids.filter { RuleEngine.getRule(it) != null }.toSet()
+        if (surviving.size != ids.size) {
+            _chipState.value = _chipState.value.copy(activeRuleIds = surviving)
+            savedState[KEY_ACTIVE_RULE_IDS] = ArrayList(surviving)
+            if (surviving.isEmpty()) {
+                userDedupBeforeRule = null
+                savedState[KEY_USER_DEDUP_BEFORE_RULE] = null
+            }
         }
 
         // Phase 28：totalCount 改為 stateIn Room Flow 直接 derive（見 [totalCount] 宣告），
@@ -355,34 +384,39 @@ class TimelineViewModel(
         ProfileLogger.append("Chip", "setDedupChecked=$checked")
     }
 
+    /**
+     * W6：UI 仍維持單選 — applyRule 把 set 替換為 [rule.id]，視覺與舊版等價。
+     * 未來改多選 UI 時新增 addRule / removeRule，不破壞此 API。
+     */
     fun applyRule(rule: Rule) {
         val current = _chipState.value
         // 第一次進 rule 模式時記下 user dedup，切換 rule 之間不重複記
-        if (current.activeRuleId == null) {
+        if (current.activeRuleIds.isEmpty()) {
             userDedupBeforeRule = current.dedupChecked
             savedState[KEY_USER_DEDUP_BEFORE_RULE] = userDedupBeforeRule
         }
         val ruleSpec = rule.toFilterSpec()
+        val newIds = setOf(rule.id)
         _chipState.value = current.copy(
-            activeRuleId = rule.id,
+            activeRuleIds = newIds,
             dedupChecked = ruleSpec.deduplicate
         )
-        savedState[KEY_ACTIVE_RULE_ID] = rule.id
+        savedState[KEY_ACTIVE_RULE_IDS] = ArrayList(newIds)
         savedState[KEY_DEDUP_CHECKED] = ruleSpec.deduplicate
         ProfileLogger.append("Chip", "applyRule id=${rule.id} dedup=${ruleSpec.deduplicate}")
     }
 
     fun deactivateRule() {
         val current = _chipState.value
-        if (current.activeRuleId == null) return
+        if (current.activeRuleIds.isEmpty()) return
         val restore = userDedupBeforeRule ?: true
         userDedupBeforeRule = null
         savedState[KEY_USER_DEDUP_BEFORE_RULE] = null
         _chipState.value = current.copy(
-            activeRuleId = null,
+            activeRuleIds = emptySet(),
             dedupChecked = restore
         )
-        savedState[KEY_ACTIVE_RULE_ID] = null
+        savedState[KEY_ACTIVE_RULE_IDS] = ArrayList<String>()
         savedState[KEY_DEDUP_CHECKED] = restore
         ProfileLogger.append("Chip", "deactivateRule restoreDedup=$restore")
     }
@@ -404,18 +438,22 @@ class TimelineViewModel(
     private fun applyClientSideOverlay(
         base: List<NotificationDisplay>,
         dedup: Boolean,
-        ruleId: String?
+        ruleIds: Set<String>
     ): List<NotificationDisplay> {
         var result = base
-        val rule = ruleId?.let { RuleEngine.getRule(it) }
-        val ruleSpec = rule?.toFilterSpec()
+        val rules = ruleIds.mapNotNull { RuleEngine.getRule(it) }
+        val listFilters = rules.mapNotNull { it.action as? com.notificationmaster.core.filter.RuleAction.ListFilter }
 
-        if (rule != null) {
+        if (rules.isNotEmpty()) {
             result = result.filter { display ->
-                rule.matches(matchContextOf(display))
+                val ctx = matchContextOf(display)
+                rules.all { it.matches(ctx) }
             }
-            ruleSpec?.timeFrom?.let { from -> result = result.filter { it.postTime >= from } }
-            ruleSpec?.timeTo?.let { to -> result = result.filter { it.postTime <= to } }
+            // W6：多 rule 取最嚴格時間窗（timeFrom 取最大、timeTo 取最小）
+            listFilters.mapNotNull { it.timeFrom }.maxOrNull()
+                ?.let { from -> result = result.filter { it.postTime >= from } }
+            listFilters.mapNotNull { it.timeTo }.minOrNull()
+                ?.let { to -> result = result.filter { it.postTime <= to } }
         }
 
         if (dedup) {
@@ -426,7 +464,9 @@ class TimelineViewModel(
                 .sortedByDescending { it.postTime }
         }
 
-        ruleSpec?.limit?.let { lim -> result = result.take(lim) }
+        // W6：多 rule limit 取最小（最嚴格）
+        listFilters.mapNotNull { it.limit }.minOrNull()
+            ?.let { lim -> result = result.take(lim) }
         return result
     }
 
@@ -516,7 +556,7 @@ class TimelineViewModel(
 
     companion object {
         const val KEY_DEDUP_CHECKED = "timeline.dedupChecked"
-        const val KEY_ACTIVE_RULE_ID = "timeline.activeRuleId"
+        const val KEY_ACTIVE_RULE_IDS = "timeline.activeRuleIds"
         const val KEY_FILTER_TEXT = "timeline.filterText"
         const val KEY_USER_DEDUP_BEFORE_RULE = "timeline.userDedupBeforeRule"
         // Phase 27 移除：KEY_SCROLL_STATE / KEY_PAGE_SIZE（不跨 process 持久化）
