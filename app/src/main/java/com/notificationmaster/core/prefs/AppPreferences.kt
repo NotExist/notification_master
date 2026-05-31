@@ -249,4 +249,41 @@ object AppPreferences {
     fun setDebugDumperEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_DEBUG_DUMPER_ENABLED, enabled).apply()
     }
+
+    // === Plan 1-zippy-thunder W10：ProfileLogger per-tag 開關 ===
+
+    private const val DEBUG_TAG_PREFIX = "debug_tag_"
+
+    /**
+     * 已知 ProfileLogger tag 清單，供 settings UI 列舉用（運行時 ProfileLogger.append
+     * 不依賴此清單 — 新 tag 自動沿用預設值 true）。
+     */
+    val KNOWN_PROFILE_LOG_TAGS: List<String> = listOf(
+        "App", "UncaughtExn", "Watchdog", "Archive",
+        "Removed", "Chip", "Enricher", "Display",
+        "State", "Displays", "Fragment", "Timeline"
+    )
+
+    /**
+     * 檢查 debug 總開關 ON 且該 tag 個別未被關閉。
+     * 設計原則：debug 開啟時所有 tag 預設 ON（避免遺漏資訊），user 雜訊過多再個別關閉。
+     */
+    fun isDebugTagEnabled(context: Context, tag: String): Boolean {
+        if (!isDebugDumperEnabled(context)) return false
+        return isDebugTagPrefEnabled(context, tag)
+    }
+
+    /** 純讀 per-tag SharedPreferences，不檢查 debug 總開關（供 settings UI 顯示用） */
+    fun isDebugTagPrefEnabled(context: Context, tag: String): Boolean {
+        return prefs(context).getBoolean(
+            "$DEBUG_TAG_PREFIX${tag.lowercase()}_enabled",
+            true
+        )
+    }
+
+    fun setDebugTagEnabled(context: Context, tag: String, enabled: Boolean) {
+        prefs(context).edit()
+            .putBoolean("$DEBUG_TAG_PREFIX${tag.lowercase()}_enabled", enabled)
+            .apply()
+    }
 }

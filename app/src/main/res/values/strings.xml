@@ -28,6 +28,15 @@
     <string name="settings_debug_mode">Debug 模式</string>
     <string name="settings_debug_mode_summary">將原始通知資料 dump 到外部儲存</string>
     <string name="settings_debug_clear">清除 Debug 資料</string>
+    <string name="settings_debug_profile_log_tags_header">Profile Log Tags %1$s</string>
+    <string name="settings_debug_dump_types_header">Dump Types %1$s</string>
+    <string name="settings_debug_collapsed_arrow">▸</string>
+    <string name="settings_debug_expanded_arrow">▾</string>
+    <string name="settings_debug_dump_type_env">環境資訊 (env)</string>
+    <string name="settings_debug_dump_type_event">事件 (event)</string>
+    <string name="settings_debug_dump_type_initial">初始掃描 (initial)</string>
+    <string name="settings_debug_dump_type_ranking">Ranking 更新 (ranking)</string>
+    <string name="settings_debug_dump_type_channel">Channel / Ranking 快照 (channel)</string>
     <string name="settings_debug_test_alert">測試持續提醒（10 秒後）</string>
     <string name="settings_debug_update_ranking_map">更新 RankingMap</string>
     <string name="settings_debug_test_alert_scheduled">持續提醒將在 10 秒後觸發</string>

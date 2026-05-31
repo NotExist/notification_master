@@ -381,6 +381,9 @@ class SettingsFragment : Fragment() {
             updateDebugInfo()
         }
 
+        // Plan 1-zippy-thunder W10：ProfileLogger per-tag 開關（摺疊區）
+        setupProfileLogTagSwitches()
+
         // 即時匯出歷程
         binding.switchCalendarExportLog.isChecked = CalendarExportLog.enabled
         binding.btnCalendarExportHistory.isEnabled = CalendarExportLog.enabled
@@ -482,6 +485,45 @@ class SettingsFragment : Fragment() {
             append("路徑: ${debugDumper.dumpDir.absolutePath}\n")
             append("檔案數: $fileCount, 大小: $sizeStr")
         }
+    }
+
+    /**
+     * Plan 1-zippy-thunder W10：ProfileLogger per-tag 開關 UI。
+     *
+     * Header TextView 點擊切換展開／收合，container 內動態 inflate 12 個 row：
+     * [TextView | SwitchMaterial]。Switch 狀態用 [AppPreferences.isDebugTagPrefEnabled]
+     * 取得（純讀個別 pref，不被 debug 總開關 chain）。
+     */
+    private fun setupProfileLogTagSwitches() {
+        val ctx = requireContext()
+        val container = binding.containerProfileLogTags
+        val header = binding.headerProfileLogTags
+
+        container.removeAllViews()
+        val inflater = LayoutInflater.from(ctx)
+        for (tag in AppPreferences.KNOWN_PROFILE_LOG_TAGS) {
+            val row = inflater.inflate(R.layout.row_debug_toggle, container, false)
+            row.findViewById<TextView>(R.id.toggle_label).text = tag
+            val sw = row.findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.toggle_switch)
+            sw.isChecked = AppPreferences.isDebugTagPrefEnabled(ctx, tag)
+            sw.setOnCheckedChangeListener { _, isChecked ->
+                AppPreferences.setDebugTagEnabled(ctx, tag, isChecked)
+            }
+            container.addView(row)
+        }
+
+        renderHeaderArrow(header, R.string.settings_debug_profile_log_tags_header, container.visibility == View.VISIBLE)
+        header.setOnClickListener {
+            val expanded = container.visibility != View.VISIBLE
+            container.visibility = if (expanded) View.VISIBLE else View.GONE
+            renderHeaderArrow(header, R.string.settings_debug_profile_log_tags_header, expanded)
+        }
+    }
+
+    private fun renderHeaderArrow(header: TextView, @androidx.annotation.StringRes resId: Int, expanded: Boolean) {
+        val arrow = if (expanded) getString(R.string.settings_debug_expanded_arrow)
+                    else getString(R.string.settings_debug_collapsed_arrow)
+        header.text = getString(resId, arrow)
     }
 
     /**

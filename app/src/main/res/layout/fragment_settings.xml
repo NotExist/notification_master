@@ -691,6 +691,48 @@
                     android:textColor="?android:attr/textColorSecondary"
                     tools:text="路徑: /storage/emulated/0/Documents/NotificationMaster/debug\n檔案數: 42, 大小: 1.2 MB" />
 
+                <!-- Plan 1-zippy-thunder W10：ProfileLogger per-tag 開關（摺疊區） -->
+                <TextView
+                    android:id="@+id/header_profile_log_tags"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:padding="8dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textStyle="bold"
+                    tools:text="Profile Log Tags ▾" />
+
+                <LinearLayout
+                    android:id="@+id/container_profile_log_tags"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:visibility="gone" />
+
+                <!-- Plan 1-zippy-thunder W14：DebugDumper per-type 開關（摺疊區） -->
+                <TextView
+                    android:id="@+id/header_dump_types"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:padding="8dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textStyle="bold"
+                    tools:text="Dump Types ▾" />
+
+                <LinearLayout
+                    android:id="@+id/container_dump_types"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:visibility="gone" />
+
                 <!-- 即時匯出歷程 -->
                 <LinearLayout
                     android:layout_width="match_parent"

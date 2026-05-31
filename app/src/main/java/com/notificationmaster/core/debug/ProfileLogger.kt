@@ -36,7 +36,8 @@ object ProfileLogger {
 
     fun append(tag: String, message: String) {
         val ctx = appContext ?: return
-        if (!AppPreferences.isDebugDumperEnabled(ctx)) return
+        // W10：個別 tag 開關（內部 chained 檢查 isDebugDumperEnabled）
+        if (!AppPreferences.isDebugTagEnabled(ctx, tag)) return
         val file = resolveLogFile(ctx) ?: return
         try {
             val ts = timeFmt.format(Date())
