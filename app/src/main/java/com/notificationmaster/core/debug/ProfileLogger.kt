@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.notificationmaster.core.prefs.AppPreferences
 import java.io.File
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -40,8 +41,14 @@ object ProfileLogger {
         try {
             val ts = timeFmt.format(Date())
             val thread = Thread.currentThread().name
+            val line = "$ts [$tag/T:$thread] $message\n"
+            // W12：用 FileOutputStream + fd.sync 確保寫入即時刷到磁碟，
+            // 避免 process killed 時最後幾 KB buffer 遺失（user 觀察「中斷」原因之一）。
             synchronized(this) {
-                file.appendText("$ts [$tag/T:$thread] $message\n")
+                FileOutputStream(file, true).use { fos ->
+                    fos.write(line.toByteArray())
+                    fos.fd.sync()
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "append failed", e)
