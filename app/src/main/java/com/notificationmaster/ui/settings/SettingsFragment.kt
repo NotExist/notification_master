@@ -383,6 +383,8 @@ class SettingsFragment : Fragment() {
 
         // Plan 1-zippy-thunder W10：ProfileLogger per-tag 開關（摺疊區）
         setupProfileLogTagSwitches()
+        // Plan 1-zippy-thunder W14：DebugDumper per-type 開關（摺疊區）
+        setupDumpTypeSwitches()
 
         // 即時匯出歷程
         binding.switchCalendarExportLog.isChecked = CalendarExportLog.enabled
@@ -524,6 +526,42 @@ class SettingsFragment : Fragment() {
         val arrow = if (expanded) getString(R.string.settings_debug_expanded_arrow)
                     else getString(R.string.settings_debug_collapsed_arrow)
         header.text = getString(resId, arrow)
+    }
+
+    /**
+     * Plan 1-zippy-thunder W14：DebugDumper per-type 開關 UI（與 W10 同 pattern）。
+     */
+    private fun setupDumpTypeSwitches() {
+        val ctx = requireContext()
+        val container = binding.containerDumpTypes
+        val header = binding.headerDumpTypes
+
+        container.removeAllViews()
+        val inflater = LayoutInflater.from(ctx)
+        val labels = mapOf(
+            AppPreferences.DumpType.ENV to getString(R.string.settings_debug_dump_type_env),
+            AppPreferences.DumpType.EVENT to getString(R.string.settings_debug_dump_type_event),
+            AppPreferences.DumpType.INITIAL to getString(R.string.settings_debug_dump_type_initial),
+            AppPreferences.DumpType.RANKING to getString(R.string.settings_debug_dump_type_ranking),
+            AppPreferences.DumpType.CHANNEL to getString(R.string.settings_debug_dump_type_channel)
+        )
+        for (type in AppPreferences.DumpType.entries) {
+            val row = inflater.inflate(R.layout.row_debug_toggle, container, false)
+            row.findViewById<TextView>(R.id.toggle_label).text = labels[type] ?: type.name
+            val sw = row.findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.toggle_switch)
+            sw.isChecked = AppPreferences.isDumpTypePrefEnabled(ctx, type)
+            sw.setOnCheckedChangeListener { _, isChecked ->
+                AppPreferences.setDumpTypeEnabled(ctx, type, isChecked)
+            }
+            container.addView(row)
+        }
+
+        renderHeaderArrow(header, R.string.settings_debug_dump_types_header, container.visibility == View.VISIBLE)
+        header.setOnClickListener {
+            val expanded = container.visibility != View.VISIBLE
+            container.visibility = if (expanded) View.VISIBLE else View.GONE
+            renderHeaderArrow(header, R.string.settings_debug_dump_types_header, expanded)
+        }
     }
 
     /**

@@ -286,4 +286,39 @@ object AppPreferences {
             .putBoolean("$DEBUG_TAG_PREFIX${tag.lowercase()}_enabled", enabled)
             .apply()
     }
+
+    // === Plan 1-zippy-thunder W14：DebugDumper per-type 開關 ===
+
+    private const val DUMP_TYPE_PREFIX = "debug_dump_"
+
+    /**
+     * DebugDumper / channel_dump 分類，每個分類可在 debug 總開關 ON 前提下個別 toggle。
+     *
+     * - [ENV]：啟動環境 / 權限快照（dumpSystemInfo）
+     * - [EVENT]：個別通知事件 JSON（dumpEvent — POSTED/REMOVED/UPDATED）
+     * - [INITIAL]：NLS 連線時 active notification 全表（dumpActiveNotifications）
+     * - [RANKING]：onNotificationRankingUpdate 觸發的 ranking 快照（dumpRankingUpdate）
+     * - [CHANNEL]：NLS ranking probe + 各觸發源 ranking dump（NotificationCaptureService）
+     */
+    enum class DumpType { ENV, EVENT, INITIAL, RANKING, CHANNEL }
+
+    /** 檢查 debug 總開關 ON 且該類型個別未被關閉。預設全 ON（避免遺漏）。 */
+    fun isDumpTypeEnabled(context: Context, type: DumpType): Boolean {
+        if (!isDebugDumperEnabled(context)) return false
+        return isDumpTypePrefEnabled(context, type)
+    }
+
+    /** 純讀 per-type SharedPreferences，不檢查 debug 總開關（供 settings UI 顯示用） */
+    fun isDumpTypePrefEnabled(context: Context, type: DumpType): Boolean {
+        return prefs(context).getBoolean(
+            "$DUMP_TYPE_PREFIX${type.name.lowercase()}_enabled",
+            true
+        )
+    }
+
+    fun setDumpTypeEnabled(context: Context, type: DumpType, enabled: Boolean) {
+        prefs(context).edit()
+            .putBoolean("$DUMP_TYPE_PREFIX${type.name.lowercase()}_enabled", enabled)
+            .apply()
+    }
 }

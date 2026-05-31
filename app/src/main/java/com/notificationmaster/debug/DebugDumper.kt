@@ -64,6 +64,8 @@ class DebugDumper(private val context: Context) {
      * 包含裝置型號、Android 版本、API 支援狀況、權限授予狀態
      */
     private fun dumpSystemInfo() {
+        // W14：env 類型獨立 toggle
+        if (!AppPreferences.isDumpTypeEnabled(context, AppPreferences.DumpType.ENV)) return
         try {
             val timestamp = dateFormat.format(Date())
             val filename = "system_${timestamp}_ENV.json"
@@ -147,6 +149,8 @@ class DebugDumper(private val context: Context) {
         rankingMap: RankingMap?
     ) {
         if (!isEnabled) return
+        // W14：initial 類型獨立 toggle
+        if (!AppPreferences.isDumpTypeEnabled(context, AppPreferences.DumpType.INITIAL)) return
         notifications?.forEach { sbn -> dumpEvent(sbn, "INITIAL", rankingMap) }
     }
 
@@ -161,6 +165,8 @@ class DebugDumper(private val context: Context) {
         removalReason: Int? = null
     ) {
         if (!isEnabled) return
+        // W14：event 類型獨立 toggle
+        if (!AppPreferences.isDumpTypeEnabled(context, AppPreferences.DumpType.EVENT)) return
 
         try {
             val timestamp = dateFormat.format(Date())
@@ -208,6 +214,8 @@ class DebugDumper(private val context: Context) {
      */
     fun dumpRankingUpdate(rankingMap: RankingMap) {
         if (!isEnabled) return
+        // W14：ranking 類型獨立 toggle
+        if (!AppPreferences.isDumpTypeEnabled(context, AppPreferences.DumpType.RANKING)) return
 
         try {
             val timestamp = dateFormat.format(Date())

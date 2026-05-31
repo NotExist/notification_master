@@ -169,7 +169,10 @@ class NotificationCaptureService : NotificationListenerService() {
                     if (probeMap != null && entries > 0) {
                         dumpRankingMap(probeMap, "probe_${elapsed}ms")
                         break
-                    } else {
+                    } else if (com.notificationmaster.core.prefs.AppPreferences.isDumpTypeEnabled(
+                            this@NotificationCaptureService,
+                            com.notificationmaster.core.prefs.AppPreferences.DumpType.CHANNEL)) {
+                        // W14：channel 類型獨立 toggle（同 dumpRankingMap）
                         val dumpDir = com.notificationmaster.core.debug.DebugPaths
                             .resolve(this@NotificationCaptureService, com.notificationmaster.core.debug.DebugPaths.Sink.EVENT_DUMP)
                         val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
@@ -881,6 +884,9 @@ class NotificationCaptureService : NotificationListenerService() {
      */
     private fun dumpRankingMap(rankingMap: RankingMap, source: String) {
         if (!debugDumper.isEnabled) return
+        // W14：channel 類型獨立 toggle
+        if (!com.notificationmaster.core.prefs.AppPreferences.isDumpTypeEnabled(
+                this, com.notificationmaster.core.prefs.AppPreferences.DumpType.CHANNEL)) return
         try {
             val dumpDir = com.notificationmaster.core.debug.DebugPaths
                 .resolve(this, com.notificationmaster.core.debug.DebugPaths.Sink.EVENT_DUMP)
