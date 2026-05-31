@@ -30,8 +30,16 @@ object DebugPaths {
         PROFILE_LOG("profile_log"),
     }
 
-    fun resolve(context: Context, sink: Sink): File {
-        val relative = "$DEBUG_ROOT/${sink.subdir}"
+    fun resolve(context: Context, sink: Sink): File = resolveInternal(context, sink.subdir)
+
+    /**
+     * Debug root 目錄（含所有 sink 子目錄的父）。供 settings UI 呈現「debug 資訊放置主目錄」用。
+     * 同樣三層 fallback，與 sink 一致 — 確保「主目錄」與其下 sink 子目錄位於同一 tier。
+     */
+    fun rootDir(context: Context): File = resolveInternal(context, null)
+
+    private fun resolveInternal(context: Context, subdir: String?): File {
+        val relative = if (subdir != null) "$DEBUG_ROOT/$subdir" else DEBUG_ROOT
 
         val publicDocs = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
         val publicDir = File(File(publicDocs, PUBLIC_PARENT), relative)

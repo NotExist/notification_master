@@ -479,14 +479,30 @@ class SettingsFragment : Fragment() {
     }
 
     private fun updateDebugInfo() {
-        val fileCount = debugDumper.getDumpFileCount()
-        val totalSize = debugDumper.getDumpTotalSize()
+        // Plan 1-zippy-thunder 後續修補：debug section 路徑顯示「主目錄」而非 event_dump 子層，
+        // 與 W4 統一目錄結構（debug/ root 下派生 event_dump/ + profile_log/）一致。
+        // 檔案數/大小遞迴含 root 下所有 sink。
+        val rootDir = com.notificationmaster.core.debug.DebugPaths.rootDir(requireContext())
+        val (fileCount, totalSize) = countFilesRecursive(rootDir)
         val sizeStr = android.text.format.Formatter.formatShortFileSize(requireContext(), totalSize)
 
         binding.textDebugInfo.text = buildString {
-            append("路徑: ${debugDumper.dumpDir.absolutePath}\n")
-            append("檔案數: $fileCount, 大小: $sizeStr")
+            append("主目錄: ${rootDir.absolutePath}\n")
+            append("檔案數: $fileCount, 總大小: $sizeStr")
         }
+    }
+
+    /** Debug root 下遞迴計算檔案數與總大小（含所有 sink 子目錄）。 */
+    private fun countFilesRecursive(dir: java.io.File): Pair<Int, Long> {
+        var count = 0
+        var total = 0L
+        dir.walkTopDown().forEach { f ->
+            if (f.isFile) {
+                count++
+                total += f.length()
+            }
+        }
+        return count to total
     }
 
     /**
