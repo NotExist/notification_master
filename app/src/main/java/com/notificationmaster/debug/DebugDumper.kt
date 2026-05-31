@@ -15,6 +15,10 @@ import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.core.permission.PermissionDescriptions
 import com.notificationmaster.data.model.EnvironmentInfo
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -45,6 +49,18 @@ class DebugDumper(private val context: Context) {
     private val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US)
 
     /**
+     * Plan 1-zippy-thunder W15：所有 dump 寫入移 IO scope。
+     *
+     * 117 log Watchdog 鐵證 NLS callback (main thread) 同步呼叫 dumpEvent → RawSerializer
+     * 反射 + JSONObject.toString + File.writeText + RawSizeAnalyzer 兩次寫檔 卡 2-9 秒 → ANR FC。
+     * 改 SupervisorJob + IO scope 保證每次 dump fire-and-forget 不阻塞 caller thread。
+     *
+     * 物件 thread-safety：sbn / ranking 由 NLS 系統提供，callback 後通常仍可讀（system 不會
+     * 主動 mutate）。實務風險可接受，換來避免 ANR 的明確收益。
+     */
+    private val dumpScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
      * Event dump 輸出目錄（Documents/NotificationMaster/debug/event_dump/）
      *
      * Plan 1-zippy-thunder W4：原本平鋪在 `NotificationMaster/debug/` root，現由
@@ -66,7 +82,8 @@ class DebugDumper(private val context: Context) {
     private fun dumpSystemInfo() {
         // W14：env 類型獨立 toggle
         if (!AppPreferences.isDumpTypeEnabled(context, AppPreferences.DumpType.ENV)) return
-        try {
+        // W15：序列化 + 寫檔 fire-and-forget 到 IO（caller 通常是 settings UI thread，避免阻塞）
+        dumpScope.launch { try {
             val timestamp = dateFormat.format(Date())
             val filename = "system_${timestamp}_ENV.json"
 
@@ -131,7 +148,7 @@ class DebugDumper(private val context: Context) {
             Log.d(TAG, "Dumped system info")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to dump system info", e)
-        }
+        } }
     }
 
     fun disable() {
@@ -151,7 +168,10 @@ class DebugDumper(private val context: Context) {
         if (!isEnabled) return
         // W14：initial 類型獨立 toggle
         if (!AppPreferences.isDumpTypeEnabled(context, AppPreferences.DumpType.INITIAL)) return
-        notifications?.forEach { sbn -> dumpEvent(sbn, "INITIAL", rankingMap) }
+        // W15：fan-out 也包 launch — 避免 INITIAL 場景 N 個 sbn iterate 在 main thread 累積
+        dumpScope.launch {
+            notifications?.forEach { sbn -> dumpEvent(sbn, "INITIAL", rankingMap) }
+        }
     }
 
     /**
@@ -167,8 +187,9 @@ class DebugDumper(private val context: Context) {
         if (!isEnabled) return
         // W14：event 類型獨立 toggle
         if (!AppPreferences.isDumpTypeEnabled(context, AppPreferences.DumpType.EVENT)) return
-
-        try {
+        // W15：117 log 證實 RawSerializer 反射 + writeText + RawSizeAnalyzer 在 main thread
+        // 卡 2-9 秒造成 ANR。fire-and-forget 到 IO scope，caller (NLS callback) 立即 return。
+        dumpScope.launch { try {
             val timestamp = dateFormat.format(Date())
             val safePackageName = sbn.packageName.replace(".", "_")
             val filename = "${safePackageName}_${timestamp}_${eventType}.json"
@@ -206,7 +227,7 @@ class DebugDumper(private val context: Context) {
             Log.d(TAG, "Dumped $eventType for ${sbn.packageName}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to dump $eventType", e)
-        }
+        } }
     }
 
     /**
@@ -216,8 +237,8 @@ class DebugDumper(private val context: Context) {
         if (!isEnabled) return
         // W14：ranking 類型獨立 toggle
         if (!AppPreferences.isDumpTypeEnabled(context, AppPreferences.DumpType.RANKING)) return
-
-        try {
+        // W15：同 dumpEvent，移 IO 避免阻塞 NLS callback
+        dumpScope.launch { try {
             val timestamp = dateFormat.format(Date())
             val filename = "system_${timestamp}_RANKING.json"
 
@@ -248,7 +269,7 @@ class DebugDumper(private val context: Context) {
             Log.d(TAG, "Dumped RANKING (${rankingMap.orderedKeys.size} entries)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to dump ranking", e)
-        }
+        } }
     }
 
     // === 輔助 ===
