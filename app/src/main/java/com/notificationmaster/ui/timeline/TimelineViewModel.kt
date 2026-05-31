@@ -329,14 +329,18 @@ class TimelineViewModel(
             // W2.a：DB 真為空才算 EmptyDb（與 chip 篩 0 區別）
             totalRaw == 0            -> TimelineLoadState.EmptyDb
             total == null            -> TimelineLoadState.InitialLoading
+            // W8：loading sticky — 只要 loadNextDay() 還在跑（含 W2.e 200ms delay），
+            // state 永遠 LoadingMore，不被 `displays >= total` 搶先。`_isLoadingMore` 僅在
+            // user explicit lazyload 為 true（Service 自動 re-emit 不會設它），所以 sticky 安全。
+            // 修前：116 log 顯示 loading=true 期 state 仍跳 EndReached → footer=EndOfTimeline
+            // 取代 LoadingMore footer → user 完全看不到「載入中」indicator。
+            loading                  -> TimelineLoadState.LoadingMore
             // W2.a：chip 篩到 0（DB 非空）→ list 立即可空、無 more
             total == 0               -> TimelineLoadState.EndReached
             // cold start 期間 items / displays 都 empty
             items.isEmpty()          -> TimelineLoadState.InitialLoading
-            // Phase 31c+：size >= total 優先於 loading
             // W2.a：totalCount 已是 chip-aware，chip-filtered 場景也能 EndReached
             displays.size >= total   -> TimelineLoadState.EndReached
-            loading                  -> TimelineLoadState.LoadingMore
             else                     -> TimelineLoadState.Ready(canLoadMore = true)
         }
         // Phase 31ak / W2.a：log state 公式各 input + 結果
