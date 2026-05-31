@@ -12,6 +12,10 @@ import com.notificationmaster.core.debug.MainThreadWatchdog
 import com.notificationmaster.core.debug.ProfileLogger
 import com.notificationmaster.service.NlsKeepaliveService
 import com.notificationmaster.data.db.NotificationDatabase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import com.notificationmaster.ui.shortcut.AudibleShortcutActivity
 import com.notificationmaster.ui.shortcut.DismissedShortcutActivity
 import com.notificationmaster.ui.shortcut.HeadsupShortcutActivity
@@ -27,6 +31,9 @@ class NotificationMasterApp : Application() {
         NotificationDatabase.getInstance(this)
     }
 
+    /** Plan 1-zippy-thunder W9：App 生命週期 scope，用於 onCreate 內 background 工作 */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -40,7 +47,10 @@ class NotificationMasterApp : Application() {
         }
         PersistentAlertManager.createNotificationChannel(this)
         NlsKeepaliveService.createNotificationChannel(this)
-        setupShortcuts()
+        // Plan 1-zippy-thunder W9：setupShortcuts 內部 setDynamicShortcuts 是 IPC 呼叫，OEM
+        // ShortcutService 可能卡 2-6 秒（116 log Watchdog 鐵證）連鎖卡死 PackageManager +
+        // ContentResolver 達 ANR 邊緣。移 IO 避免阻塞 main thread。
+        appScope.launch { setupShortcuts() }
     }
 
     /**
