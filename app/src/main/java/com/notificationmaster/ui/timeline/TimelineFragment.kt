@@ -42,6 +42,7 @@ import com.notificationmaster.ui.main.MainActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -547,14 +548,20 @@ class TimelineFragment : Fragment() {
                     spec = spec,
                     state = state
                 )
-            }.collectLatest { input ->
-                if (_binding == null) return@collectLatest
-                try {
-                    renderList(input)
-                } catch (e: Exception) {
-                    Log.e(TAG, "renderList failed", e)
-                }
             }
+                // W11：Service 高頻寫入時 query/count/ranking 三個 Flow 連環 re-emit（116 log
+                // 約 20-50ms 一次）→ 觸發連環 renderList → submitList → DiffUtil → RecyclerView
+                // re-layout → scrollbar 抖動。.conflate() 在 Flow 層級即跳過中間 emit，
+                // 配 collectLatest cancel chain 限縮 UI 觸發頻率到 user 真實看得到的節奏。
+                .conflate()
+                .collectLatest { input ->
+                    if (_binding == null) return@collectLatest
+                    try {
+                        renderList(input)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "renderList failed", e)
+                    }
+                }
         }
 
         // counter：用 state + totalCount + displayedNotifications
@@ -567,10 +574,12 @@ class TimelineFragment : Fragment() {
                 viewModel.state
             ) { all, total, text, spec, state ->
                 CounterInput(all, total, text, spec, state)
-            }.collectLatest { input ->
-                if (_binding == null) return@collectLatest
-                renderCounter(input)
             }
+                .conflate()  // W11：同上，避免高頻 emit 觸發 counter 重繪
+                .collectLatest { input ->
+                    if (_binding == null) return@collectLatest
+                    renderCounter(input)
+                }
         }
 
         // Phase 26 indicator 對應（單一映射，無重複）：
