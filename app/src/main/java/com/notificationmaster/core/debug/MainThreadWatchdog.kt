@@ -20,6 +20,8 @@ object MainThreadWatchdog {
     private const val BLOCK_THRESHOLD_MS = 2_000L
     private const val DUMP_DEBOUNCE_MS = 1_000L
     private const val MAX_STACK_LINES = 30
+    // W13：相同 stack 連續 dump 達此次數才打一行序號訊息
+    private const val STILL_BLOCKED_INTERVAL = 10
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -27,6 +29,9 @@ object MainThreadWatchdog {
     @Volatile private var lastAckMs: Long = 0L
     @Volatile private var lastDumpMs: Long = 0L
     @Volatile private var running = false
+    // W13：相同 stack 連續節流，避免 process freeze 期 1s 一次 stack dump 灌爆 log
+    @Volatile private var lastStackHash: Int = 0
+    @Volatile private var sameStackCount: Int = 0
 
     fun start() {
         if (running) return
@@ -71,6 +76,22 @@ object MainThreadWatchdog {
         val stack = mainThread.stackTrace
             .take(MAX_STACK_LINES)
             .joinToString("\n  at ") { it.toString() }
-        ProfileLogger.append("Watchdog", "MAIN BLOCKED ${blockedMs}ms\n  at $stack")
+        val stackHash = stack.hashCode()
+        // W13：相同 stack 連續 dump 節流 — process freeze 時 main 一直停在同一處，
+        // 每 1s dump 全 stack 無新資訊。改為「stack 變化才完整 dump，重複 stack 每
+        // STILL_BLOCKED_INTERVAL 次才打一行序號訊息」。
+        if (stackHash == lastStackHash) {
+            sameStackCount++
+            if (sameStackCount % STILL_BLOCKED_INTERVAL == 0) {
+                ProfileLogger.append(
+                    "Watchdog",
+                    "MAIN STILL BLOCKED ${blockedMs}ms (same stack x$sameStackCount)"
+                )
+            }
+        } else {
+            lastStackHash = stackHash
+            sameStackCount = 0
+            ProfileLogger.append("Watchdog", "MAIN BLOCKED ${blockedMs}ms\n  at $stack")
+        }
     }
 }
