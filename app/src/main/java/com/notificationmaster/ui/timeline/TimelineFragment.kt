@@ -746,6 +746,10 @@ class TimelineFragment : Fragment() {
         val footer = when (state) {
             is TimelineLoadState.LoadingMore -> TimelineItem.LoadingMore
             is TimelineLoadState.EndReached -> TimelineItem.EndOfTimeline
+            // B1-ux：Ready 但 DB 仍有未載完 → 顯示常駐 hint footer，讓 scrollbar 範圍永遠
+            // 涵蓋底部 footer 位置，user 快速滑到底時 footer 已在範圍內（不必等 lazyload
+            // 觸發 + LoadingMore footer 才出現）。
+            is TimelineLoadState.Ready -> if (state.canLoadMore) TimelineItem.PendingMore else null
             else -> null
         }
         val withFooter = if (footer != null) items + footer else items

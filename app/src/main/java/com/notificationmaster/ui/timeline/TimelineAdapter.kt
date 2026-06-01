@@ -46,6 +46,9 @@ class TimelineAdapter(
         private const val VIEW_TYPE_NOTIFICATION = 1
         private const val VIEW_TYPE_LOADING = 2
         private const val VIEW_TYPE_END = 3
+        // Plan 1-zippy-thunder B1-ux：Ready(canLoadMore) 狀態下常駐 footer，
+        // 使 scrollbar 範圍永遠涵蓋底部 footer 位置（user 期望「快速滑到底時 footer 已在範圍內」）。
+        private const val VIEW_TYPE_PENDING_MORE = 4
     }
 
     override fun getItemViewType(position: Int): Int {
@@ -54,6 +57,7 @@ class TimelineAdapter(
             is TimelineItem.NotificationItem -> VIEW_TYPE_NOTIFICATION
             is TimelineItem.LoadingMore -> VIEW_TYPE_LOADING
             is TimelineItem.EndOfTimeline -> VIEW_TYPE_END
+            is TimelineItem.PendingMore -> VIEW_TYPE_PENDING_MORE
         }
     }
 
@@ -70,6 +74,10 @@ class TimelineAdapter(
             }
             VIEW_TYPE_END -> {
                 val view = inflater.inflate(R.layout.item_timeline_end, parent, false)
+                SimpleViewHolder(view)
+            }
+            VIEW_TYPE_PENDING_MORE -> {
+                val view = inflater.inflate(R.layout.item_timeline_pending_more, parent, false)
                 SimpleViewHolder(view)
             }
             else -> {
@@ -99,7 +107,9 @@ class TimelineAdapter(
         when (val item = getItem(position)) {
             is TimelineItem.DateHeader -> (holder as DateHeaderViewHolder).bind(item)
             is TimelineItem.NotificationItem -> (holder as NotificationViewHolder).bind(item)
-            is TimelineItem.LoadingMore, is TimelineItem.EndOfTimeline -> { /* 靜態佈局，無需綁定 */ }
+            is TimelineItem.LoadingMore,
+            is TimelineItem.EndOfTimeline,
+            is TimelineItem.PendingMore -> { /* 靜態佈局，無需綁定 */ }
         }
     }
 
@@ -332,6 +342,7 @@ class TimelineAdapter(
                     oldItem.notification.eventId == newItem.notification.eventId
                 oldItem is TimelineItem.LoadingMore && newItem is TimelineItem.LoadingMore -> true
                 oldItem is TimelineItem.EndOfTimeline && newItem is TimelineItem.EndOfTimeline -> true
+                oldItem is TimelineItem.PendingMore && newItem is TimelineItem.PendingMore -> true
                 else -> false
             }
         }
@@ -366,6 +377,7 @@ class TimelineAdapter(
                     oldItem.date == newItem.date
                 oldItem is TimelineItem.LoadingMore && newItem is TimelineItem.LoadingMore -> true
                 oldItem is TimelineItem.EndOfTimeline && newItem is TimelineItem.EndOfTimeline -> true
+                oldItem is TimelineItem.PendingMore && newItem is TimelineItem.PendingMore -> true
                 else -> false
             }
         }
@@ -384,4 +396,6 @@ sealed class TimelineItem {
     ) : TimelineItem()
     object LoadingMore : TimelineItem()
     object EndOfTimeline : TimelineItem()
+    // Plan 1-zippy-thunder B1-ux：Ready(canLoadMore) 對應 footer，靜態 hint「↓ 繼續滾動載入更多」
+    object PendingMore : TimelineItem()
 }
