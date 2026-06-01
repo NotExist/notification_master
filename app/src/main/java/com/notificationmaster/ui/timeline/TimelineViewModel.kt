@@ -329,16 +329,18 @@ class TimelineViewModel(
             // W2.a：DB 真為空才算 EmptyDb（與 chip 篩 0 區別）
             totalRaw == 0            -> TimelineLoadState.EmptyDb
             total == null            -> TimelineLoadState.InitialLoading
-            // W8：loading sticky — 只要 loadNextDay() 還在跑（含 W2.e 200ms delay），
-            // state 永遠 LoadingMore，不被 `displays >= total` 搶先。`_isLoadingMore` 僅在
-            // user explicit lazyload 為 true（Service 自動 re-emit 不會設它），所以 sticky 安全。
-            // 修前：116 log 顯示 loading=true 期 state 仍跳 EndReached → footer=EndOfTimeline
-            // 取代 LoadingMore footer → user 完全看不到「載入中」indicator。
+            // W8：loading sticky — 只要 loadNextDay() 還在跑（含 W2.e delay），
+            // state 永遠 LoadingMore，不被 `displays >= total` 搶先。
             loading                  -> TimelineLoadState.LoadingMore
             // W2.a：chip 篩到 0（DB 非空）→ list 立即可空、無 more
             total == 0               -> TimelineLoadState.EndReached
             // cold start 期間 items / displays 都 empty
             items.isEmpty()          -> TimelineLoadState.InitialLoading
+            // W16：DB raw events 全載完 → EndReached（解 chip OFF + dedup ON 時
+            // displays 為 client-overlay 算的 pageSize 範圍內 unique，total 是 SQL 算的
+            // 全 DB unique，視角不一致導致 `displays >= total` 永不成立 → lazyload 過度觸
+            // 發 50+ 次直到 raw 全載完。改成 raw 視角優先判定。
+            totalRaw != null && items.size >= totalRaw -> TimelineLoadState.EndReached
             // W2.a：totalCount 已是 chip-aware，chip-filtered 場景也能 EndReached
             displays.size >= total   -> TimelineLoadState.EndReached
             else                     -> TimelineLoadState.Ready(canLoadMore = true)
