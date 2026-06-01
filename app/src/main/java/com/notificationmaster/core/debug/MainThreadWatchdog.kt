@@ -73,7 +73,12 @@ object MainThreadWatchdog {
         if (now - lastDumpMs < DUMP_DEBOUNCE_MS) return
         lastDumpMs = now
         val mainThread = Looper.getMainLooper().thread
-        val stack = mainThread.stackTrace
+        val stackTrace = mainThread.stackTrace
+        // W17：過濾 nativePollOnce false positive — main 在 Looper.nativePollOnce / next 是
+        // 正常 idle waiting（等 message），不算真實阻塞。118 log 出現 36 秒 BLOCKED 但 stack
+        // 是 nativePollOnce → 推測 OEM 凍結 watcher thread 自身 sleep 不準，誤判 main 沒 ack。
+        if (stackTrace.isNotEmpty() && isIdleStack(stackTrace[0])) return
+        val stack = stackTrace
             .take(MAX_STACK_LINES)
             .joinToString("\n  at ") { it.toString() }
         val stackHash = stack.hashCode()
@@ -93,5 +98,13 @@ object MainThreadWatchdog {
             sameStackCount = 0
             ProfileLogger.append("Watchdog", "MAIN BLOCKED ${blockedMs}ms\n  at $stack")
         }
+    }
+
+    /** W17：判斷 stack 頂端是否為 Looper idle waiting（非真實阻塞）。 */
+    private fun isIdleStack(top: StackTraceElement): Boolean {
+        val method = top.methodName
+        val cls = top.className
+        return method == "nativePollOnce" ||
+            (cls == "android.os.MessageQueue" && method == "next")
     }
 }
