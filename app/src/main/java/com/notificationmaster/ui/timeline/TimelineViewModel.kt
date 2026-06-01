@@ -621,7 +621,12 @@ class TimelineViewModel(
          */
         const val MAX_PAGE_SIZE = 5000
 
-        /** W2.e：LoadingMore footer 至少可見時間（ms），防 Ready↔LoadingMore 切換太快閃過。 */
-        const val FOOTER_MIN_VISIBLE_MS = 200L
+        /**
+         * W2.e：LoadingMore footer 至少可見時間（ms），防 Ready↔LoadingMore 切換太快閃過。
+         *
+         * 暫提高到 2000ms 方便實機觀察 footer 行為（user request）— 確認穩定後可調回 200-500ms
+         * 取得「夠看 + 不拖延」的平衡。
+         */
+        const val FOOTER_MIN_VISIBLE_MS = 2000L
     }
 }
