@@ -207,13 +207,12 @@ class TimelineFragment : Fragment() {
                 showAndScheduleHideBubble()
 
                 // W22：scroll prefetch 走統一入口 [maybeAutoLoadNext]，threshold 與
-                // 「list 不滿一頁」末尾補載共用 AppPreferences.getLazyloadAutoThreshold —
+                // renderList 末尾補載共用 AppPreferences.getLazyloadAutoThreshold —
                 // user 在 Settings debug 區塊調的單一數字同時控制兩條觸發路徑。
                 val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return
                 val totalItemCount = layoutManager.itemCount
                 val lastVisible = layoutManager.findLastVisibleItemPosition()
                 maybeAutoLoadNext(
-                    displaysSize = viewModel.allNotifications.value.size,
                     filterText = viewModel.filterText.value,
                     state = viewModel.loadState.value,
                     scrollDistance = totalItemCount - lastVisible
@@ -731,11 +730,11 @@ class TimelineFragment : Fragment() {
             submitWithFooter(timelineItems, input.footer)
         }
 
-        // W22：末尾自動 lazyload 走統一入口 [maybeAutoLoadNext]，與 onScrolled prefetch 共用同
-        // 一個 threshold（AppPreferences.getLazyloadAutoThreshold）— user 在 Settings 調的單一
-        // 數字同時控制「list 不滿一頁就補」與「滑到距底 N 項就 prefetch」兩條觸發路徑。
+        // W22d：末尾自動 lazyload 走統一入口 [maybeAutoLoadNext]，與 onScrolled prefetch
+        // 共用 viewport distance 判斷邏輯。cooldown 結束時 state Flow emit → renderList
+        // 重跑 → maybeAutoLoadNext 讀當前 RecyclerView lastVisible：footer 仍在底部
+        // viewport 就自動續載；user 已滑離底部則停留 footer=Pending 等下次互動。
         maybeAutoLoadNext(
-            displaysSize = input.allNotifications.size,
             filterText = input.filterText,
             state = input.state,
             scrollDistance = null
@@ -746,17 +745,21 @@ class TimelineFragment : Fragment() {
      * W22：lazyload 統一觸發入口。
      *
      * 兩條呼叫路徑共用：
-     * - `scrollDistance != null` (onScrolled prefetch)：距底部 ≤ threshold item 觸發
-     * - `scrollDistance == null` (renderList 末尾)：list 內未滿 threshold 項觸發
+     * - `scrollDistance != null` (onScrolled prefetch)：呼叫端直接傳入計算好的距底距離
+     * - `scrollDistance == null` (renderList 末尾)：內部讀 RecyclerView lastVisible 計算
      *
-     * 共用 guard：天分頁模式 / filterText 為空 / state Ready 可載更多。W20 product type
-     * 拆分後 ViewModel.loadNextDay() 自帶重入防護 + DB-exhausted 截斷，此處只負責入口條件。
+     * 修前 W22b 兩路用不同維度（scroll distance vs displaysSize），renderList 末尾僅在
+     * cold start 一頁內成立，後續 displays > threshold 就永遠不 trigger → cooldown 結束
+     * footer 變 Pending 但無自動續載，user 觀察到「需切 fragment / 進出 detail 才會接續」
+     * （這些動作偶然觸發 onScrolled）。
      *
-     * threshold 從 AppPreferences runtime 讀，user 在 Settings 改動會即時生效；設 0 表示
-     * 完全關閉自動補載，user 只能下拉手動觸發。
+     * 修後 W22d 兩路統一 viewport distance — cooldown 結束時若 footer 仍在 viewport 內
+     * 就視為「user 還在底部等」，自動續載；user 已滑離則保留 Pending（合理：user 自己
+     * 不要了）。
+     *
+     * threshold 從 AppPreferences runtime 讀；設 0 表示完全關閉自動補載。
      */
     private fun maybeAutoLoadNext(
-        displaysSize: Int,
         filterText: String,
         state: TimelineLoadState,
         scrollDistance: Int?
@@ -771,14 +774,15 @@ class TimelineFragment : Fragment() {
             .getLazyloadAutoThreshold(requireContext())
         if (threshold <= 0) return
 
-        val (shouldLoad, reason) = if (scrollDistance != null) {
-            (scrollDistance <= threshold) to "scroll distance=$scrollDistance <= $threshold"
-        } else {
-            (displaysSize < threshold) to "tail displays=$displaysSize < $threshold"
+        val distance = scrollDistance ?: run {
+            val lm = _binding?.recyclerView?.layoutManager as? LinearLayoutManager ?: return
+            val last = lm.findLastVisibleItemPosition()
+            if (last < 0) return  // RecyclerView 尚未 layout 完
+            lm.itemCount - last
         }
-        if (!shouldLoad) return
+        if (distance > threshold) return
 
-        ProfileLogger.append("Fragment", "autoLazyload $reason")
+        ProfileLogger.append("Fragment", "autoLazyload distance=$distance <= $threshold")
         viewModel.loadNextDay()
     }
 
