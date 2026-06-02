@@ -554,21 +554,24 @@ class TimelineViewModel(
 
         val target = (_pageSize.value + PAGE_INCREMENT).coerceAtMost(MAX_PAGE_SIZE)
         val beforeDisplayedSize = displayedNotifications.value.size
+        val beforeItemsSize = allNotifications.value.size
         ProfileLogger.append(
             "Timeline",
             "loadNextDay trigger target=$target beforeDisplayed=$beforeDisplayedSize " +
-                "allItems=${allNotifications.value.size} total=$totalSnapshot"
+                "allItems=$beforeItemsSize total=$totalSnapshot"
         )
         _isLoadingMore.value = true
         _pageSize.value = target
 
         viewModelScope.launch {
             val result = withTimeoutOrNull(10_000L) {
-                combine(displayedNotifications, allNotifications, totalCount) { displays, items, total ->
-                    displays.size > beforeDisplayedSize ||
-                        (total != null && items.size >= total) ||
-                        // W2.b：query 回傳 size < pageSize 也算完成（DB 不會再多 items）
-                        items.size < _pageSize.value
+                // W19：condition 改為「真的有新數據進來」— 等 displays 或 items 增加才成立。
+                // 修前 W2.b 含 `items.size < _pageSize.value` trigger 那刻立即成立（剛把
+                // _pageSize 設為 target，items 仍舊），delay 在 query 回來前就開始計時 →
+                // user 觀察 LoadingMore footer → PendingMore → 新內容才呈現的錯亂序列。
+                // DB 已底由 state 公式 W16 加的 `items >= totalRaw` EndReached 判定。
+                combine(displayedNotifications, allNotifications) { displays, items ->
+                    displays.size > beforeDisplayedSize || items.size > beforeItemsSize
                 }.first { it }
             }
             // W2.e / W18：condition_met 後 delay 讓 LoadingMore footer 可見。
