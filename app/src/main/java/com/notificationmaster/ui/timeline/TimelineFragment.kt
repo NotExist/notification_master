@@ -206,24 +206,18 @@ class TimelineFragment : Fragment() {
                 updateTimeBubble()
                 showAndScheduleHideBubble()
 
-                if (viewModel.usesDayPaging()) {
-                    val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return
-                    val totalItemCount = layoutManager.itemCount
-                    val lastVisible = layoutManager.findLastVisibleItemPosition()
-                    // Phase 25：prefetch threshold 從 5 → 30，配合小 PAGE_INCREMENT (100)
-                    // Phase 26：guard 改讀 viewModel.state — single source of truth，
-                    // 只有 Ready(canLoadMore) 才觸發。LoadingMore / EndReached / Initial /
-                    // Empty / Error 都不會 fire，杜絕 D 的反覆觸發。
-                    // W20：state 改 product type — Ready 等價於 phase=Loaded + !isLazyloading
-                    val st = viewModel.loadState.value
-                    if (totalItemCount - lastVisible <= 30 &&
-                        st.phase == LoadPhase.Loaded &&
-                        !st.isLazyloading &&
-                        st.canLoadMore
-                    ) {
-                        viewModel.loadNextDay()
-                    }
-                }
+                // W22：scroll prefetch 走統一入口 [maybeAutoLoadNext]，threshold 與
+                // 「list 不滿一頁」末尾補載共用 AppPreferences.getLazyloadAutoThreshold —
+                // user 在 Settings debug 區塊調的單一數字同時控制兩條觸發路徑。
+                val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return
+                val totalItemCount = layoutManager.itemCount
+                val lastVisible = layoutManager.findLastVisibleItemPosition()
+                maybeAutoLoadNext(
+                    displaysSize = viewModel.allNotifications.value.size,
+                    filterText = viewModel.filterText.value,
+                    state = viewModel.loadState.value,
+                    scrollDistance = totalItemCount - lastVisible
+                )
             }
         })
     }
@@ -737,30 +731,55 @@ class TimelineFragment : Fragment() {
             submitWithFooter(timelineItems, input.footer)
         }
 
-        // W2.d：末尾自動 lazyload 條件改善
-        // - 用 displays.size 不用 filtered.size（與 ViewModel guard 同視角；filtered 受 text
-        //   filter 影響會發生「篩到 0 但 DB 還很多」的假觸發）
-        // - filterText 非空時不自動 lazyload（user 主動 search 不應觸發無限 paging）
-        // - state.canLoadMore guard 配合 W2.b loadNextDay 內 DB-exhausted 判定，能 hard 截斷
-        //   chip 篩 0 + DB 載完的無限迴圈
-        // W18：閾值改 runtime 從 AppPreferences 讀，user 可在 settings 即時調整
-        // W20：state 改 product type — Ready(canLoadMore) 等價於 phase=Loaded + canLoadMore + !isLazyloading
+        // W22：末尾自動 lazyload 走統一入口 [maybeAutoLoadNext]，與 onScrolled prefetch 共用同
+        // 一個 threshold（AppPreferences.getLazyloadAutoThreshold）— user 在 Settings 調的單一
+        // 數字同時控制「list 不滿一頁就補」與「滑到距底 N 項就 prefetch」兩條觸發路徑。
+        maybeAutoLoadNext(
+            displaysSize = input.allNotifications.size,
+            filterText = input.filterText,
+            state = input.state,
+            scrollDistance = null
+        )
+    }
+
+    /**
+     * W22：lazyload 統一觸發入口。
+     *
+     * 兩條呼叫路徑共用：
+     * - `scrollDistance != null` (onScrolled prefetch)：距底部 ≤ threshold item 觸發
+     * - `scrollDistance == null` (renderList 末尾)：list 內未滿 threshold 項觸發
+     *
+     * 共用 guard：天分頁模式 / filterText 為空 / state Ready 可載更多。W20 product type
+     * 拆分後 ViewModel.loadNextDay() 自帶重入防護 + DB-exhausted 截斷，此處只負責入口條件。
+     *
+     * threshold 從 AppPreferences runtime 讀，user 在 Settings 改動會即時生效；設 0 表示
+     * 完全關閉自動補載，user 只能下拉手動觸發。
+     */
+    private fun maybeAutoLoadNext(
+        displaysSize: Int,
+        filterText: String,
+        state: TimelineLoadState,
+        scrollDistance: Int?
+    ) {
+        if (!viewModel.usesDayPaging()) return
+        if (filterText.isNotEmpty()) return
+        if (state.phase != LoadPhase.Loaded) return
+        if (state.isLazyloading) return
+        if (!state.canLoadMore) return
+
         val threshold = com.notificationmaster.core.prefs.AppPreferences
             .getLazyloadAutoThreshold(requireContext())
-        val displaysSize = input.allNotifications.size
-        if (threshold > 0 &&
-            input.filterText.isEmpty() &&
-            displaysSize < threshold &&
-            input.state.phase == LoadPhase.Loaded &&
-            !input.state.isLazyloading &&
-            input.state.canLoadMore
-        ) {
-            ProfileLogger.append(
-                "Fragment",
-                "renderList autoLazyload displays=$displaysSize < $threshold"
-            )
-            viewModel.loadNextDay()
+        if (threshold <= 0) return
+
+        val (shouldLoad, reason) = if (scrollDistance != null) {
+            (scrollDistance <= threshold) to "scroll distance=$scrollDistance <= $threshold"
+        } else {
+            (displaysSize < threshold) to "tail displays=$displaysSize < $threshold"
         }
+        if (!shouldLoad) return
+
+        ProfileLogger.append("Fragment", "autoLazyload $reason")
+        viewModel.loadNextDay()
     }
 
     /**

@@ -40,8 +40,8 @@
     <string name="settings_debug_lazyload_section">Lazyload 觀察設定</string>
     <string name="settings_debug_lazyload_footer_min_label">LoadingMore footer 最少可見 (ms)</string>
     <string name="settings_debug_lazyload_footer_min_hint">預設 0；debug 用：設大時阻擋下一輪 lazyload N ms 便於觀察每輪邊界</string>
-    <string name="settings_debug_lazyload_auto_threshold_label">末尾自動 lazyload 閾值 (0=關閉)</string>
-    <string name="settings_debug_lazyload_auto_threshold_hint">預設 30，0 表示完全關閉自動湊滿</string>
+    <string name="settings_debug_lazyload_auto_threshold_label">自動 lazyload 閾值 (0=關閉)</string>
+    <string name="settings_debug_lazyload_auto_threshold_hint">預設 30，同時控制「list 不滿 N 項就補」與「滑動距底 N 項就 prefetch」，0=只能下拉手動觸發</string>
     <string name="settings_debug_test_alert">測試持續提醒（10 秒後）</string>
     <string name="settings_debug_update_ranking_map">更新 RankingMap</string>
     <string name="settings_debug_test_alert_scheduled">持續提醒將在 10 秒後觸發</string>
