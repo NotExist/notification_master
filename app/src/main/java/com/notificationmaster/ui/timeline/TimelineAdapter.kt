@@ -87,21 +87,9 @@ class TimelineAdapter(
         }
     }
 
-    /**
-     * Phase 31al：onViewAttachedToWindow 補強 alpha — DiffUtil 跳 bind 的 ViewHolder
-     * 從 pool 取出 attach 到畫面時，依當下 item.isRemoved 強制重設 alpha，避免殘留
-     * 前一個 item 的 alpha 值（user 觀察「開關響過/彈出後 removed card 恢復全亮」
-     * 場景的解法）。
-     */
-    override fun onViewAttachedToWindow(holder: RecyclerView.ViewHolder) {
-        super.onViewAttachedToWindow(holder)
-        if (holder is NotificationViewHolder) {
-            val pos = holder.bindingAdapterPosition
-            if (pos == RecyclerView.NO_POSITION) return
-            val item = getItem(pos) as? TimelineItem.NotificationItem ?: return
-            holder.itemView.alpha = if (item.isRemoved) 0.55f else 1.0f
-        }
-    }
+    // Plan 2 W5：onViewAttachedToWindow alpha 補強已移除 — W1 完成後 NotificationDisplay.isRemoved
+    // 由 enrichment 廣義計算（廣義語意一致），DiffUtil 對 isRemoved 變化能 trigger bind，
+    // bind() 第一行 `alpha = if (isRemoved) 0.55f else 1.0f` 處理 pool ViewHolder 殘留即可。
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (val item = getItem(position)) {
