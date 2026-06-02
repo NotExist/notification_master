@@ -881,34 +881,46 @@ class NotificationCaptureService : NotificationListenerService() {
 
     /**
      * Dump 完整 RankingMap 到外部目錄（debug 用）
+     *
+     * W22c：寫檔搬到 [serviceScope]（Dispatchers.IO）。先前直接在 NLS callback 的 main
+     * thread 同步呼叫 `File.writeText`，被 BlockGuardOs 偵測為 main thread disk IO，
+     * 大量 POSTED 湧入時連續寫檔阻塞 main thread ~50 秒 → ANR → 系統強制 FC。
+     *
+     * Fast-path guards (isEnabled / isDumpTypeEnabled) 仍在呼叫端 thread 同步判斷，
+     * 多數呼叫（debug 未開）直接 short-circuit 不 launch 多餘 coroutine。
+     *
+     * rankingMap 為 system 給的 snapshot，後續 IO 內讀取 orderedKeys / getRanking
+     * 不影響 callback frame 生命週期。
      */
     private fun dumpRankingMap(rankingMap: RankingMap, source: String) {
         if (!debugDumper.isEnabled) return
         // W14：channel 類型獨立 toggle
         if (!com.notificationmaster.core.prefs.AppPreferences.isDumpTypeEnabled(
                 this, com.notificationmaster.core.prefs.AppPreferences.DumpType.CHANNEL)) return
-        try {
-            val dumpDir = com.notificationmaster.core.debug.DebugPaths
-                .resolve(this, com.notificationmaster.core.debug.DebugPaths.Sink.EVENT_DUMP)
-            val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
-            val sb = StringBuilder()
-            val keys = rankingMap.orderedKeys
-            sb.appendLine("source=$source")
-            sb.appendLine("RankingMap: ${keys.size} entries")
-            sb.appendLine()
-            for (key in keys) {
-                val ranking = Ranking()
-                val ok = rankingMap.getRanking(key, ranking)
-                sb.appendLine("key=$key")
-                sb.appendLine("  getRanking=$ok")
-                if (ok && Build.VERSION.SDK_INT >= 26) {
-                    sb.appendLine("  channel=${ranking.channel}")
-                    sb.appendLine("  importance=${ranking.importance}")
-                }
+        serviceScope.launch {
+            try {
+                val dumpDir = com.notificationmaster.core.debug.DebugPaths
+                    .resolve(this@NotificationCaptureService, com.notificationmaster.core.debug.DebugPaths.Sink.EVENT_DUMP)
+                val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
+                val sb = StringBuilder()
+                val keys = rankingMap.orderedKeys
+                sb.appendLine("source=$source")
+                sb.appendLine("RankingMap: ${keys.size} entries")
                 sb.appendLine()
-            }
-            java.io.File(dumpDir, "channel_${source}_$ts.txt").writeText(sb.toString())
-        } catch (_: Exception) { }
+                for (key in keys) {
+                    val ranking = Ranking()
+                    val ok = rankingMap.getRanking(key, ranking)
+                    sb.appendLine("key=$key")
+                    sb.appendLine("  getRanking=$ok")
+                    if (ok && Build.VERSION.SDK_INT >= 26) {
+                        sb.appendLine("  channel=${ranking.channel}")
+                        sb.appendLine("  importance=${ranking.importance}")
+                    }
+                    sb.appendLine()
+                }
+                java.io.File(dumpDir, "channel_${source}_$ts.txt").writeText(sb.toString())
+            } catch (_: Exception) { }
+        }
     }
 
     /**
