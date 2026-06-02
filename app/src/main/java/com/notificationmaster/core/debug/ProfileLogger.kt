@@ -17,14 +17,23 @@ import java.util.Locale
  * disable 時不砍既有檔案（user 可事後查看），只停止寫入。
  *
  * 路徑由 [DebugPaths] 統一派生（Plan 1-zippy-thunder W4），落在
- * `Documents/NotificationMaster/debug/profile_log/timeline.log`。
+ * `Documents/NotificationMaster/debug/profile_log/timeline_<sessionTs>.log`。
+ *
+ * W22：檔名加 process 啟動 timestamp（`yyyyMMdd_HHmmss_SSS` 精度到 ms），每個 process
+ * session 獨立檔案。舊版固定 `timeline.log` 跨 session append，新舊版本 / 重灌 APK 後
+ * log 黏在一起難辨識；session timestamp 後 user 看檔名即知對應哪次啟動。
+ *
+ * 精度到 ms 是為了避免「ANR/crash 後立即重啟」或「OEM 自動 rebind NLS」場景同秒內撞檔。
  *
  * logFile 延遲到首次 append 時 resolve（隨 isEnabled toggle 自然啟動）；resolve 後緩存
  * 直到 process 結束 — toggle 改 disable 後 reference 仍在但 append 入口已 gate。
  */
 object ProfileLogger {
 
-    private const val FILE_NAME = "timeline.log"
+    /** Process 啟動時生成的 session timestamp（精度到 ms），整個 process 生命週期固定 */
+    private val SESSION_TS: String =
+        SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
+    private val FILE_NAME = "timeline_$SESSION_TS.log"
     private const val TAG = "ProfileLogger"
     @Volatile private var appContext: Context? = null
     @Volatile private var logFile: File? = null
