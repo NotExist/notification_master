@@ -385,6 +385,8 @@ class SettingsFragment : Fragment() {
         setupProfileLogTagSwitches()
         // Plan 1-zippy-thunder W14：DebugDumper per-type 開關（摺疊區）
         setupDumpTypeSwitches()
+        // Plan 1-zippy-thunder W18：lazyload 觀察參數（runtime 可調）
+        setupLazyloadDebugInputs()
 
         // 即時匯出歷程
         binding.switchCalendarExportLog.isChecked = CalendarExportLog.enabled
@@ -530,6 +532,39 @@ class SettingsFragment : Fragment() {
         val arrow = if (expanded) getString(R.string.settings_debug_expanded_arrow)
                     else getString(R.string.settings_debug_collapsed_arrow)
         header.text = getString(resId, arrow)
+    }
+
+    /**
+     * Plan 1-zippy-thunder W18：lazyload runtime debug inputs。
+     *
+     * 兩個輸入：
+     * - footer 最少可見時間（ms）
+     * - 末尾自動 lazyload 閾值（displays < N，0=關閉）
+     *
+     * 失焦或 Enter 時寫入 AppPreferences；ViewModel/Fragment 每次 lazyload 時 runtime 讀。
+     */
+    private fun setupLazyloadDebugInputs() {
+        val ctx = requireContext()
+        val footerInput = binding.inputLazyloadFooterMin
+        val thresholdInput = binding.inputLazyloadAutoThreshold
+
+        footerInput.setText(AppPreferences.getLazyloadFooterMinMs(ctx).toString())
+        thresholdInput.setText(AppPreferences.getLazyloadAutoThreshold(ctx).toString())
+
+        footerInput.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                footerInput.text?.toString()?.toLongOrNull()?.let {
+                    AppPreferences.setLazyloadFooterMinMs(ctx, it)
+                }
+            }
+        }
+        thresholdInput.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                thresholdInput.text?.toString()?.toIntOrNull()?.let {
+                    AppPreferences.setLazyloadAutoThreshold(ctx, it.coerceAtLeast(0))
+                }
+            }
+        }
     }
 
     /**

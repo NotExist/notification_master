@@ -321,4 +321,29 @@ object AppPreferences {
             .putBoolean("$DUMP_TYPE_PREFIX${type.name.lowercase()}_enabled", enabled)
             .apply()
     }
+
+    // === Plan 1-zippy-thunder：Timeline lazyload runtime tunables ===
+
+    private const val KEY_LAZYLOAD_FOOTER_MIN_MS = "timeline_lazyload_footer_min_ms"
+    private const val KEY_LAZYLOAD_AUTO_THRESHOLD = "timeline_lazyload_auto_threshold"
+
+    /** LoadingMore footer 最少可見時間（ms）。預設 2000 方便觀察，stable 後可調回 200-500。 */
+    fun getLazyloadFooterMinMs(context: Context): Long =
+        prefs(context).getLong(KEY_LAZYLOAD_FOOTER_MIN_MS, 2000L)
+
+    fun setLazyloadFooterMinMs(context: Context, value: Long) {
+        prefs(context).edit().putLong(KEY_LAZYLOAD_FOOTER_MIN_MS, value).apply()
+    }
+
+    /**
+     * 末尾自動 lazyload 觸發閾值：`displays.size < N` 時 renderList 末尾自動觸發 loadNextDay。
+     * 預設 30（沿用 INITIAL_PAGE_SIZE 同視角）。設為 0 可關閉「自動湊滿」行為，只剩 onScrolled
+     * 手動滑到底觸發。
+     */
+    fun getLazyloadAutoThreshold(context: Context): Int =
+        prefs(context).getInt(KEY_LAZYLOAD_AUTO_THRESHOLD, 30)
+
+    fun setLazyloadAutoThreshold(context: Context, value: Int) {
+        prefs(context).edit().putInt(KEY_LAZYLOAD_AUTO_THRESHOLD, value).apply()
+    }
 }

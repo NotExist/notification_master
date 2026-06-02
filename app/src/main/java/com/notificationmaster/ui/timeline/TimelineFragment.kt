@@ -722,15 +722,20 @@ class TimelineFragment : Fragment() {
         // - filterText 非空時不自動 lazyload（user 主動 search 不應觸發無限 paging）
         // - state.canLoadMore guard 配合 W2.b loadNextDay 內 DB-exhausted 判定，能 hard 截斷
         //   chip 篩 0 + DB 載完的無限迴圈
+        // W18：閾值改 runtime 從 AppPreferences 讀，user 可在 settings 即時調整
+        // （設為 0 完全關閉「末尾自動湊滿」，只剩 onScrolled 手動觸發）
+        val threshold = com.notificationmaster.core.prefs.AppPreferences
+            .getLazyloadAutoThreshold(requireContext())
         val displaysSize = input.allNotifications.size
-        if (input.filterText.isEmpty() &&
-            displaysSize < TimelineViewModel.INITIAL_PAGE_SIZE &&
+        if (threshold > 0 &&
+            input.filterText.isEmpty() &&
+            displaysSize < threshold &&
             input.state is TimelineLoadState.Ready &&
             input.state.canLoadMore
         ) {
             ProfileLogger.append(
                 "Fragment",
-                "renderList autoLazyload displays=$displaysSize < ${TimelineViewModel.INITIAL_PAGE_SIZE}"
+                "renderList autoLazyload displays=$displaysSize < $threshold"
             )
             viewModel.loadNextDay()
         }

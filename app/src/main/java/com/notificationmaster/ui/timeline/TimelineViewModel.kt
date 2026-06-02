@@ -11,6 +11,7 @@ import com.notificationmaster.core.filter.MatchContext
 import com.notificationmaster.core.filter.Rule
 import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.filter.RuleRepository
+import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.data.db.dao.count
 import com.notificationmaster.data.db.dao.query
 import com.notificationmaster.data.db.entity.NotificationEventEntity
@@ -570,8 +571,9 @@ class TimelineViewModel(
                         items.size < _pageSize.value
                 }.first { it }
             }
-            // W2.e：condition_met 後 delay 200ms 讓 LoadingMore footer 可見
-            if (result != null) delay(FOOTER_MIN_VISIBLE_MS)
+            // W2.e / W18：condition_met 後 delay 讓 LoadingMore footer 可見。
+            // W18：runtime 從 AppPreferences 讀，user 可在 settings 即時調整。
+            if (result != null) delay(AppPreferences.getLazyloadFooterMinMs(getApplication()))
             _isLoadingMore.value = false
             ProfileLogger.append(
                 "Timeline",
@@ -624,11 +626,9 @@ class TimelineViewModel(
         const val MAX_PAGE_SIZE = 5000
 
         /**
-         * W2.e：LoadingMore footer 至少可見時間（ms），防 Ready↔LoadingMore 切換太快閃過。
-         *
-         * 暫提高到 2000ms 方便實機觀察 footer 行為（user request）— 確認穩定後可調回 200-500ms
-         * 取得「夠看 + 不拖延」的平衡。
+         * @Deprecated W18：改 runtime 從 [AppPreferences.getLazyloadFooterMinMs] 讀，
+         * 保留 const 僅為向下相容 / 預設值參考。實際 delay 用 AppPreferences 值。
          */
-        const val FOOTER_MIN_VISIBLE_MS = 2000L
+        const val FOOTER_MIN_VISIBLE_MS_DEFAULT = 2000L
     }
 }
