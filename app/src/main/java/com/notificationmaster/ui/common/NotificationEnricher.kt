@@ -4,8 +4,10 @@ import android.util.Log
 import com.notificationmaster.core.RankingSnapshotMerger
 import com.notificationmaster.core.debug.ProfileLogger
 import com.notificationmaster.data.db.dao.ChannelDao
+import com.notificationmaster.data.db.dao.NotificationEventDao
 import com.notificationmaster.data.db.dao.RankingObservationDao
 import com.notificationmaster.data.db.dao.RankingSnapshotDao
+import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.NotificationEventEntity
 
 /**
@@ -41,7 +43,8 @@ object NotificationEnricher {
         events: List<NotificationEventEntity>,
         channelDao: ChannelDao,
         rankingObsDao: RankingObservationDao,
-        rankingSnapDao: RankingSnapshotDao
+        rankingSnapDao: RankingSnapshotDao,
+        eventDao: NotificationEventDao? = null
     ): List<NotificationDisplay> {
         if (events.isEmpty()) return emptyList()
         val t0 = System.currentTimeMillis()
@@ -74,6 +77,17 @@ object NotificationEnricher {
         }
         val t3 = System.currentTimeMillis()
 
+        // Plan 2 W1.b：批次拿「每 nkey 最新事件」算廣義 row.isRemoved 屬性。
+        // - row 後有同 nkey 任何事件（row.event_time < latest.event_time）→ isRemoved=true
+        // - 該 nkey 最終 REMOVED（latest.event_type == REMOVED）→ 該 nkey 所有 row isRemoved=true
+        // - row 是 nkey 最新且 latest != REMOVED → isRemoved=false（「活著」代表）
+        // eventDao 為 null（暫時相容）時 fallback 用 row.event_type == REMOVED（狹義舊行為）。
+        val latestPerKey: Map<String, NotificationEventEntity> =
+            if (eventDao != null && keys.isNotEmpty()) {
+                eventDao.getLatestEventByKeysSync(keys).associateBy { it.notificationKey }
+            } else emptyMap()
+        val t3b = System.currentTimeMillis()
+
         // Phase 31o：取消 cache，每次 enrich 都重 parse + 用最新 channelMap / rankingJsonMap
         val fromTimings = mutableListOf<Int>()
         var totalRawSize = 0L
@@ -87,11 +101,26 @@ object NotificationEnricher {
                 val channelKey = event.channelId?.let { "${event.packageName}|$it" }
                 val importance = channelKey?.let { channelMap[it] } ?: -1
                 val mergedJson = rankingJsonMap[event.notificationKey]
+                // Plan 2 W1.b：算廣義 isRemoved 並 inject 到 Enrichment
+                val isRemoved = if (latestPerKey.isEmpty()) {
+                    // fallback 狹義（caller 沒傳 eventDao）
+                    event.eventType == EventType.REMOVED
+                } else {
+                    val latest = latestPerKey[event.notificationKey]
+                    if (latest == null) {
+                        event.eventType == EventType.REMOVED
+                    } else {
+                        val rowIsLatest = event.eventTime == latest.eventTime
+                        val nkeyFinallyRemoved = latest.eventType == EventType.REMOVED
+                        !rowIsLatest || nkeyFinallyRemoved
+                    }
+                }
                 NotificationDisplay.from(
                     event,
                     NotificationDisplay.Enrichment(
                         channelImportance = importance,
-                        mergedRankingJson = mergedJson
+                        mergedRankingJson = mergedJson,
+                        isRemoved = isRemoved
                     )
                 )
             }.getOrElse { e ->

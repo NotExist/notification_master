@@ -647,7 +647,7 @@ class TimelineViewModel(
      * 仍有可能整批 throw（如 channelDao.getAllChannelsSync 拋 SQLiteException），由 [allNotifications].catch 接住。
      */
     private suspend fun enrichAndMap(events: List<NotificationEventEntity>): List<NotificationDisplay> =
-        NotificationEnricher.enrich(events, channelDao, rankingObsDao, rankingSnapDao)
+        NotificationEnricher.enrich(events, channelDao, rankingObsDao, rankingSnapDao, eventDao)
 
     companion object {
         const val KEY_DEDUP_CHECKED = "timeline.dedupChecked"

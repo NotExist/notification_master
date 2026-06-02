@@ -210,7 +210,8 @@ class NotificationDetailFragment : Fragment() {
                         listOf(anchorEvent),
                         database.channelDao(),
                         database.rankingObservationDao(),
-                        database.rankingSnapshotDao()
+                        database.rankingSnapshotDao(),
+                        database.notificationEventDao()
                     ).first()
                 }
                 val channelEntity = withContext(Dispatchers.IO) {

@@ -54,7 +54,8 @@ class SearchViewModel : ViewModel() {
                     events,
                     database.channelDao(),
                     database.rankingObservationDao(),
-                    database.rankingSnapshotDao()
+                    database.rankingSnapshotDao(),
+                    database.notificationEventDao()
                 )
             }
             _results.value = results

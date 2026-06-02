@@ -116,6 +116,27 @@ interface NotificationEventDao {
     fun getRemovedNotificationKeysFlow(): Flow<List<String>>
 
     /**
+     * Plan 2 W1.b：每 notification_key 的最新一筆 event（給 NotificationEnricher 計算
+     * 廣義 row.isRemoved 用）。
+     *
+     * 「row 後有同 nkey 任何事件 OR 該 nkey 最終 REMOVED」 = 廣義 isRemoved=true。
+     * Enricher 對 events batch 拿 key list 後 query 此方法，比對每 row 的 event_time
+     * 與「該 nkey 最新 event_time」+ 看「該 nkey 最新 event_type 是否 REMOVED」算出。
+     *
+     * **不過 EventFilterSqlBuilder 排除 REMOVED**：此 query 走自己的 SQL 不過 builder，
+     * 才能拿到「最新事件可能是 REMOVED」的真實狀態。
+     */
+    @Query("""
+        SELECT e.* FROM notification_events e
+        WHERE notification_key IN (:keys)
+          AND event_time = (
+              SELECT MAX(event_time) FROM notification_events e2
+              WHERE e2.notification_key = e.notification_key
+          )
+    """)
+    suspend fun getLatestEventByKeysSync(keys: List<String>): List<NotificationEventEntity>
+
+    /**
      * 同 content_hash 的不同 notification_key 數量（去重模式 similar 提示）
      */
     @Query("""

@@ -106,7 +106,16 @@ data class NotificationDisplay(
      */
     data class Enrichment(
         val channelImportance: Int = -1,
-        val mergedRankingJson: JSONObject? = null
+        val mergedRankingJson: JSONObject? = null,
+        /**
+         * Plan 2 W1.b：廣義 row.isRemoved（由 NotificationEnricher 批次計算寫入）。
+         * - row 後有同 nkey 任何事件（被取代）→ true
+         * - 該 nkey 最終 event_type == REMOVED → 該 nkey 所有 row = true
+         * - row 是 nkey 最新且最終非 REMOVED（「活著」代表）→ false
+         *
+         * Default null = caller 未提供 → from() fallback 狹義 `row.eventType == REMOVED`。
+         */
+        val isRemoved: Boolean? = null
     ) {
         val isAmbient: Boolean = mergedRankingJson?.optBoolean("isAmbient", false) ?: false
         val isSuspended: Boolean = mergedRankingJson?.optBoolean("isSuspended", false) ?: false
@@ -132,8 +141,8 @@ data class NotificationDisplay(
             val tFieldStart = System.currentTimeMillis()
             val result = NotificationDisplay(
                 event = event,
-                // Phase 27：snap 是 local val，攤平後 function 結束 GC，display 不持有 reference
-                isRemoved = event.eventType == EventType.REMOVED,
+                // Plan 2 W1.b：來源改 enrichment 廣義計算；fallback 狹義 row.eventType == REMOVED
+                isRemoved = enrichment.isRemoved ?: (event.eventType == EventType.REMOVED),
                 packageName = event.packageName,
                 notificationKey = event.notificationKey,
                 channelId = event.channelId,

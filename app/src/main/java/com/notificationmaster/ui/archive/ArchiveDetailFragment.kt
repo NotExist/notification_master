@@ -138,7 +138,8 @@ class ArchiveDetailFragment : Fragment() {
                             events,
                             database.channelDao(),
                             database.rankingObservationDao(),
-                            database.rankingSnapshotDao()
+                            database.rankingSnapshotDao(),
+                            database.notificationEventDao()
                         )
                     }
                     val tSubmit = System.currentTimeMillis()
