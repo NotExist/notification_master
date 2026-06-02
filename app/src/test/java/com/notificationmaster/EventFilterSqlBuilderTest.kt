@@ -144,13 +144,12 @@ class EventFilterSqlBuilderTest {
     }
 
     @Test
-    fun `DerivedProperty isRemoved=true emits event_type = REMOVED`() {
-        val spec = EventFilterSpec(
-            matchers = listOf(Matcher.DerivedProperty(isRemoved = true))
-        )
+    fun `all queries exclude REMOVED row by default (Plan 2 W1)`() {
+        // Plan 2 W1：EventFilterSqlBuilder 全 query 加 event_type != 'REMOVED'
+        // REMOVED event 不顯示為 list row，作為「前 row 的 attribute」
+        val spec = EventFilterSpec()
         val q = EventFilterSqlBuilder.build(spec)
-        // MatcherSqlTranslator 對 isRemoved=true 用 e.event_type = ?
-        assertTrue("expected event_type predicate: ${q.sql}", q.sql.contains("e.event_type"))
+        assertTrue("expected REMOVED exclusion: ${q.sql}", q.sql.contains("e.event_type != 'REMOVED'"))
     }
 
     // ===== count 對應 =====
