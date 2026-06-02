@@ -75,20 +75,22 @@ sealed interface LoadPhase {
 
 /**
  * Plan 2 W20：頂層載入狀態改 **product type**，各維度 (phase / isLazyloading / canLoadMore /
- * footerCooldown / error) 顯式為 field。各 UI 投影 derive 自己關心的 field，消除舊 sealed enum
+ * error) 顯式為 field。各 UI 投影 derive 自己關心的 field，消除舊 sealed enum
  * 用 when ordering 短路造成的「為 footer 改 state ordering 順帶影響 SwipeRefresh」副作用。
  *
- * Plan 1 W8 / W16 / W2.e / W19 對應到此結構：
- * - W8 sticky loading：footer derive 用 `isLazyloading || footerCooldown`，不再靠 state ordering
+ * Plan 1 W8 / W16 / W19 對應到此結構：
+ * - W8 sticky loading：footer derive 用 `isLazyloading`（debug delay 內化進 lazyload 期間）
  * - W16 raw-exhausted：邏輯下放到 `canLoadMore` field 計算
- * - W2.e cooldown：抽出獨立 `_footerCooldown` StateFlow，loadNextDay 不再內含 delay
  * - W19 condition：保留在 loadNextDay 等待真實 items 變化的判定
+ *
+ * W22f：footerCooldown 欄位移除 — debug 用的「LoadingMore 最少可見時間」純粹延後
+ * `_isLoadingMore = false` 的執行時機（cooldown delay 在 lazyload coroutine 內、set false
+ * 之前 inline），不再暴露為獨立 state factor。
  */
 data class TimelineLoadState(
     val phase: LoadPhase,
     val isLazyloading: Boolean = false,
     val canLoadMore: Boolean = false,
-    val footerCooldown: Boolean = false,
     val error: Throwable? = null
 ) {
     companion object {
@@ -342,43 +344,30 @@ class TimelineViewModel(
     private val _isLoadingMore = MutableStateFlow(false)
 
     /**
-     * Plan 2 W21：W2.e cooldown 從 loadNextDay 抽出獨立 StateFlow。
-     * footer 依 `isLazyloading || footerCooldown` 派生顯示時長，與 state ordering 無關。
-     *
-     * Plan 2 W22：cooldown 重新設計為「debug 觀察用阻擋機制」。
-     * - 預設 0（生產行為不延長）
-     * - 設大時 cooldown delay 在 `_isLoadingMore=false` 之前執行，期間 isLoadingMore=true
-     *   自然阻擋下一輪 loadNextDay，user 能看清楚每輪 lazyload 完整顯示 LoadingMore
-     *   footer N ms 才允許下一輪
-     * - 不再需要 detached cooldown coroutine — 整段 cooldown 跟 lazyload 本體一起序列化
-     *
-     * 撤回方向：W22a-v1（single Job + cancel-restart）— 該方向把 cooldown 跟 lazyload
-     * 本體解耦讓「不影響資料載入節奏」，但對 debug 觀察反而妨礙：使用者調大數字本來
-     * 就期望「載入分明、能看清每一輪」。改阻擋式直接滿足 debug 用途。
-     */
-    private val _footerCooldown = MutableStateFlow(false)
-
-    /**
      * Plan 2 W20：頂層載入狀態 product type 重寫。
      *
      * 修前（sealed enum + when ordering 短路）：為 footer 顯示時長改 ordering（W8 / W16）會
      * 順帶影響 SwipeRefresh / counter 等其他 UI。
      *
-     * 修後：各維度（phase / isLazyloading / canLoadMore / footerCooldown / error）顯式為 field，
+     * 修後：各維度（phase / isLazyloading / canLoadMore / error）顯式為 field，
      * UI 投影各自 derive 關心欄位，互不干擾。
+     *
+     * W22f：原 footerCooldown source 移除。debug 用的「LoadingMore 最少可見時間」純粹
+     * 內化為 lazyload coroutine 內、`_isLoadingMore=false` 之前的 inline delay；不再
+     * 作為並列 StateFlow source 影響 footer derive — 消除「cooldown=false 跟 loading=false
+     * 兩個獨立 emit 必然產生『都 false 中間態』」造成的 footer flicker。
      */
     val loadState: StateFlow<TimelineLoadState> = combine(
         displayedNotifications,
         totalCount,
         _isLoadingMore,
-        combine(allNotifications, totalRawCount, _footerCooldown) { items, totalRaw, cooldown ->
-            Triple(items, totalRaw, cooldown)
+        combine(allNotifications, totalRawCount) { items, totalRaw ->
+            items to totalRaw
         },
         _errorCh
     ) { displays, total, loading, bundle, err ->
         val items = bundle.first
         val totalRaw = bundle.second
-        val cooldown = bundle.third
 
         val phase: LoadPhase = when {
             err != null -> LoadPhase.Initial  // Error 仍標 Initial，UI 主要看 error field
@@ -403,21 +392,22 @@ class TimelineViewModel(
             phase = phase,
             isLazyloading = loading,
             canLoadMore = canLoadMore,
-            footerCooldown = cooldown,
             error = err
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), TimelineLoadState.InitialLoading)
 
     /**
      * Plan 2 W21：FooterState 獨立 derive。
-     * 所有 footer 顯示邏輯（含 W2.e min visible cooldown）集中此公式。
+     *
+     * W22f：footer 純依 [isLazyloading] / [canLoadMore] derive；debug cooldown delay
+     * 期間 isLazyloading 仍 true，footer 自然維持 Loading，不需要額外的 cooldown flag。
      */
     val footerState: StateFlow<FooterState> = loadState.map { s ->
         when {
             s.phase == LoadPhase.Empty -> FooterState.None
             s.phase == LoadPhase.Initial -> FooterState.None
             s.error != null -> FooterState.None
-            s.isLazyloading || s.footerCooldown -> FooterState.Loading
+            s.isLazyloading -> FooterState.Loading
             s.canLoadMore -> FooterState.Pending
             else -> FooterState.EndReached
         }
@@ -436,7 +426,7 @@ class TimelineViewModel(
                 ProfileLogger.append(
                     "State",
                     "emit phase=${s.phase::class.simpleName} loading=${s.isLazyloading} " +
-                        "canLoadMore=${s.canLoadMore} cooldown=${s.footerCooldown} err=${s.error != null}"
+                        "canLoadMore=${s.canLoadMore} err=${s.error != null}"
                 )
             }
         }
@@ -664,16 +654,16 @@ class TimelineViewModel(
                 "loadNextDay done reason=${if (result == null) "timeout" else "condition_met"} " +
                     "afterDisplayed=${displayedNotifications.value.size} afterItems=${allNotifications.value.size}"
             )
-            // W22：cooldown delay 跟 lazyload 本體一起序列化 — 在 _isLoadingMore=false 之前
-            // delay，期間 isLoadingMore=true 自然阻擋下一輪 loadNextDay（loadNextDay 入口
-            // guard `if (_isLoadingMore.value) return` 守住）。
+            // W22f：debug 用「LoadingMore 最少可見時間」純粹延後 `_isLoadingMore=false`
+            // 的執行時機 — 整段 lazyload+delay 用單一 isLazyloading=true 表示，cooldown
+            // 結束跟 lazyload 結束是同一個 set，combine 只 emit 一次 state change，
+            // footer 從 Loading 直接 transition 到下一狀態（Pending / EndReached / 或被
+            // Fragment trigger 下一輪 lazyload 蓋回 Loading），不經過「都 false」中間態。
             //
-            // 預設 0 = 生產行為跟以前一致（delay(0) 是 no-op）；debug 設大時 footer
-            // LoadingMore 完整顯示 N ms + 阻擋下一輪 = user 能看清楚每輪 lazyload 邊界。
+            // 預設 0 = delay(0) no-op = 生產行為跟沒這層邏輯一樣；debug 設大時 footer
+            // LoadingMore 完整顯示 N ms + 阻擋下一輪 lazyload（_isLoadingMore guard 守住）。
             if (result != null) {
-                _footerCooldown.value = true
                 delay(AppPreferences.getLazyloadFooterMinMs(getApplication()))
-                _footerCooldown.value = false
             }
             _isLoadingMore.value = false
         }
