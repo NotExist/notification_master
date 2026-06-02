@@ -245,6 +245,24 @@ class TimelineFragment : Fragment() {
             // Phase 22+：純 client-side overlay，不觸發任何 indicator
             viewModel.setDedupChecked(binding.chipDeduplicated.isChecked)
         }
+        // Plan 2 W1.d：「已移除」view-level filter chip
+        binding.chipIsRemoved.setOnClickListener {
+            if (suppressChipListener) return@setOnClickListener
+            viewModel.setRemovalFilter(
+                if (binding.chipIsRemoved.isChecked)
+                    com.notificationmaster.data.filter.RemovalFilter.OnlyRemoved
+                else
+                    com.notificationmaster.data.filter.RemovalFilter.None
+            )
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.removalFilter.collect { rf ->
+                if (_binding == null) return@collect
+                suppressChipListener = true
+                binding.chipIsRemoved.isChecked = rf == com.notificationmaster.data.filter.RemovalFilter.OnlyRemoved
+                suppressChipListener = false
+            }
+        }
     }
 
     private fun setupRuleChips() {
@@ -324,7 +342,7 @@ class TimelineFragment : Fragment() {
     private fun ruleDisplayName(rule: Rule): String = when (rule.id) {
         RuleRepository.builtInRuleIdAudible() -> getString(R.string.preset_audible)
         RuleRepository.builtInRuleIdHeadsup() -> getString(R.string.preset_headsup)
-        RuleRepository.builtInRuleIdDismissed() -> getString(R.string.preset_dismissed)
+        // Plan 2 W1.d：builtInRuleIdDismissed dead value — 對應 rule 已移除，此 branch 不會 hit
         else -> rule.name ?: rule.id.take(8)
     }
 

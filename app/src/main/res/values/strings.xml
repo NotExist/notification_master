@@ -58,6 +58,7 @@
     <string name="timeline_empty_hint">通知監聽服務運作中，新的通知會自動記錄在這裡。</string>
     <string name="timeline_permission_hint">需要授權「通知存取權」才能開始擷取通知。\n授權後所有通知都會自動記錄在這裡。</string>
     <string name="timeline_show_deduplicated">去重顯示</string>
+    <string name="timeline_show_removed">已移除</string>
     <string name="timeline_count_format">%d 筆</string>
     <string name="timeline_count_format_loaded_total">%1$s / %2$d 筆</string>
     <string name="timeline_count_loading_placeholder">…</string>

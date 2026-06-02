@@ -65,6 +65,19 @@
                     app:ensureMinTouchTargetSize="false"
                     style="@style/Widget.Material3.Chip.Filter" />
 
+                <!-- Plan 2 W1：「已移除」view-level filter chip，與 dedup 並列、分隔線之前 -->
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_is_removed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="@string/timeline_show_removed"
+                    android:checked="false"
+                    app:checkedIconVisible="false"
+                    app:chipIconVisible="false"
+                    app:ensureMinTouchTargetSize="false"
+                    style="@style/Widget.Material3.Chip.Filter" />
+
                 <View
                     android:layout_width="1dp"
                     android:layout_height="20dp"

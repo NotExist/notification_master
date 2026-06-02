@@ -11,12 +11,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
-import com.notificationmaster.core.filter.RuleEngine
-import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.data.db.dao.query
-import com.notificationmaster.data.filter.toFilterSpec
 import com.notificationmaster.databinding.FragmentShortcutDismissedBinding
-import com.notificationmaster.ui.common.NotificationDisplay
 import com.notificationmaster.ui.main.MainActivity
 import com.notificationmaster.ui.search.NotificationAdapter
 import kotlinx.coroutines.Dispatchers
@@ -58,25 +54,35 @@ class DismissedBottomSheetFragment : BottomSheetDialogFragment() {
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
 
-        RuleRepository.load(requireContext())
-        val rule = RuleEngine.getRule(RuleRepository.builtInRuleIdDismissed()) ?: run {
-            dismiss(); return
-        }
+        // Plan 2 W1.d：Dismissed shortcut 改用 view-level filter 直接 query「已移除」row。
+        // 不再透過 builtin rule chip（已從 RuleEngine 移除）。
+        // 條件 = NOT (row 是同 nkey 最新非-REMOVED row 且 nkey 最終非-REMOVED) — 廣義 isRemoved=true。
+        // SQL：撈所有 events，client 端用 enricher 算 isRemoved 篩。
         val dao = NotificationMasterApp.getInstance().database.notificationEventDao()
+        val db = NotificationMasterApp.getInstance().database
         viewLifecycleOwner.lifecycleScope.launch {
-            dao.query(rule.toFilterSpec().copy(limit = 30)).collectLatest { events ->
-                if (_binding == null) return@collectLatest
-                val displays = withContext(Dispatchers.IO) { events.map(NotificationDisplay::from) }
-                adapter.submitList(displays)
-                if (displays.isEmpty()) {
-                    binding.recyclerView.visibility = View.GONE
-                    binding.textEmpty.visibility = View.VISIBLE
-                    binding.textEmpty.setText(R.string.shortcut_empty_dismissed)
-                } else {
-                    binding.recyclerView.visibility = View.VISIBLE
-                    binding.textEmpty.visibility = View.GONE
+            dao.query(com.notificationmaster.data.filter.EventFilterSpec.All.copy(limit = 200))
+                .collectLatest { events ->
+                    if (_binding == null) return@collectLatest
+                    val displays = withContext(Dispatchers.IO) {
+                        com.notificationmaster.ui.common.NotificationEnricher.enrich(
+                            events,
+                            db.channelDao(),
+                            db.rankingObservationDao(),
+                            db.rankingSnapshotDao(),
+                            dao
+                        ).filter { it.isRemoved }.take(30)
+                    }
+                    adapter.submitList(displays)
+                    if (displays.isEmpty()) {
+                        binding.recyclerView.visibility = View.GONE
+                        binding.textEmpty.visibility = View.VISIBLE
+                        binding.textEmpty.setText(R.string.shortcut_empty_dismissed)
+                    } else {
+                        binding.recyclerView.visibility = View.VISIBLE
+                        binding.textEmpty.visibility = View.GONE
+                    }
                 }
-            }
         }
     }
 
