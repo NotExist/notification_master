@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.notificationmaster.core.prefs.AppPreferences
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -27,6 +28,10 @@ import java.util.Locale
  *
  * logFile 延遲到首次 append 時 resolve（隨 isEnabled toggle 自然啟動）；resolve 後緩存
  * 直到 process 結束 — toggle 改 disable 後 reference 仍在但 append 入口已 gate。
+ *
+ * W22h：append 偵測 FileNotFoundException（parent dir 不存在，典型情境是 user 為了除錯
+ * 把外部 profile_log 資料夾搬走）時自動 invalidate cache + 重 resolve + 重試一次；
+ * DebugPaths.resolve 內 mkdirs 會重建被搬走的外部 dir，log 不中斷。
  */
 object ProfileLogger {
 
@@ -47,21 +52,47 @@ object ProfileLogger {
         val ctx = appContext ?: return
         // W10：個別 tag 開關（內部 chained 檢查 isDebugDumperEnabled）
         if (!AppPreferences.isDebugTagEnabled(ctx, tag)) return
+
+        val ts = timeFmt.format(Date())
+        val thread = Thread.currentThread().name
+        val line = "$ts [$tag/T:$thread] $message\n"
+
         val file = resolveLogFile(ctx) ?: return
         try {
-            val ts = timeFmt.format(Date())
-            val thread = Thread.currentThread().name
-            val line = "$ts [$tag/T:$thread] $message\n"
-            // W12：用 FileOutputStream + fd.sync 確保寫入即時刷到磁碟，
-            // 避免 process killed 時最後幾 KB buffer 遺失（user 觀察「中斷」原因之一）。
-            synchronized(this) {
-                FileOutputStream(file, true).use { fos ->
-                    fos.write(line.toByteArray())
-                    fos.fd.sync()
-                }
-            }
+            writeLine(file, line)
+            return
+        } catch (e: FileNotFoundException) {
+            // W22h：parent dir 不存在（典型情境：user 把外部 profile_log 資料夾搬走除錯）
+            // → invalidate logFile cache，下次 resolveLogFile 重 resolve 觸發
+            // DebugPaths.resolve 內 mkdirs 重建外部 dir → 重試一次。
+            Log.w(TAG, "append: parent dir missing, rebuild + retry", e)
+            // fall through to retry
         } catch (e: Exception) {
+            // 其他 IO 錯誤（device 滿 / 權限變動等）不重試，避免無限迴圈
             Log.e(TAG, "append failed", e)
+            return
+        }
+
+        synchronized(this) { logFile = null }
+        val rebuiltFile = resolveLogFile(ctx) ?: return
+        try {
+            writeLine(rebuiltFile, line)
+        } catch (e: Exception) {
+            Log.e(TAG, "append failed after rebuild", e)
+        }
+    }
+
+    /**
+     * W22h：寫入一行的核心邏輯抽出為 helper，供 [append] 主路徑與 FileNotFoundException
+     * 重試路徑共用。同 W12 約定 — FileOutputStream + fd.sync 確保 process killed 前
+     * 緩衝刷到磁碟。
+     */
+    private fun writeLine(file: File, line: String) {
+        synchronized(this) {
+            FileOutputStream(file, true).use { fos ->
+                fos.write(line.toByteArray())
+                fos.fd.sync()
+            }
         }
     }
 
