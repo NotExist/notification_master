@@ -261,7 +261,9 @@ object AppPreferences {
     val KNOWN_PROFILE_LOG_TAGS: List<String> = listOf(
         "App", "UncaughtExn", "Watchdog", "Archive",
         "Removed", "Chip", "Enricher", "Display",
-        "State", "Displays", "Fragment", "Timeline"
+        "State", "Displays", "Fragment", "Timeline",
+        // W22-instrument：counter/scrollbar/list timing 釐清
+        "Counter", "Scroll", "Adapter"
     )
 
     /**

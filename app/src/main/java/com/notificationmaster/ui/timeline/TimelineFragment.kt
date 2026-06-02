@@ -197,11 +197,67 @@ class TimelineFragment : Fragment() {
                     )
                 }
             )
+            // W22-instrument：監聽 adapter 變動，log itemCount 何時實際更新
+            // submitList 的 commitCallback 是 dispatch 完成；onItemRangeInserted 是 dispatch
+            // 中各 op fire。兩者對應 RecyclerView 內部不同階段，分開看 timing。
+            adapter?.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
+                override fun onChanged() {
+                    ProfileLogger.append(
+                        "Adapter",
+                        "onChanged itemCount=${adapter?.itemCount ?: -1}"
+                    )
+                }
+                override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
+                    ProfileLogger.append(
+                        "Adapter",
+                        "onItemRangeInserted at=$positionStart count=$itemCount totalNow=${adapter?.itemCount ?: -1}"
+                    )
+                }
+                override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) {
+                    ProfileLogger.append(
+                        "Adapter",
+                        "onItemRangeRemoved at=$positionStart count=$itemCount totalNow=${adapter?.itemCount ?: -1}"
+                    )
+                }
+                override fun onItemRangeMoved(fromPosition: Int, toPosition: Int, itemCount: Int) {
+                    ProfileLogger.append(
+                        "Adapter",
+                        "onItemRangeMoved from=$fromPosition to=$toPosition count=$itemCount"
+                    )
+                }
+                override fun onItemRangeChanged(positionStart: Int, itemCount: Int, payload: Any?) {
+                    ProfileLogger.append(
+                        "Adapter",
+                        "onItemRangeChanged at=$positionStart count=$itemCount"
+                    )
+                }
+            })
         }
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
 
         binding.recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            // W22-instrument：onScrolled 高頻（fling 慣性中每 frame fire），throttle 條件：
+            // 1. 距底 ≤ 60 item (≈ 2×threshold 預設) — 只關心接近底部時的滑動
+            // 2. lastVisible 變動 — 同個位置只 log 一次
+            private var lastLoggedLastVisible: Int = -1
+
+            override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
+                val stateName = when (newState) {
+                    RecyclerView.SCROLL_STATE_IDLE -> "IDLE"
+                    RecyclerView.SCROLL_STATE_DRAGGING -> "DRAGGING"
+                    RecyclerView.SCROLL_STATE_SETTLING -> "SETTLING"
+                    else -> "state=$newState"
+                }
+                val lm = rv.layoutManager as? LinearLayoutManager
+                ProfileLogger.append(
+                    "Scroll",
+                    "stateChanged=$stateName itemCount=${lm?.itemCount ?: -1} " +
+                        "lastVisible=${lm?.findLastVisibleItemPosition() ?: -1}"
+                )
+                if (newState == RecyclerView.SCROLL_STATE_IDLE) lastLoggedLastVisible = -1
+            }
+
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 updateTimeBubble()
                 showAndScheduleHideBubble()
@@ -212,10 +268,21 @@ class TimelineFragment : Fragment() {
                 val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return
                 val totalItemCount = layoutManager.itemCount
                 val lastVisible = layoutManager.findLastVisibleItemPosition()
+                val distance = totalItemCount - lastVisible
+
+                // W22-instrument：throttle log（接近底部 + lastVisible 變動才記）
+                if (distance <= 60 && lastVisible != lastLoggedLastVisible) {
+                    ProfileLogger.append(
+                        "Scroll",
+                        "onScrolled dy=$dy itemCount=$totalItemCount lastVisible=$lastVisible distance=$distance"
+                    )
+                    lastLoggedLastVisible = lastVisible
+                }
+
                 maybeAutoLoadNext(
                     filterText = viewModel.filterText.value,
                     state = viewModel.loadState.value,
-                    scrollDistance = totalItemCount - lastVisible
+                    scrollDistance = distance
                 )
             }
         })
@@ -804,7 +871,15 @@ class TimelineFragment : Fragment() {
             "Fragment",
             "renderList submit footer=${footerState::class.simpleName} items=${withFooter.size}"
         )
+        // W22-instrument：量測 submitList → DiffUtil + dispatch → commitCallback 的時間
+        val submitT0 = System.currentTimeMillis()
         adapter?.submitList(withFooter) {
+            val dispatchMs = System.currentTimeMillis() - submitT0
+            ProfileLogger.append(
+                "Fragment",
+                "submitList commit done items=${withFooter.size} dispatchMs=$dispatchMs " +
+                    "adapterItemCount=${adapter?.itemCount ?: -1}"
+            )
             pendingScrollRestore?.let {
                 binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
                 pendingScrollRestore = null
@@ -828,9 +903,18 @@ class TimelineFragment : Fragment() {
             loadedDisplay,
             input.totalCount ?: 0
         )
+        // W22-instrument：log 進入 renderCounter 跟 setText 完成 — 證實 counter 是 displays
+        // emit 後立即 update（vs 經過載入點才 update 是 user perception bias）
+        ProfileLogger.append(
+            "Counter",
+            "render in displays=${input.allNotifications.size} filtered=${filtered.size} " +
+                "total=${input.totalCount} phase=${input.state.phase::class.simpleName} " +
+                "loading=${input.state.isLazyloading} text='$text'"
+        )
         (activity as? MainActivity)?.setToolbarCount(text)
         // Phase 31f：點 toolbar counter 跳載入詳情對話框
         (activity as? MainActivity)?.setToolbarCountClickListener { showLoadDetailDialog() }
+        ProfileLogger.append("Counter", "render done setToolbarCount text='$text'")
     }
 
     /**
