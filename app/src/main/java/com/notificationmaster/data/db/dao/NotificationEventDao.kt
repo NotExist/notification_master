@@ -105,15 +105,8 @@ interface NotificationEventDao {
      * dismiss 後再復活、Android 系統行為支援）也錯標為 removed → 即使該通知還在
      * 通知欄、UI 仍顯示已移除。
      */
-    @Query("""
-        SELECT r.notification_key FROM notification_records r
-        WHERE (
-            SELECT event_type FROM notification_events
-            WHERE notification_key = r.notification_key
-            ORDER BY event_time DESC LIMIT 1
-        ) = 'REMOVED'
-    """)
-    fun getRemovedNotificationKeysFlow(): Flow<List<String>>
+    // Plan 2 W1.c：getRemovedNotificationKeysFlow 移除 — row.isRemoved 由 NotificationEnricher
+    // 廣義計算寫入 NotificationDisplay.isRemoved 屬性，不再需要 record-level Flow
 
     /**
      * Plan 2 W1.b：每 notification_key 的最新一筆 event（給 NotificationEnricher 計算

@@ -16,6 +16,7 @@ import com.notificationmaster.data.db.dao.count
 import com.notificationmaster.data.db.dao.query
 import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.data.filter.EventFilterSpec
+import com.notificationmaster.data.filter.RemovalFilter
 import com.notificationmaster.data.filter.toFilterSpec
 import com.notificationmaster.ui.common.NotificationDisplay
 import com.notificationmaster.ui.common.NotificationEnricher
@@ -152,7 +153,9 @@ class TimelineViewModel(
      */
     private data class ChipState(
         val dedupChecked: Boolean,
-        val activeRuleIds: Set<String>
+        val activeRuleIds: Set<String>,
+        /** Plan 2 W1.c：「已移除」view-level filter（與 dedup 並列）*/
+        val removalFilter: RemovalFilter
     )
 
     // === chip state（單一 source）===
@@ -161,13 +164,20 @@ class TimelineViewModel(
         ChipState(
             dedupChecked = savedState[KEY_DEDUP_CHECKED] ?: true,
             activeRuleIds = (savedState.get<ArrayList<String>>(KEY_ACTIVE_RULE_IDS))
-                ?.toSet().orEmpty()
+                ?.toSet().orEmpty(),
+            removalFilter = (savedState.get<String>(KEY_REMOVAL_FILTER))
+                ?.let { runCatching { RemovalFilter.valueOf(it) }.getOrNull() }
+                ?: RemovalFilter.None
         )
     )
 
     val dedupChecked: StateFlow<Boolean> = _chipState
         .map { it.dedupChecked }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), _chipState.value.dedupChecked)
+
+    val removalFilter: StateFlow<RemovalFilter> = _chipState
+        .map { it.removalFilter }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), _chipState.value.removalFilter)
 
     val activeRuleIds: StateFlow<Set<String>> = _chipState
         .map { it.activeRuleIds }
@@ -271,7 +281,7 @@ class TimelineViewModel(
     val displayedNotifications: StateFlow<List<NotificationDisplay>> = combine(
         allNotifications, _chipState
     ) { base, chip ->
-        val result = applyClientSideOverlay(base, chip.dedupChecked, chip.activeRuleIds)
+        val result = applyClientSideOverlay(base, chip.dedupChecked, chip.activeRuleIds, chip.removalFilter)
         // Phase 31ak：log overlay compute — base/chip/result 對齊
         ProfileLogger.append(
             "Displays",
@@ -326,8 +336,8 @@ class TimelineViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), null)
 
-    private val _removedIds = MutableStateFlow<Set<String>>(emptySet())
-    val removedIds: StateFlow<Set<String>> = _removedIds.asStateFlow()
+    // Plan 2 W1.c：_removedIds + removedIds Flow 移除 — row.isRemoved 廣義語意由 enrichment
+    // 計算寫入 NotificationDisplay.isRemoved，UI 直接讀屬性（廢除 record-level Flow 訂閱）
 
     private val _isLoadingMore = MutableStateFlow(false)
 
@@ -451,15 +461,8 @@ class TimelineViewModel(
         // 不在 init 內 launch — 確保 cold start 時 fragment 來 collect 才啟動 Room Flow，
         // state 從 InitialLoading 開始 emit。
 
-        // removed overlay 訂閱（保留 init launch — 跟 fragment 訂閱解耦無妨，且需要持續更新）
-        viewModelScope.launch {
-            eventDao.getRemovedNotificationKeysFlow()
-                .catch { /* removed overlay 非關鍵，例外吞掉避免影響 state */ }
-                .collectLatest { ids ->
-                    _removedIds.value = ids.toSet()
-                    ProfileLogger.append("Removed", "emit size=${ids.size}")
-                }
-        }
+        // Plan 2 W1.c：removedIds Flow 訂閱移除 — row.isRemoved 由 NotificationEnricher 廣義
+        // 計算寫進 NotificationDisplay.isRemoved，UI 直接讀屬性
     }
 
     fun setDedupChecked(checked: Boolean) {
@@ -467,6 +470,14 @@ class TimelineViewModel(
         _chipState.value = _chipState.value.copy(dedupChecked = checked)
         savedState[KEY_DEDUP_CHECKED] = checked
         ProfileLogger.append("Chip", "setDedupChecked=$checked")
+    }
+
+    /** Plan 2 W1.c：「已移除」view-level filter setter，與 dedup 並列正交。 */
+    fun setRemovalFilter(filter: RemovalFilter) {
+        if (_chipState.value.removalFilter == filter) return
+        _chipState.value = _chipState.value.copy(removalFilter = filter)
+        savedState[KEY_REMOVAL_FILTER] = filter.name
+        ProfileLogger.append("Chip", "setRemovalFilter=$filter")
     }
 
     /**
@@ -523,7 +534,8 @@ class TimelineViewModel(
     private fun applyClientSideOverlay(
         base: List<NotificationDisplay>,
         dedup: Boolean,
-        ruleIds: Set<String>
+        ruleIds: Set<String>,
+        removalFilter: RemovalFilter
     ): List<NotificationDisplay> {
         var result = base
         val rules = ruleIds.mapNotNull { RuleEngine.getRule(it) }
@@ -541,7 +553,18 @@ class TimelineViewModel(
                 ?.let { to -> result = result.filter { it.postTime <= to } }
         }
 
+        // Plan 2 W1.c：「已移除」view-level filter（dedup 之前套用，使 dedup 在「篩後集合」內取最新）
+        when (removalFilter) {
+            RemovalFilter.None -> { /* 不過濾 */ }
+            RemovalFilter.OnlyRemoved -> result = result.filter { it.isRemoved }
+            RemovalFilter.ExcludeRemoved -> result = result.filter { !it.isRemoved }
+        }
+
         if (dedup) {
+            // W1.c：dedup 規則 = 每 nkey 取「篩後集合」內最新 event_time。
+            // SQL 已過濾 event_type != 'REMOVED'（W1.a），所以 base 不含 REMOVED row。
+            // 加上 isRemoved chip 篩 client overlay 後，per-nkey 取 event_time 最新 = 該 nkey
+            // 「最新可顯示 row」。
             result = result
                 .groupBy { it.notificationKey }
                 .values
@@ -654,6 +677,8 @@ class TimelineViewModel(
         const val KEY_ACTIVE_RULE_IDS = "timeline.activeRuleIds"
         const val KEY_FILTER_TEXT = "timeline.filterText"
         const val KEY_USER_DEDUP_BEFORE_RULE = "timeline.userDedupBeforeRule"
+        /** Plan 2 W1.c：「已移除」view-level filter 持久化 key（存 RemovalFilter enum name） */
+        const val KEY_REMOVAL_FILTER = "timeline.removalFilter"
         // Phase 27 移除：KEY_SCROLL_STATE / KEY_PAGE_SIZE（不跨 process 持久化）
 
         /**

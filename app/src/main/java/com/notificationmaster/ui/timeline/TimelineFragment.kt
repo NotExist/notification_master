@@ -539,20 +539,21 @@ class TimelineFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             // W21：footer 加入 combine — footerState 從 loadState derive 為純函數，
             // collect 端拿到一致快照（避免 state 與 footer 不同 dispatch frame race）。
+            // Plan 2 W1.c：viewModel.removedIds Flow 移除 — row.isRemoved 由 enrichment 計算
+            // 寫入 NotificationDisplay.isRemoved，combine 不再需要 removedIds source。
             combine(
                 viewModel.displayedNotifications,
-                viewModel.removedIds,
                 viewModel.filterText,
-                combine(viewModel.coreSpec, viewModel.footerState) { s, f -> s to f },
+                viewModel.coreSpec,
+                viewModel.footerState,
                 viewModel.loadState
-            ) { allList, removed, filterText, specAndFooter, state ->
+            ) { allList, filterText, spec, footer, state ->
                 ListRenderInput(
                     allNotifications = allList,
-                    removedIds = removed,
                     filterText = filterText,
-                    spec = specAndFooter.first,
+                    spec = spec,
                     state = state,
-                    footer = specAndFooter.second
+                    footer = footer
                 )
             }
                 // W11：Service 高頻寫入時 query/count/ranking 三個 Flow 連環 re-emit（116 log
@@ -638,7 +639,6 @@ class TimelineFragment : Fragment() {
 
     private data class ListRenderInput(
         val allNotifications: List<NotificationDisplay>,
-        val removedIds: Set<String>,
         val filterText: String,
         val spec: EventFilterSpec,
         val state: TimelineLoadState,
@@ -676,7 +676,7 @@ class TimelineFragment : Fragment() {
                 "loading=${input.state.isLazyloading} canLoadMore=${input.state.canLoadMore} " +
                 "footer=${input.footer::class.simpleName} " +
                 "allDisplays=${input.allNotifications.size} filtered=${filtered.size} " +
-                "filterText='${input.filterText}' removedIds=${input.removedIds.size}"
+                "filterText='${input.filterText}'"
         )
 
         // W2.c：任 state 下 filtered.isEmpty() 都明確走 submit，不再 early return（避免
@@ -714,7 +714,7 @@ class TimelineFragment : Fragment() {
             // Phase 31j：similarCount 與 dedup chip 脫離連動，無論 dedup ON/OFF 都計算
             // 「跨通知同內容」筆數（不同 notification_key 但同 content_hash）。
             val timelineItems: List<TimelineItem> = withContext(Dispatchers.IO) {
-                buildTimelineItemsWithSimilarCountInIo(filtered, input.removedIds, eventDao)
+                buildTimelineItemsWithSimilarCountInIo(filtered, eventDao)
             }
             submitWithFooter(timelineItems, input.footer)
         }
@@ -849,9 +849,9 @@ class TimelineFragment : Fragment() {
      */
     private suspend fun buildTimelineItemsWithSimilarCountInIo(
         notifications: List<NotificationDisplay>,
-        removedIds: Set<String>,
         eventDao: com.notificationmaster.data.db.dao.NotificationEventDao
     ): List<TimelineItem> {
+        // Plan 2 W1.c：removedIds 參數移除 — row.isRemoved 由 NotificationDisplay 自帶（廣義語意）
         val items = mutableListOf<TimelineItem>()
         var lastDate: Long? = null
         for (notification in notifications) {
@@ -868,7 +868,7 @@ class TimelineFragment : Fragment() {
             items.add(TimelineItem.NotificationItem(
                 notification = notification,
                 similarCount = similarCount,
-                isRemoved = removedIds.contains(notification.notificationKey)
+                isRemoved = notification.isRemoved
             ))
         }
         return items
