@@ -39,7 +39,7 @@
     <string name="settings_debug_dump_type_channel">Channel / Ranking 快照 (channel)</string>
     <string name="settings_debug_lazyload_section">Lazyload 觀察設定</string>
     <string name="settings_debug_lazyload_footer_min_label">LoadingMore footer 最少可見 (ms)</string>
-    <string name="settings_debug_lazyload_footer_min_hint">預設 2000</string>
+    <string name="settings_debug_lazyload_footer_min_hint">預設 0；debug 用：設大時阻擋下一輪 lazyload N ms 便於觀察每輪邊界</string>
     <string name="settings_debug_lazyload_auto_threshold_label">末尾自動 lazyload 閾值 (0=關閉)</string>
     <string name="settings_debug_lazyload_auto_threshold_hint">預設 30，0 表示完全關閉自動湊滿</string>
     <string name="settings_debug_test_alert">測試持續提醒（10 秒後）</string>

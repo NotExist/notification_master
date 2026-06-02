@@ -343,8 +343,18 @@ class TimelineViewModel(
 
     /**
      * Plan 2 W21：W2.e cooldown 從 loadNextDay 抽出獨立 StateFlow。
-     * loadNextDay 完成後由 cooldown coroutine 設 true → delay → set false。
      * footer 依 `isLazyloading || footerCooldown` 派生顯示時長，與 state ordering 無關。
+     *
+     * Plan 2 W22：cooldown 重新設計為「debug 觀察用阻擋機制」。
+     * - 預設 0（生產行為不延長）
+     * - 設大時 cooldown delay 在 `_isLoadingMore=false` 之前執行，期間 isLoadingMore=true
+     *   自然阻擋下一輪 loadNextDay，user 能看清楚每輪 lazyload 完整顯示 LoadingMore
+     *   footer N ms 才允許下一輪
+     * - 不再需要 detached cooldown coroutine — 整段 cooldown 跟 lazyload 本體一起序列化
+     *
+     * 撤回方向：W22a-v1（single Job + cancel-restart）— 該方向把 cooldown 跟 lazyload
+     * 本體解耦讓「不影響資料載入節奏」，但對 debug 觀察反而妨礙：使用者調大數字本來
+     * 就期望「載入分明、能看清每一輪」。改阻擋式直接滿足 debug 用途。
      */
     private val _footerCooldown = MutableStateFlow(false)
 
@@ -649,19 +659,23 @@ class TimelineViewModel(
                     displays.size > beforeDisplayedSize || items.size > beforeItemsSize
                 }.first { it }
             }
-            _isLoadingMore.value = false
             ProfileLogger.append(
                 "Timeline",
                 "loadNextDay done reason=${if (result == null) "timeout" else "condition_met"} " +
                     "afterDisplayed=${displayedNotifications.value.size} afterItems=${allNotifications.value.size}"
             )
-            // W21：cooldown 從 loadNextDay 抽出 — _footerCooldown 設 true → delay → set false。
-            // footer 顯示時長與 loadNextDay 邏輯解耦，state 公式不需 ordering 短路撐住 LoadingMore。
+            // W22：cooldown delay 跟 lazyload 本體一起序列化 — 在 _isLoadingMore=false 之前
+            // delay，期間 isLoadingMore=true 自然阻擋下一輪 loadNextDay（loadNextDay 入口
+            // guard `if (_isLoadingMore.value) return` 守住）。
+            //
+            // 預設 0 = 生產行為跟以前一致（delay(0) 是 no-op）；debug 設大時 footer
+            // LoadingMore 完整顯示 N ms + 阻擋下一輪 = user 能看清楚每輪 lazyload 邊界。
             if (result != null) {
                 _footerCooldown.value = true
                 delay(AppPreferences.getLazyloadFooterMinMs(getApplication()))
                 _footerCooldown.value = false
             }
+            _isLoadingMore.value = false
         }
     }
 

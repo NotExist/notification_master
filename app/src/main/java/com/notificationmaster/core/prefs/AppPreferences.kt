@@ -327,9 +327,15 @@ object AppPreferences {
     private const val KEY_LAZYLOAD_FOOTER_MIN_MS = "timeline_lazyload_footer_min_ms"
     private const val KEY_LAZYLOAD_AUTO_THRESHOLD = "timeline_lazyload_auto_threshold"
 
-    /** LoadingMore footer 最少可見時間（ms）。預設 2000 方便觀察，stable 後可調回 200-500。 */
+    /**
+     * LoadingMore footer 最少可見時間（ms）— **debug 觀察用阻擋機制**。
+     *
+     * 預設 0：生產行為不延長，跟沒這層邏輯一樣（lazyload done 立即解除阻擋）。
+     * 設大時：cooldown delay 期間 isLoadingMore 維持 true 阻擋下一輪 lazyload，user
+     * 能看清楚每輪 lazyload 完整顯示 LoadingMore footer N ms 的邊界（適合除錯觀察）。
+     */
     fun getLazyloadFooterMinMs(context: Context): Long =
-        prefs(context).getLong(KEY_LAZYLOAD_FOOTER_MIN_MS, 2000L)
+        prefs(context).getLong(KEY_LAZYLOAD_FOOTER_MIN_MS, 0L)
 
     fun setLazyloadFooterMinMs(context: Context, value: Long) {
         prefs(context).edit().putLong(KEY_LAZYLOAD_FOOTER_MIN_MS, value).apply()
