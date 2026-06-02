@@ -88,6 +88,8 @@ object MatcherSqlTranslator {
         is Matcher.Channel -> Fragment("e.channel_id = ?", listOf(matcher.channelId))
 
         is Matcher.DerivedProperty -> {
+            // Plan 2 W1：isRemoved 分支移除 — 改 view-level filter（EventFilterSpec.removalFilter
+            // 在 EventFilterSqlBuilder outer wrap 套用，不再走 row-level matcher）
             val parts = mutableListOf<String>()
             val args = mutableListOf<Any?>()
             matcher.isAudible?.let {
@@ -97,9 +99,6 @@ object MatcherSqlTranslator {
             matcher.likelyHeadsup?.let {
                 parts += "e.likely_headsup = ?"
                 args += if (it) 1 else 0
-            }
-            matcher.isRemoved?.let {
-                parts += if (it) "e.event_type = 'REMOVED'" else "e.event_type != 'REMOVED'"
             }
             if (parts.isEmpty()) Fragment.ALWAYS_TRUE
             else Fragment(parts.joinToString(" AND "), args)

@@ -271,20 +271,20 @@ sealed interface Matcher {
     }
 
     /**
-     * 依推斷屬性匹配（isAudible / likelyHeadsup / isRemoved）
+     * 依推斷屬性匹配（isAudible / likelyHeadsup）。
      *
-     * 每個欄位：true = 必須, false = 排除, null = 不限。
-     * 全為 null = 永遠通過。
+     * 每個欄位：true = 必須, false = 排除, null = 不限。全為 null = 永遠通過。
+     *
+     * Plan 2 W1：`isRemoved` 移除 — 「已移除」改為 view-level filter 維度（與 dedup 並列），
+     * 不再走 rule chip 體系。舊 JSON 含 `isRemoved` 由 fromJson graceful drop。
      */
     data class DerivedProperty(
         val isAudible: Boolean? = null,
-        val likelyHeadsup: Boolean? = null,
-        val isRemoved: Boolean? = null
+        val likelyHeadsup: Boolean? = null
     ) : Matcher {
         override fun matches(context: MatchContext): Boolean {
             if (isAudible != null && context.isAudible != isAudible) return false
             if (likelyHeadsup != null && context.likelyHeadsup != likelyHeadsup) return false
-            if (isRemoved != null && context.isRemoved != isRemoved) return false
             return true
         }
 
@@ -292,7 +292,6 @@ sealed interface Matcher {
             put("type", "DerivedProperty")
             put("isAudible", isAudible ?: JSONObject.NULL)
             put("likelyHeadsup", likelyHeadsup ?: JSONObject.NULL)
-            put("isRemoved", isRemoved ?: JSONObject.NULL)
         }
     }
 
@@ -325,8 +324,8 @@ sealed interface Matcher {
             )
             "DerivedProperty" -> DerivedProperty(
                 isAudible = if (json.isNull("isAudible")) null else json.getBoolean("isAudible"),
-                likelyHeadsup = if (json.isNull("likelyHeadsup")) null else json.getBoolean("likelyHeadsup"),
-                isRemoved = if (json.isNull("isRemoved")) null else json.getBoolean("isRemoved")
+                likelyHeadsup = if (json.isNull("likelyHeadsup")) null else json.getBoolean("likelyHeadsup")
+                // Plan 2 W1：舊 JSON 含 isRemoved 此處 graceful drop
             )
             "Field" -> Field(
                 field = json.getString("field"),

@@ -60,6 +60,10 @@ object RuleRepository {
     /** 內建 LIST_FILTER rule 的固定 id（不可變） */
     private const val BUILTIN_AUDIBLE_ID = "builtin-list-audible"
     private const val BUILTIN_HEADSUP_ID = "builtin-list-headsup"
+    // Plan 2 W1：「已移除」改為 view-level filter（與 dedup 並列），不再走 rule chip 體系。
+    // 內建 rule 從 builtInListFilterRules() 移除 — ensureBuiltInListFilterRules 用 isBuiltIn=true
+    // 清理會自動剝離舊 SharedPreferences / 備份中此 id 的 rule。BUILTIN_DISMISSED_ID const +
+    // builtInRuleIdDismissed() API 暫保留為 dead value 避免 caller compile 破壞（W1.d 改 caller）。
     private const val BUILTIN_DISMISSED_ID = "builtin-list-dismissed"
 
     /**
@@ -91,19 +95,17 @@ object RuleRepository {
             matchers = listOf(Matcher.DerivedProperty(likelyHeadsup = true)),
             action = RuleAction.ListFilter(deduplicate = true),
             isBuiltIn = true
-        ),
-        Rule(
-            id = BUILTIN_DISMISSED_ID,
-            name = "Dismissed",
-            matchers = listOf(Matcher.DerivedProperty(isRemoved = true)),
-            action = RuleAction.ListFilter(deduplicate = true),
-            isBuiltIn = true
         )
+        // Plan 2 W1：BUILTIN_DISMISSED_ID rule 移除 — 改 view-level filter chip
     )
 
     /** 提供給 Shortcut / Widget 解析「響過」等系統入口 */
     fun builtInRuleIdAudible(): String = BUILTIN_AUDIBLE_ID
     fun builtInRuleIdHeadsup(): String = BUILTIN_HEADSUP_ID
+    /**
+     * Plan 2 W1：dead value — rule 已從 builtInListFilterRules 移除，RuleEngine.getRule() 對此 id
+     * 回傳 null。caller 由 W1.d 改用 viewModel.setRemovalFilter(OnlyRemoved)。
+     */
     fun builtInRuleIdDismissed(): String = BUILTIN_DISMISSED_ID
 
     /**

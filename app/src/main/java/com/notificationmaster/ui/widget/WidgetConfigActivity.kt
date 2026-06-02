@@ -163,7 +163,9 @@ class WidgetConfigActivity : AppCompatActivity() {
         if (derived != null) {
             if (derived.isAudible == true) return getString(R.string.preset_audible)
             if (derived.likelyHeadsup == true) return getString(R.string.preset_headsup)
-            if (derived.isRemoved == true) return getString(R.string.preset_dismissed)
+            // Plan 2 W1：DerivedProperty.isRemoved 移除 — Widget dismissed 顯示由 W1.d
+            // 改 deep link + viewModel.setRemovalFilter(OnlyRemoved)，此處 dismissed label
+            // 分支移除（widget rule 不再含此 matcher）
         }
         val pkg = matchers.filterIsInstance<Matcher.Package>().firstOrNull()
         if (pkg != null) return AppLabelCache.getLabel(this, pkg.packageName)

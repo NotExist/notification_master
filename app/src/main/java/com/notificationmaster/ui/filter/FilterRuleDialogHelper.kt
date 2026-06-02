@@ -265,12 +265,11 @@ object FilterRuleDialogHelper {
             )
         }
 
-        // 建立 3 個 derived property 列
+        // Plan 2 W1：derived property 列移除 isRemoved（改 view-level filter chip）
         data class DerivedDef(val key: String, val labelResId: Int)
         val derivedDefs = listOf(
             DerivedDef("isAudible", R.string.derived_audible),
-            DerivedDef("likelyHeadsup", R.string.derived_headsup),
-            DerivedDef("isRemoved", R.string.derived_removed)
+            DerivedDef("likelyHeadsup", R.string.derived_headsup)
         )
         val derivedToggleGroups = mutableMapOf<String, com.google.android.material.button.MaterialButtonToggleGroup>()
         for (def in derivedDefs) {
@@ -320,7 +319,7 @@ object FilterRuleDialogHelper {
                 }
                 fillDerived("isAudible", dp.isAudible)
                 fillDerived("likelyHeadsup", dp.likelyHeadsup)
-                fillDerived("isRemoved", dp.isRemoved)
+                // Plan 2 W1：isRemoved 移除
             }
             if (hasFlags) {
                 layoutFlagsSection.visibility = View.VISIBLE
@@ -782,11 +781,11 @@ object FilterRuleDialogHelper {
             }
 
             // DerivedProperty matcher
+            // Plan 2 W1：isRemoved 移除 — 「已移除」改 view-level filter chip
             val audible = when (readTriState(derivedToggleGroups["isAudible"]!!)) { 1 -> true; -1 -> false; else -> null }
             val headsup = when (readTriState(derivedToggleGroups["likelyHeadsup"]!!)) { 1 -> true; -1 -> false; else -> null }
-            val removed = when (readTriState(derivedToggleGroups["isRemoved"]!!)) { 1 -> true; -1 -> false; else -> null }
-            if (audible != null || headsup != null || removed != null) {
-                matchers.add(Matcher.DerivedProperty(audible, headsup, removed))
+            if (audible != null || headsup != null) {
+                matchers.add(Matcher.DerivedProperty(audible, headsup))
             }
 
             // Field 條件 matchers

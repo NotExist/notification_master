@@ -26,6 +26,10 @@ object EventFilterSqlBuilder {
         val args = mutableListOf<Any?>()
         val where = StringBuilder("1=1")
 
+        // Plan 2 W1：所有 query 排除 REMOVED event row（REMOVED 不顯示為 list row，
+        // 改成「對前 row 的 attribute」 — 在 NotificationEnricher 計算 row.isRemoved 廣義屬性）
+        where.append(" AND e.event_type != 'REMOVED'")
+
         // matchers
         val matcherFragment = MatcherSqlTranslator.toFragment(spec.matchers)
         if (matcherFragment.sql != "1=1") {

@@ -18,6 +18,17 @@ import com.notificationmaster.core.filter.RuleAction
  *   把 matchers 轉成 WHERE fragment，下壓查詢
  * - **In-memory 路徑**（RuleEngine）：[Matcher.matches] 對單一 [com.notificationmaster.core.filter.MatchContext]
  */
+/**
+ * Plan 2 W1：「已移除」過濾三態。
+ *
+ * - [None]：不過濾（顯示所有 row，dim/不 dim 混合）
+ * - [OnlyRemoved]：只顯示 row.isRemoved=true 的 row（dim list）
+ * - [ExcludeRemoved]：只顯示 row.isRemoved=false 的 row（活著的 list）
+ *
+ * UI chip 暫對應 None ↔ OnlyRemoved 兩態，ExcludeRemoved 為未來擴充預留。
+ */
+enum class RemovalFilter { None, OnlyRemoved, ExcludeRemoved }
+
 data class EventFilterSpec(
     /** 篩選 matchers，AND 組合（與 Rule.matchers 相同語意） */
     val matchers: List<Matcher> = emptyList(),
@@ -26,6 +37,8 @@ data class EventFilterSpec(
     val timeFrom: Long? = null,
     val timeTo: Long? = null,
     val deduplicate: Boolean = false,
+    /** Plan 2 W1：view-level「已移除」過濾，與 dedup 並列 */
+    val removalFilter: RemovalFilter = RemovalFilter.None,
     val orderBy: OrderBy = OrderBy.PostTimeDesc,
     val limit: Int? = null
 ) {
@@ -49,7 +62,6 @@ data class EventFilterSpec(
     val channelId: String? get() = matchers.filterIsInstance<Matcher.Channel>().firstOrNull()?.channelId
     val isAudible: Boolean? get() = derivedFlag { it.isAudible }
     val likelyHeadsup: Boolean? get() = derivedFlag { it.likelyHeadsup }
-    val isRemoved: Boolean? get() = derivedFlag { it.isRemoved }
     val keyword: String? get() = matchers.filterIsInstance<Matcher.Keyword>().firstOrNull()
         ?.takeUnless { it.isRegex }?.pattern
 
@@ -57,21 +69,22 @@ data class EventFilterSpec(
         matchers.filterIsInstance<Matcher.DerivedProperty>().firstNotNullOfOrNull(extract)
 }
 
-/** 從核心 chip 狀態建構簡單 spec（Timeline 用）。所有為 null 的欄位 = 不限。 */
+/**
+ * 從核心 chip 狀態建構簡單 spec（Timeline 用）。所有為 null 的欄位 = 不限。
+ * Plan 2 W1：isRemoved 參數移除，改用 [EventFilterSpec.removalFilter] 在 caller 端設定。
+ */
 fun coreFilterSpecOf(
     isAudible: Boolean? = null,
     likelyHeadsup: Boolean? = null,
-    isRemoved: Boolean? = null,
     deduplicate: Boolean = false,
     timeFrom: Long? = null,
     timeTo: Long? = null
 ): EventFilterSpec {
     val matchers = mutableListOf<Matcher>()
-    if (isAudible != null || likelyHeadsup != null || isRemoved != null) {
+    if (isAudible != null || likelyHeadsup != null) {
         matchers += Matcher.DerivedProperty(
             isAudible = isAudible,
-            likelyHeadsup = likelyHeadsup,
-            isRemoved = isRemoved
+            likelyHeadsup = likelyHeadsup
         )
     }
     return EventFilterSpec(
