@@ -57,24 +57,53 @@ import kotlinx.coroutines.withTimeoutOrNull
  * else                   → Ready(canLoadMore=true)
  * ```
  */
-sealed interface TimelineLoadState {
-    /** App 開啟到第一筆 emit 之間；冷啟反饋階段 */
-    object InitialLoading : TimelineLoadState
+/**
+ * Plan 2 W20：載入階段（純資料層）。
+ * 跟 lazyload / footer / error 各維度正交，由 [TimelineLoadState] product type 組合。
+ */
+sealed interface LoadPhase {
+    /** Cold start，count Flow / items 尚未 emit */
+    object Initial : LoadPhase
 
-    /** 有資料、無動作；可繼續 lazyload */
-    data class Ready(val canLoadMore: Boolean) : TimelineLoadState
+    /** 有資料可顯示（items / displays / total 任一就緒）*/
+    object Loaded : LoadPhase
 
-    /** Lazyload 進行中（pageSize 擴張，等待 DAO emit）*/
-    object LoadingMore : TimelineLoadState
+    /** DB 真為空（totalRaw == 0）*/
+    object Empty : LoadPhase
+}
 
-    /** pageSize >= totalCount，DB 全部 events 已載入 */
-    object EndReached : TimelineLoadState
+/**
+ * Plan 2 W20：頂層載入狀態改 **product type**，各維度 (phase / isLazyloading / canLoadMore /
+ * footerCooldown / error) 顯式為 field。各 UI 投影 derive 自己關心的 field，消除舊 sealed enum
+ * 用 when ordering 短路造成的「為 footer 改 state ordering 順帶影響 SwipeRefresh」副作用。
+ *
+ * Plan 1 W8 / W16 / W2.e / W19 對應到此結構：
+ * - W8 sticky loading：footer derive 用 `isLazyloading || footerCooldown`，不再靠 state ordering
+ * - W16 raw-exhausted：邏輯下放到 `canLoadMore` field 計算
+ * - W2.e cooldown：抽出獨立 `_footerCooldown` StateFlow，loadNextDay 不再內含 delay
+ * - W19 condition：保留在 loadNextDay 等待真實 items 變化的判定
+ */
+data class TimelineLoadState(
+    val phase: LoadPhase,
+    val isLazyloading: Boolean = false,
+    val canLoadMore: Boolean = false,
+    val footerCooldown: Boolean = false,
+    val error: Throwable? = null
+) {
+    companion object {
+        val InitialLoading = TimelineLoadState(phase = LoadPhase.Initial)
+    }
+}
 
-    /** count Flow 確認 DB 為空（與 InitialLoading 區分）*/
-    object EmptyDb : TimelineLoadState
-
-    /** enrich / parse / DAO 例外。list 仍可用快取資料渲染，不 crash */
-    data class Error(val cause: Throwable) : TimelineLoadState
+/**
+ * Plan 2 W21：footer 視覺狀態獨立。
+ * 從 [TimelineLoadState] derive 為純函數，所有 footer 觸發 / 調整邏輯集中於此。
+ */
+sealed interface FooterState {
+    object None : FooterState         // 無 footer（cold start / empty / error）
+    object Loading : FooterState      // 載入中…（spinner）
+    object Pending : FooterState      // ↓ 繼續滾動載入更多
+    object EndReached : FooterState   // 已無更多記錄
 }
 
 /**
@@ -303,58 +332,95 @@ class TimelineViewModel(
     private val _isLoadingMore = MutableStateFlow(false)
 
     /**
-     * Phase 26：頂層載入狀態。Fragment 觀察此值用單一 `when` 映射所有 indicator
-     * （SwipeRefresh 圓圈 / progress 光條 / footer / emptyState / Snackbar）。
-     *
-     * 派生時序：所有 source（allNotifications / totalCount / _pageSize / _isLoadingMore /
-     * _errorCh）任一變動觸發重算。combine 對 StateFlow 通常合併同 dispatch frame。
+     * Plan 2 W21：W2.e cooldown 從 loadNextDay 抽出獨立 StateFlow。
+     * loadNextDay 完成後由 cooldown coroutine 設 true → delay → set false。
+     * footer 依 `isLazyloading || footerCooldown` 派生顯示時長，與 state ordering 無關。
      */
+    private val _footerCooldown = MutableStateFlow(false)
+
     /**
-     * Phase 26 / W2.a 重寫：頂層載入狀態。Fragment 觀察此值用單一 `when` 映射所有 indicator
-     * （SwipeRefresh 圓圈 / progress 光條 / footer / emptyState / Snackbar）。
+     * Plan 2 W20：頂層載入狀態 product type 重寫。
      *
-     * W2.a：引入 totalRawCount 區分「DB 真為空（EmptyDb）」與「chip 篩到 0（EndReached）」；
-     * 6 個 source 用巢狀 combine 拆 Triple 規避 stdlib combine 最多 5 元的限制。
+     * 修前（sealed enum + when ordering 短路）：為 footer 顯示時長改 ordering（W8 / W16）會
+     * 順帶影響 SwipeRefresh / counter 等其他 UI。
+     *
+     * 修後：各維度（phase / isLazyloading / canLoadMore / footerCooldown / error）顯式為 field，
+     * UI 投影各自 derive 關心欄位，互不干擾。
      */
-    val state: StateFlow<TimelineLoadState> = combine(
+    val loadState: StateFlow<TimelineLoadState> = combine(
         displayedNotifications,
         totalCount,
         _isLoadingMore,
-        combine(allNotifications, totalRawCount) { items, totalRaw -> items to totalRaw },
+        combine(allNotifications, totalRawCount, _footerCooldown) { items, totalRaw, cooldown ->
+            Triple(items, totalRaw, cooldown)
+        },
         _errorCh
-    ) { displays, total, loading, itemsAndRaw, err ->
-        val items = itemsAndRaw.first
-        val totalRaw = itemsAndRaw.second
-        val s = when {
-            err != null              -> TimelineLoadState.Error(err)
-            // W2.a：DB 真為空才算 EmptyDb（與 chip 篩 0 區別）
-            totalRaw == 0            -> TimelineLoadState.EmptyDb
-            total == null            -> TimelineLoadState.InitialLoading
-            // W8：loading sticky — 只要 loadNextDay() 還在跑（含 W2.e delay），
-            // state 永遠 LoadingMore，不被 `displays >= total` 搶先。
-            loading                  -> TimelineLoadState.LoadingMore
-            // W2.a：chip 篩到 0（DB 非空）→ list 立即可空、無 more
-            total == 0               -> TimelineLoadState.EndReached
-            // cold start 期間 items / displays 都 empty
-            items.isEmpty()          -> TimelineLoadState.InitialLoading
-            // W16：DB raw events 全載完 → EndReached（解 chip OFF + dedup ON 時
-            // displays 為 client-overlay 算的 pageSize 範圍內 unique，total 是 SQL 算的
-            // 全 DB unique，視角不一致導致 `displays >= total` 永不成立 → lazyload 過度觸
-            // 發 50+ 次直到 raw 全載完。改成 raw 視角優先判定。
-            totalRaw != null && items.size >= totalRaw -> TimelineLoadState.EndReached
-            // W2.a：totalCount 已是 chip-aware，chip-filtered 場景也能 EndReached
-            displays.size >= total   -> TimelineLoadState.EndReached
-            else                     -> TimelineLoadState.Ready(canLoadMore = true)
+    ) { displays, total, loading, bundle, err ->
+        val items = bundle.first
+        val totalRaw = bundle.second
+        val cooldown = bundle.third
+
+        val phase: LoadPhase = when {
+            err != null -> LoadPhase.Initial  // Error 仍標 Initial，UI 主要看 error field
+            totalRaw == 0 -> LoadPhase.Empty
+            total == null -> LoadPhase.Initial
+            items.isEmpty() -> LoadPhase.Initial
+            else -> LoadPhase.Loaded
         }
-        // Phase 31ak / W2.a：log state 公式各 input + 結果
-        ProfileLogger.append(
-            "State",
-            "emit=${s::class.simpleName} displays=${displays.size} items=${items.size} " +
-                "total=${total ?: "null"} totalRaw=${totalRaw ?: "null"} " +
-                "loading=$loading err=${err != null}"
+
+        // canLoadMore 各維度合算：raw 未載完 + chip-aware total 未顯示完 + 未達 MAX_PAGE_SIZE
+        val canLoadMore = when {
+            err != null -> false
+            phase != LoadPhase.Loaded -> false
+            total == 0 -> false  // chip 篩 0
+            totalRaw != null && items.size >= totalRaw -> false  // W16: raw 全載完
+            total != null && displays.size >= total -> false     // W2.a: chip-aware 全顯示
+            _pageSize.value >= MAX_PAGE_SIZE -> false
+            else -> true
+        }
+
+        TimelineLoadState(
+            phase = phase,
+            isLazyloading = loading,
+            canLoadMore = canLoadMore,
+            footerCooldown = cooldown,
+            error = err
         )
-        s
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), TimelineLoadState.InitialLoading)
+
+    /**
+     * Plan 2 W21：FooterState 獨立 derive。
+     * 所有 footer 顯示邏輯（含 W2.e min visible cooldown）集中此公式。
+     */
+    val footerState: StateFlow<FooterState> = loadState.map { s ->
+        when {
+            s.phase == LoadPhase.Empty -> FooterState.None
+            s.phase == LoadPhase.Initial -> FooterState.None
+            s.error != null -> FooterState.None
+            s.isLazyloading || s.footerCooldown -> FooterState.Loading
+            s.canLoadMore -> FooterState.Pending
+            else -> FooterState.EndReached
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), FooterState.None)
+
+    /**
+     * @Deprecated 舊 [state] 引用保留為 alias 給 SearchFragment / ArchiveFragment 等暫未遷移處；
+     * 新 code 直接讀 [loadState] / [footerState]。本 plan 範圍只動 Timeline，其他 fragment 後續再清。
+     */
+    val state: StateFlow<TimelineLoadState> = loadState
+
+    init {
+        viewModelScope.launch {
+            // 把舊 state 公式 log 對齊新結構，方便 log 觀察各維度變化
+            loadState.collect { s ->
+                ProfileLogger.append(
+                    "State",
+                    "emit phase=${s.phase::class.simpleName} loading=${s.isLazyloading} " +
+                        "canLoadMore=${s.canLoadMore} cooldown=${s.footerCooldown} err=${s.error != null}"
+                )
+            }
+        }
+    }
 
     /**
      * RecyclerView LayoutManager.onSaveInstanceState() 的結果。
@@ -528,27 +594,17 @@ class TimelineViewModel(
      * _isLoadingMore，確保 LoadingMore footer 至少可見 200ms 給 user 視覺回饋。
      */
     fun loadNextDay() {
-        val st = state.value
-        if (st !is TimelineLoadState.Ready || !st.canLoadMore) return
+        val st = loadState.value
+        if (st.phase != LoadPhase.Loaded || !st.canLoadMore) return
         if (_isLoadingMore.value) return
-        val totalSnapshot = totalCount.value
-        val displaysSnapshot = displayedNotifications.value.size
-        if (totalSnapshot != null && displaysSnapshot >= totalSnapshot) {
-            ProfileLogger.append("Timeline", "loadNextDay skip: displays=$displaysSnapshot >= total=$totalSnapshot")
-            return
-        }
-        // W2.b：DB 已載完（上次 query 回傳 size < 當前 limit）
+        // canLoadMore 公式已涵蓋 displays>=total / raw exhausted / MAX cap guard
+        // 此處純粹再讀 lastQuery snapshot 防 race（_pageSize 剛 set 但 flatMapLatest 未跑）
         val lastQuerySize = allNotifications.value.size
         if (lastQuerySize < _pageSize.value) {
             ProfileLogger.append(
                 "Timeline",
                 "loadNextDay skip: lastQuery=$lastQuerySize < pageSize=${_pageSize.value} (DB exhausted)"
             )
-            return
-        }
-        // W2.b：hard cap 防失控（chip 篩 0 + lastQuery 巧合等於 pageSize 的邊界）
-        if (_pageSize.value >= MAX_PAGE_SIZE) {
-            ProfileLogger.append("Timeline", "loadNextDay skip: pageSize=${_pageSize.value} >= MAX_PAGE_SIZE=$MAX_PAGE_SIZE")
             return
         }
 
@@ -558,31 +614,31 @@ class TimelineViewModel(
         ProfileLogger.append(
             "Timeline",
             "loadNextDay trigger target=$target beforeDisplayed=$beforeDisplayedSize " +
-                "allItems=$beforeItemsSize total=$totalSnapshot"
+                "allItems=$beforeItemsSize"
         )
         _isLoadingMore.value = true
         _pageSize.value = target
 
         viewModelScope.launch {
+            // W19：等真實 items 變化或 displays 增加才視為「query 回來」。
             val result = withTimeoutOrNull(10_000L) {
-                // W19：condition 改為「真的有新數據進來」— 等 displays 或 items 增加才成立。
-                // 修前 W2.b 含 `items.size < _pageSize.value` trigger 那刻立即成立（剛把
-                // _pageSize 設為 target，items 仍舊），delay 在 query 回來前就開始計時 →
-                // user 觀察 LoadingMore footer → PendingMore → 新內容才呈現的錯亂序列。
-                // DB 已底由 state 公式 W16 加的 `items >= totalRaw` EndReached 判定。
                 combine(displayedNotifications, allNotifications) { displays, items ->
                     displays.size > beforeDisplayedSize || items.size > beforeItemsSize
                 }.first { it }
             }
-            // W2.e / W18：condition_met 後 delay 讓 LoadingMore footer 可見。
-            // W18：runtime 從 AppPreferences 讀，user 可在 settings 即時調整。
-            if (result != null) delay(AppPreferences.getLazyloadFooterMinMs(getApplication()))
             _isLoadingMore.value = false
             ProfileLogger.append(
                 "Timeline",
                 "loadNextDay done reason=${if (result == null) "timeout" else "condition_met"} " +
                     "afterDisplayed=${displayedNotifications.value.size} afterItems=${allNotifications.value.size}"
             )
+            // W21：cooldown 從 loadNextDay 抽出 — _footerCooldown 設 true → delay → set false。
+            // footer 顯示時長與 loadNextDay 邏輯解耦，state 公式不需 ordering 短路撐住 LoadingMore。
+            if (result != null) {
+                _footerCooldown.value = true
+                delay(AppPreferences.getLazyloadFooterMinMs(getApplication()))
+                _footerCooldown.value = false
+            }
         }
     }
 

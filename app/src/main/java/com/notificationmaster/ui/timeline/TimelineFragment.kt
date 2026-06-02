@@ -214,9 +214,12 @@ class TimelineFragment : Fragment() {
                     // Phase 26：guard 改讀 viewModel.state — single source of truth，
                     // 只有 Ready(canLoadMore) 才觸發。LoadingMore / EndReached / Initial /
                     // Empty / Error 都不會 fire，杜絕 D 的反覆觸發。
-                    val st = viewModel.state.value
+                    // W20：state 改 product type — Ready 等價於 phase=Loaded + !isLazyloading
+                    val st = viewModel.loadState.value
                     if (totalItemCount - lastVisible <= 30 &&
-                        st is TimelineLoadState.Ready && st.canLoadMore
+                        st.phase == LoadPhase.Loaded &&
+                        !st.isLazyloading &&
+                        st.canLoadMore
                     ) {
                         viewModel.loadNextDay()
                     }
@@ -534,19 +537,22 @@ class TimelineFragment : Fragment() {
         // ListRenderInput 帶 state 一起傳給 renderList/renderCounter，避免在 render 內部讀 state.value
         // 跟 list 在不同時間點 emit 而錯位。
         viewLifecycleOwner.lifecycleScope.launch {
+            // W21：footer 加入 combine — footerState 從 loadState derive 為純函數，
+            // collect 端拿到一致快照（避免 state 與 footer 不同 dispatch frame race）。
             combine(
                 viewModel.displayedNotifications,
                 viewModel.removedIds,
                 viewModel.filterText,
-                viewModel.coreSpec,
-                viewModel.state
-            ) { allList, removed, filterText, spec, state ->
+                combine(viewModel.coreSpec, viewModel.footerState) { s, f -> s to f },
+                viewModel.loadState
+            ) { allList, removed, filterText, specAndFooter, state ->
                 ListRenderInput(
                     allNotifications = allList,
                     removedIds = removed,
                     filterText = filterText,
-                    spec = spec,
-                    state = state
+                    spec = specAndFooter.first,
+                    state = state,
+                    footer = specAndFooter.second
                 )
             }
                 // W11：Service 高頻寫入時 query/count/ranking 三個 Flow 連環 re-emit（116 log
@@ -571,7 +577,7 @@ class TimelineFragment : Fragment() {
                 viewModel.totalCount,
                 viewModel.filterText,
                 viewModel.coreSpec,
-                viewModel.state
+                viewModel.loadState
             ) { all, total, text, spec, state ->
                 CounterInput(all, total, text, spec, state)
             }
@@ -596,15 +602,12 @@ class TimelineFragment : Fragment() {
                 if (processing) b.progressLoading.show() else b.progressLoading.hide()
             }
         }
+        // W20.b：各 UI 投影獨立 derive 對應 field，不再共用 sealed when 短路
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.state.collectLatest { st ->
-                // Phase 29：state transition log，定位 cold start 為何卡 InitialLoading
-                ProfileLogger.append("Fragment", "state=${st::class.simpleName}")
+            viewModel.loadState.collectLatest { st ->
                 if (_binding == null) return@collectLatest
-                _binding?.swipeRefresh?.isRefreshing = st is TimelineLoadState.InitialLoading
-                if (st is TimelineLoadState.Error) {
-                    showErrorSnackbar(st.cause)
-                }
+                _binding?.swipeRefresh?.isRefreshing = st.phase == LoadPhase.Initial
+                st.error?.let { showErrorSnackbar(it) }
             }
         }
     }
@@ -638,7 +641,8 @@ class TimelineFragment : Fragment() {
         val removedIds: Set<String>,
         val filterText: String,
         val spec: EventFilterSpec,
-        val state: TimelineLoadState
+        val state: TimelineLoadState,
+        val footer: FooterState
     )
 
     private data class CounterInput(
@@ -668,7 +672,9 @@ class TimelineFragment : Fragment() {
         // Phase 31ak：renderList entry log — 對應 ListRenderInput 各 source 當下值
         ProfileLogger.append(
             "Fragment",
-            "renderList entry state=${input.state::class.simpleName} " +
+            "renderList entry phase=${input.state.phase::class.simpleName} " +
+                "loading=${input.state.isLazyloading} canLoadMore=${input.state.canLoadMore} " +
+                "footer=${input.footer::class.simpleName} " +
                 "allDisplays=${input.allNotifications.size} filtered=${filtered.size} " +
                 "filterText='${input.filterText}' removedIds=${input.removedIds.size}"
         )
@@ -677,28 +683,25 @@ class TimelineFragment : Fragment() {
         // 「submit 沒真的執行 → 留下 stale list」的 bug）。InitialLoading 例外：cold start
         // 保留舊內容避免閃白頁。
         if (filtered.isEmpty()) {
-            when (input.state) {
-                is TimelineLoadState.EmptyDb -> {
+            // W20：phase product type 取代 sealed when 分支
+            when (input.state.phase) {
+                LoadPhase.Empty -> {
                     ProfileLogger.append("Fragment", "renderList isEmpty case=EmptyDb")
                     binding.emptyState.visibility = View.VISIBLE
                     binding.recyclerView.visibility = View.GONE
                     updateEmptyStateForPermission()
-                    submitWithFooter(emptyList(), input.state)
+                    submitWithFooter(emptyList(), input.footer)
                 }
-                is TimelineLoadState.InitialLoading -> {
+                LoadPhase.Initial -> {
                     ProfileLogger.append("Fragment", "renderList isEmpty case=InitialLoading hold")
                     // cold start：保留舊 list；不 submit empty 避免閃白
                 }
-                else -> {
-                    // Ready / LoadingMore / EndReached / Error：list 確該空（chip 篩 0 或
-                    // search 0 結果）— 明確 submit empty + footer 反映 loading / end-of-list 狀態
-                    ProfileLogger.append(
-                        "Fragment",
-                        "renderList isEmpty case=other(${input.state::class.simpleName}) submitEmpty"
-                    )
+                LoadPhase.Loaded -> {
+                    // chip 篩 0 / search 0 結果：明確 submit empty + footer 反映狀態
+                    ProfileLogger.append("Fragment", "renderList isEmpty case=Loaded submitEmpty")
                     binding.emptyState.visibility = View.GONE
                     binding.recyclerView.visibility = View.VISIBLE
-                    submitWithFooter(emptyList(), input.state)
+                    submitWithFooter(emptyList(), input.footer)
                 }
             }
         } else {
@@ -713,7 +716,7 @@ class TimelineFragment : Fragment() {
             val timelineItems: List<TimelineItem> = withContext(Dispatchers.IO) {
                 buildTimelineItemsWithSimilarCountInIo(filtered, input.removedIds, eventDao)
             }
-            submitWithFooter(timelineItems, input.state)
+            submitWithFooter(timelineItems, input.footer)
         }
 
         // W2.d：末尾自動 lazyload 條件改善
@@ -723,14 +726,15 @@ class TimelineFragment : Fragment() {
         // - state.canLoadMore guard 配合 W2.b loadNextDay 內 DB-exhausted 判定，能 hard 截斷
         //   chip 篩 0 + DB 載完的無限迴圈
         // W18：閾值改 runtime 從 AppPreferences 讀，user 可在 settings 即時調整
-        // （設為 0 完全關閉「末尾自動湊滿」，只剩 onScrolled 手動觸發）
+        // W20：state 改 product type — Ready(canLoadMore) 等價於 phase=Loaded + canLoadMore + !isLazyloading
         val threshold = com.notificationmaster.core.prefs.AppPreferences
             .getLazyloadAutoThreshold(requireContext())
         val displaysSize = input.allNotifications.size
         if (threshold > 0 &&
             input.filterText.isEmpty() &&
             displaysSize < threshold &&
-            input.state is TimelineLoadState.Ready &&
+            input.state.phase == LoadPhase.Loaded &&
+            !input.state.isLazyloading &&
             input.state.canLoadMore
         ) {
             ProfileLogger.append(
@@ -742,25 +746,22 @@ class TimelineFragment : Fragment() {
     }
 
     /**
-     * W2.c：抽 helper 統一 submit 路徑，避免 isEmpty / non-empty 各走一條導致漏 submit。
-     * Footer 由 state 派生（LoadingMore / EndReached）放在 items 末尾，配合 W2.e
-     * loadNextDay 末尾 delay 200ms，user 能穩定看到 footer。
+     * W2.c：統一 submit 路徑，避免 isEmpty / non-empty 各走一條導致漏 submit。
+     * W21：footer 改用 [FooterState] 純 mapping，所有 footer 顯示邏輯（cooldown / canLoadMore
+     * 判定）集中於 ViewModel.footerState 公式。
      */
-    private fun submitWithFooter(items: List<TimelineItem>, state: TimelineLoadState) {
+    private fun submitWithFooter(items: List<TimelineItem>, footerState: FooterState) {
         val binding = _binding ?: return
-        val footer = when (state) {
-            is TimelineLoadState.LoadingMore -> TimelineItem.LoadingMore
-            is TimelineLoadState.EndReached -> TimelineItem.EndOfTimeline
-            // B1-ux：Ready 但 DB 仍有未載完 → 顯示常駐 hint footer，讓 scrollbar 範圍永遠
-            // 涵蓋底部 footer 位置，user 快速滑到底時 footer 已在範圍內（不必等 lazyload
-            // 觸發 + LoadingMore footer 才出現）。
-            is TimelineLoadState.Ready -> if (state.canLoadMore) TimelineItem.PendingMore else null
-            else -> null
+        val footer: TimelineItem? = when (footerState) {
+            FooterState.Loading -> TimelineItem.LoadingMore
+            FooterState.EndReached -> TimelineItem.EndOfTimeline
+            FooterState.Pending -> TimelineItem.PendingMore
+            FooterState.None -> null
         }
         val withFooter = if (footer != null) items + footer else items
         ProfileLogger.append(
             "Fragment",
-            "renderList submit state=${state::class.simpleName} items=${withFooter.size} footer=${footer?.javaClass?.simpleName ?: "none"}"
+            "renderList submit footer=${footerState::class.simpleName} items=${withFooter.size}"
         )
         adapter?.submitList(withFooter) {
             pendingScrollRestore?.let {
@@ -774,8 +775,8 @@ class TimelineFragment : Fragment() {
         // Phase 22：displayedNotifications 已包含 client-side dedup + rule predicate，
         // counter 只需把 text filter 套上計算即可，不再額外 distinctBy。
         val filtered = filterNotifications(input.allNotifications, input.filterText)
-        // Phase 26：loadingPlaceholder 在 InitialLoading 顯示；其他 state（含 LoadingMore）都直接顯示數字
-        val loadedDisplay: String = if (input.state is TimelineLoadState.InitialLoading) {
+        // Phase 26 / W20：loadingPlaceholder 在 phase=Initial 顯示；其他 phase 直接顯示數字
+        val loadedDisplay: String = if (input.state.phase == LoadPhase.Initial) {
             getString(R.string.timeline_count_loading_placeholder)
         } else {
             filtered.size.toString()
