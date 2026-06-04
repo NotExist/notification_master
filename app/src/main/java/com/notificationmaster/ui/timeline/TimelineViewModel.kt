@@ -258,16 +258,36 @@ class TimelineViewModel(
      * - Service 寫入任何 event → Room invalidation → Flow re-emit
      * - Lazyload → _pageSize 擴張 → flatMapLatest 重新訂閱
      * - `.catch` 攔截 DAO / enrich 例外，emit 空 list + 推 errorCh（不傳到 collectLatest 導致 crash）
+     *
+     * W22-x：query 從 `EventFilterSpec.All` 改用 `coreSpec`（含 dedup + rule matchers）。
+     *
+     * 修前：SQL 拿 N 個 raw events（不 dedup），enrich 全部 N 個，client-side overlay
+     * 才套 dedup。在 dedup ON + raw 高度重複 nkey 場景下（如 80 raw 對應 8 unique nkey），
+     * enrich 大量浪費；且 `displays.size << total` 持續成立造成 lazyload 連發到 raw 撞底。
+     *
+     * 修後：SQL `LIMIT N` 套在 dedup 後 outer query（[EventFilterSqlBuilder] 已支援），
+     * 拿 N 個 unique nkey（或 DB 上限）對應 row。enrich 只跑需要顯示的 row；
+     * `query.size < limit` 直接表示 DB 真正 unique nkey 不夠（W2.b guard 自動正確）。
+     * Rule matchers SQL-表達得出（Package / Channel / EventTypes / ChannelProperty）的
+     * 也在 SQL 層套，client-side 只剩 keyword / removalFilter 等 SQL 表達不出的部分。
+     *
+     * pageSize 變動 + coreSpec 變動都會觸發 flatMapLatest 切換（chip 切換時整個 list
+     * 重新 SQL query — 跟 totalCount 訂閱 coreSpec 行為一致）。
      */
-    val allNotifications: StateFlow<List<NotificationDisplay>> = _pageSize
-        .flatMapLatest { size ->
+    val allNotifications: StateFlow<List<NotificationDisplay>> = combine(_pageSize, coreSpec) { size, spec ->
+        spec.copy(limit = size)
+    }
+        .flatMapLatest { spec ->
             val tStart = System.currentTimeMillis()
-            ProfileLogger.append("Timeline", "flatMapLatest start limit=$size")
-            eventDao.query(EventFilterSpec.All.copy(limit = size))
+            ProfileLogger.append(
+                "Timeline",
+                "flatMapLatest start limit=${spec.limit} dedup=${spec.deduplicate}"
+            )
+            eventDao.query(spec)
                 .onEach { items ->
                     ProfileLogger.append(
                         "Timeline",
-                        "query emit limit=$size size=${items.size} since-start=${System.currentTimeMillis() - tStart}ms"
+                        "query emit limit=${spec.limit} size=${items.size} since-start=${System.currentTimeMillis() - tStart}ms"
                     )
                 }
                 .map { items -> enrichAndMap(items) }
