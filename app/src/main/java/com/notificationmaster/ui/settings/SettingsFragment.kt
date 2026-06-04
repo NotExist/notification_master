@@ -483,15 +483,24 @@ class SettingsFragment : Fragment() {
     private fun updateDebugInfo() {
         // Plan 1-zippy-thunder 後續修補：呈現方式維持，僅把路徑「標的」從 event_dump 子層換成
         // debug 主目錄（W4 統一結構：debug/ 下派生 event_dump/ + profile_log/ 等子目錄）。
-        // 檔案數/大小沿用 debugDumper 既有方法（算 event_dump 範圍），不改原計算邏輯。
-        val rootDir = com.notificationmaster.core.debug.DebugPaths.rootDir(requireContext())
-        val fileCount = debugDumper.getDumpFileCount()
-        val totalSize = debugDumper.getDumpTotalSize()
-        val sizeStr = android.text.format.Formatter.formatShortFileSize(requireContext(), totalSize)
-
-        binding.textDebugInfo.text = buildString {
-            append("路徑: ${rootDir.absolutePath}\n")
-            append("檔案數: $fileCount, 大小: $sizeStr")
+        //
+        // W22-mainthread-io：listFiles + 每檔 stat 搬到 IO scope（user 切到 Settings 每次
+        // onResume 都會跑，event_dump 累積上千檔時會卡 main thread 觸發 ANR）。原本
+        // getDumpFileCount + getDumpTotalSize 各 call 一次 listFiles，合併為單次 IO 計算。
+        val ctx = context ?: return
+        val rootDir = com.notificationmaster.core.debug.DebugPaths.rootDir(ctx)
+        binding.textDebugInfo.text = "路徑: ${rootDir.absolutePath}\n計算中…"
+        viewLifecycleOwner.lifecycleScope.launch {
+            val (fileCount, totalSize) = withContext(Dispatchers.IO) {
+                val files = debugDumper.getDumpFiles()
+                files.size to files.sumOf { it.length() }
+            }
+            if (_binding == null) return@launch
+            val sizeStr = android.text.format.Formatter.formatShortFileSize(requireContext(), totalSize)
+            binding.textDebugInfo.text = buildString {
+                append("路徑: ${rootDir.absolutePath}\n")
+                append("檔案數: $fileCount, 大小: $sizeStr")
+            }
         }
     }
 
@@ -952,24 +961,29 @@ class SettingsFragment : Fragment() {
     /**
      * 驗證已儲存的自訂目錄 URI 是否仍可存取
      * 在 onResume 時呼叫，偵測權限撤銷或外部儲存移除等情況
+     *
+     * W22-mainthread-io：`DocumentFile.fromTreeUri` + `canWrite()` 是 SAF + ContentResolver
+     * IPC，搬到 IO scope 避免每次 onResume 卡 main thread。失敗才更新 UI（顯示 lost）。
      */
     private fun validateCustomMediaDir() {
         val ctx = context ?: return
         val uri = AppPreferences.getCustomMediaDirUri(ctx) ?: return
 
-        try {
-            val docFile = DocumentFile.fromTreeUri(ctx, uri)
-            if (docFile == null || !docFile.canWrite()) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            val accessible = withContext(Dispatchers.IO) {
+                try {
+                    val docFile = DocumentFile.fromTreeUri(ctx, uri)
+                    docFile != null && docFile.canWrite()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Custom media dir validation failed", e)
+                    false
+                }
+            }
+            if (!accessible) {
                 _binding?.textMediaDirPath?.let { tv ->
                     tv.text = getString(R.string.settings_media_dir_lost)
                     tv.setTextColor(ContextCompat.getColor(ctx, R.color.status_disabled))
                 }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Custom media dir validation failed", e)
-            _binding?.textMediaDirPath?.let { tv ->
-                tv.text = getString(R.string.settings_media_dir_lost)
-                tv.setTextColor(ContextCompat.getColor(ctx, R.color.status_disabled))
             }
         }
     }
@@ -1426,21 +1440,31 @@ class SettingsFragment : Fragment() {
 
         val ctx = context ?: return
         if (AppPreferences.isBackupDirEnabled(ctx)) {
-            // 有備份目錄 → 檢查是否有未同步規則
-            val json = RuleRepository.readBackupFromDir(ctx) ?: return
-            val newCount = RuleEngine.countNewRulesInBackup(json)
-            if (newCount > 0) {
-                AlertDialog.Builder(ctx)
-                    .setTitle(R.string.filter_backup_found_title)
-                    .setMessage(getString(R.string.filter_backup_found_message, newCount))
-                    .setPositiveButton(R.string.ok) { _, _ ->
-                        mergeBackupJson(json)
-                    }
-                    .setNegativeButton(R.string.cancel, null)
-                    .show()
+            // W22-mainthread-io：有備份目錄場景 `RuleRepository.readBackupFromDir`
+            // (SAF findFile + ContentResolver openInputStream + readText) 跑 main thread
+            // 卡 UI，是 SettingsFragment onViewCreated ANR root cause 之一。搬 IO scope
+            // 計算完成才彈 dialog。
+            viewLifecycleOwner.lifecycleScope.launch {
+                val pair = withContext(Dispatchers.IO) {
+                    val json = RuleRepository.readBackupFromDir(ctx) ?: return@withContext null
+                    val newCount = RuleEngine.countNewRulesInBackup(json)
+                    json to newCount
+                }
+                if (pair == null || _binding == null) return@launch
+                val (json, newCount) = pair
+                if (newCount > 0) {
+                    AlertDialog.Builder(requireContext())
+                        .setTitle(R.string.filter_backup_found_title)
+                        .setMessage(getString(R.string.filter_backup_found_message, newCount))
+                        .setPositiveButton(R.string.ok) { _, _ ->
+                            mergeBackupJson(json)
+                        }
+                        .setNegativeButton(R.string.cancel, null)
+                        .show()
+                }
             }
         } else if (!AppPreferences.isBackupSetupDeclined(ctx)) {
-            // 未設定備份目錄 → 建議設定
+            // 未設定備份目錄 → 建議設定（無 IO，main thread 即可）
             AlertDialog.Builder(ctx)
                 .setTitle(R.string.filter_backup_setup_title)
                 .setMessage(R.string.filter_backup_setup_message)
