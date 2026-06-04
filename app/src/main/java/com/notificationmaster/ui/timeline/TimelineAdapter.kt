@@ -164,7 +164,18 @@ class TimelineAdapter(
             val context = binding.root.context
 
             // 已移除通知淡化（alpha=0.55）
-            binding.root.alpha = if (item.isRemoved) 0.55f else 1.0f
+            val newAlpha = if (item.isRemoved) 0.55f else 1.0f
+            val oldAlpha = binding.root.alpha
+            binding.root.alpha = newAlpha
+            // W22-instrument：log alpha 設定 — 對應 user 觀察「lazyload 第一筆 alpha 沒立即
+            // dim」的 root cause。只在 alpha 實際變動時 log（避免 bind() 高頻 spam）。
+            if (oldAlpha != newAlpha) {
+                com.notificationmaster.core.debug.ProfileLogger.append(
+                    "Adapter",
+                    "bind alpha eventId=${display.eventId} key=${display.notificationKey} " +
+                        "isRemoved=${item.isRemoved} ${oldAlpha}→${newAlpha}"
+                )
+            }
 
             // 標題
             binding.textTitle.text = display.title ?: context.getString(R.string.no_title)
@@ -345,7 +356,7 @@ class TimelineAdapter(
                 oldItem is TimelineItem.NotificationItem && newItem is TimelineItem.NotificationItem -> {
                     val o = oldItem.notification
                     val n = newItem.notification
-                    oldItem.similarCount == newItem.similarCount &&
+                    val same = oldItem.similarCount == newItem.similarCount &&
                         oldItem.isRemoved == newItem.isRemoved &&
                         o.contentHash == n.contentHash &&
                         o.title == n.title &&
@@ -360,6 +371,17 @@ class TimelineAdapter(
                         o.isSuspended == n.isSuspended &&
                         o.isConversation == n.isConversation &&
                         o.template == n.template
+                    // W22-instrument：log isRemoved 變動的 row，幫忙找「應 dim 但沒立即 dim」
+                    // 的 row 對應 DiffUtil 是否 detect 到 content 變動。DiffUtil 在 background
+                    // thread 跑，ProfileLogger 內 synchronized 確保安全。
+                    if (oldItem.isRemoved != newItem.isRemoved) {
+                        com.notificationmaster.core.debug.ProfileLogger.append(
+                            "Adapter",
+                            "diff isRemoved eventId=${n.eventId} key=${n.notificationKey} " +
+                                "${oldItem.isRemoved}→${newItem.isRemoved} sameContent=$same"
+                        )
+                    }
+                    same
                 }
                 oldItem is TimelineItem.DateHeader && newItem is TimelineItem.DateHeader ->
                     oldItem.date == newItem.date

@@ -88,6 +88,16 @@ object NotificationEnricher {
             } else emptyMap()
         val t3b = System.currentTimeMillis()
 
+        // W22-instrument：log latest event map 統計 — 確認 isRemoved 計算依據
+        // user 觀察「lazyload 第一筆 alpha 沒立即 dim」可能 enricher race（service 寫 REMOVED
+        // 時序 vs getLatestEventByKeysSync snapshot）。log latest type 分佈方便對比。
+        val latestRemovedCount = latestPerKey.values.count { it.eventType == EventType.REMOVED }
+        ProfileLogger.append(
+            "Enricher",
+            "isRemoved calc inputEvents=${events.size} uniqueKeys=${keys.size} " +
+                "latestMap=${latestPerKey.size} latestREMOVED=$latestRemovedCount"
+        )
+
         // Phase 31o：取消 cache，每次 enrich 都重 parse + 用最新 channelMap / rankingJsonMap
         val fromTimings = mutableListOf<Int>()
         var totalRawSize = 0L
@@ -137,13 +147,16 @@ object NotificationEnricher {
         val p50 = sorted.getOrNull(sorted.size / 2) ?: 0
         val p99 = sorted.getOrNull(((sorted.size - 1) * 99 / 100).coerceAtLeast(0)) ?: 0
         val avgRawSize = if (events.isNotEmpty()) (totalRawSize / events.size).toInt() else 0
+        // W22-instrument：result 內 isRemoved=true 的數量
+        val resultRemovedCount = result.count { it.isRemoved }
         ProfileLogger.append(
             "Enricher",
             "enrich(${events.size}) total=${t4 - t0}ms " +
                 "channels=${t2 - t1}ms ranking=${t3 - t2}ms map=${t4 - t3}ms " +
                 "fromTotal=${fromTimings.sum()}ms p50=${p50}ms p99=${p99}ms max=${sorted.lastOrNull() ?: 0}ms " +
                 "avgRawSize=${avgRawSize}B maxRawSize=${maxRawSize}B " +
-                "channelsCount=${channelMap.size} obsCount=${observations.size}"
+                "channelsCount=${channelMap.size} obsCount=${observations.size} " +
+                "isRemoved=$resultRemovedCount"
         )
         return result
     }

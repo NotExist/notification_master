@@ -328,6 +328,25 @@ object AppPreferences {
 
     private const val KEY_LAZYLOAD_FOOTER_MIN_MS = "timeline_lazyload_footer_min_ms"
     private const val KEY_LAZYLOAD_AUTO_THRESHOLD = "timeline_lazyload_auto_threshold"
+    private const val KEY_LAZYLOAD_INITIAL_PAGE_SIZE = "timeline_lazyload_initial_page_size"
+
+    /**
+     * Timeline cold start 初始載入的 events 數量（W22 debug 觀察用）。
+     *
+     * 預設 30：cold start query 30 events，list 顯示後 distance threshold (30) 立即觸發
+     * auto-fill 第一次 lazyload (30→80)。user 視角看是「視距外連發兩次擴展」（cold start
+     * + auto-fill）。
+     *
+     * 調大（如 80）可避免 cold start auto-fill：cold start 一次 query 給足 viewport
+     * 撐滿 + 多一頁緩衝，user 一打開即是「auto-fill 完成」狀態，之後 user 主動滑動才
+     * 觸發第一次 lazyload，footer Loading 一定在 viewport 內出現。
+     */
+    fun getLazyloadInitialPageSize(context: Context): Int =
+        prefs(context).getInt(KEY_LAZYLOAD_INITIAL_PAGE_SIZE, 30)
+
+    fun setLazyloadInitialPageSize(context: Context, value: Int) {
+        prefs(context).edit().putInt(KEY_LAZYLOAD_INITIAL_PAGE_SIZE, value).apply()
+    }
 
     /**
      * LoadingMore footer 最少可見時間（ms）— **debug 觀察用阻擋機制**。

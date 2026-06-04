@@ -537,24 +537,36 @@ class SettingsFragment : Fragment() {
     /**
      * Plan 1-zippy-thunder W18：lazyload runtime debug inputs。
      *
-     * 兩個輸入：
+     * 三個輸入（W22-debug 新增 initial page size）：
      * - footer 最少可見時間（ms）
-     * - 末尾自動 lazyload 閾值（displays < N，0=關閉）
+     * - cold start 初始頁面大小（events）— 調大可避免 auto-fill 連發
+     * - 末尾自動 lazyload 閾值（distance ≤ N，0=關閉）
      *
      * 失焦或 Enter 時寫入 AppPreferences；ViewModel/Fragment 每次 lazyload 時 runtime 讀。
+     * Initial page size 變更需 process restart（ViewModel._pageSize 初始值讀一次）— 切離
+     * App 重開即可生效。
      */
     private fun setupLazyloadDebugInputs() {
         val ctx = requireContext()
         val footerInput = binding.inputLazyloadFooterMin
+        val initialPageSizeInput = binding.inputLazyloadInitialPageSize
         val thresholdInput = binding.inputLazyloadAutoThreshold
 
         footerInput.setText(AppPreferences.getLazyloadFooterMinMs(ctx).toString())
+        initialPageSizeInput.setText(AppPreferences.getLazyloadInitialPageSize(ctx).toString())
         thresholdInput.setText(AppPreferences.getLazyloadAutoThreshold(ctx).toString())
 
         footerInput.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) {
                 footerInput.text?.toString()?.toLongOrNull()?.let {
                     AppPreferences.setLazyloadFooterMinMs(ctx, it)
+                }
+            }
+        }
+        initialPageSizeInput.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                initialPageSizeInput.text?.toString()?.toIntOrNull()?.let {
+                    AppPreferences.setLazyloadInitialPageSize(ctx, it.coerceAtLeast(1))
                 }
             }
         }

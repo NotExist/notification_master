@@ -237,7 +237,10 @@ class TimelineViewModel(
      * - Process restart（冷啟 / force-stop）→ ViewModel 重建，_pageSize 回到 INITIAL_PAGE_SIZE
      * 與 user 直覺一致（「重開 App 從頭開始」），避免 phase 25 持久化造成的重 enrich OOM。
      */
-    private val _pageSize = MutableStateFlow(INITIAL_PAGE_SIZE)
+    // W22-debug：cold start 初始頁面大小改 runtime — user 可在 Settings debug 區塊調整
+    // （預設仍 30，調大如 80 可避免 cold start auto-fill 連發）。INITIAL_PAGE_SIZE 常數
+    // 作為 fallback / 文件用，實際初始值由 AppPreferences 提供。
+    private val _pageSize = MutableStateFlow(AppPreferences.getLazyloadInitialPageSize(application))
 
     // === 錯誤通道（Phase 26）===
 
