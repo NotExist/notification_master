@@ -323,33 +323,46 @@ class SettingsFragment : Fragment() {
             requireContext(), "com.notificationmaster.ShareTextAlias"
         )
 
-        // 初始狀態
-        binding.switchProcessText.isChecked =
-            pm.getComponentEnabledSetting(processTextComponent) == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-        binding.switchShareText.isChecked =
-            pm.getComponentEnabledSetting(shareTextComponent) == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        // W22-mainthread-io：getComponentEnabledSetting 是 PackageManager 跨 process IPC，
+        // 搬 IO scope。Switch 預先設 false 避免閃爍，IO 完才更新真實狀態。
+        viewLifecycleOwner.lifecycleScope.launch {
+            val (processEnabled, shareEnabled) = withContext(Dispatchers.IO) {
+                val enabled = android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                (pm.getComponentEnabledSetting(processTextComponent) == enabled) to
+                    (pm.getComponentEnabledSetting(shareTextComponent) == enabled)
+            }
+            if (_binding == null) return@launch
+            binding.switchProcessText.isChecked = processEnabled
+            binding.switchShareText.isChecked = shareEnabled
+        }
 
         // API 23 以下停用 PROCESS_TEXT
         if (android.os.Build.VERSION.SDK_INT < 23) {
             binding.switchProcessText.isEnabled = false
         }
 
+        // W22-mainthread-io：setComponentEnabledSetting 也是 IPC，搬 IO scope 避免 user
+        // 切換 switch 卡 UI。
         binding.switchProcessText.setOnCheckedChangeListener { _, isChecked ->
-            pm.setComponentEnabledSetting(
-                processTextComponent,
-                if (isChecked) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                android.content.pm.PackageManager.DONT_KILL_APP
-            )
+            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                pm.setComponentEnabledSetting(
+                    processTextComponent,
+                    if (isChecked) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                    else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    android.content.pm.PackageManager.DONT_KILL_APP
+                )
+            }
         }
 
         binding.switchShareText.setOnCheckedChangeListener { _, isChecked ->
-            pm.setComponentEnabledSetting(
-                shareTextComponent,
-                if (isChecked) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                android.content.pm.PackageManager.DONT_KILL_APP
-            )
+            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                pm.setComponentEnabledSetting(
+                    shareTextComponent,
+                    if (isChecked) android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                    else android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    android.content.pm.PackageManager.DONT_KILL_APP
+                )
+            }
         }
 
         binding.textProcessTextSummary.setOnClickListener {
@@ -404,13 +417,21 @@ class SettingsFragment : Fragment() {
                 .setTitle("清除 Debug 資料")
                 .setMessage("確定要清除所有 Debug dump 檔案嗎？")
                 .setPositiveButton(R.string.ok) { _, _ ->
-                    val count = debugDumper.clearDumpFiles()
-                    Toast.makeText(
-                        requireContext(),
-                        "已清除 $count 個檔案",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    updateDebugInfo()
+                    // W22-mainthread-io：clearDumpFiles 內 listFiles + 每檔 delete syscall
+                    // 搬 IO scope，避免 user 按下後 UI 卡住。完成後拉回 main 顯示 Toast +
+                    // 更新檔案數/大小（updateDebugInfo 已內含 IO scope，可直接 call）。
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        val count = withContext(Dispatchers.IO) {
+                            debugDumper.clearDumpFiles()
+                        }
+                        if (_binding == null) return@launch
+                        Toast.makeText(
+                            requireContext(),
+                            "已清除 $count 個檔案",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        updateDebugInfo()
+                    }
                 }
                 .setNegativeButton(R.string.cancel, null)
                 .show()
@@ -874,38 +895,50 @@ class SettingsFragment : Fragment() {
      * 否則僅更新 SAF tree URI（user 在 PUBLIC_EXTERNAL 模式下換目錄）。
      */
     private fun handleMediaDirSelected(treeUri: android.net.Uri) {
+        // W22-mainthread-io：SAF picker callback 內的 takePersistableUriPermission +
+        // DocumentFile.fromTreeUri + canWrite() 是 ContentResolver / SAF IPC，搬 IO scope。
         val ctx = context ?: return
-        try {
-            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            ctx.contentResolver.takePersistableUriPermission(treeUri, flags)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                try {
+                    val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    ctx.contentResolver.takePersistableUriPermission(treeUri, flags)
 
-            val docFile = DocumentFile.fromTreeUri(ctx, treeUri)
-            if (docFile == null || !docFile.canWrite()) {
-                Toast.makeText(ctx, R.string.settings_media_dir_invalid, Toast.LENGTH_SHORT).show()
-                pendingStorageType = null
-                refreshStorageRadioFromPrefs()
-                return
+                    val docFile = DocumentFile.fromTreeUri(ctx, treeUri)
+                    if (docFile == null || !docFile.canWrite()) {
+                        return@withContext MediaDirSelectResult.INVALID
+                    }
+                    val displayName = docFile.name ?: treeUri.lastPathSegment ?: treeUri.toString()
+                    AppPreferences.setCustomMediaDir(ctx, treeUri, displayName)
+                    MediaDirSelectResult.OK
+                } catch (e: SecurityException) {
+                    Log.w(TAG, "Failed to take persistable URI permission", e)
+                    MediaDirSelectResult.INVALID
+                }
             }
-
-            val displayName = docFile.name ?: treeUri.lastPathSegment ?: treeUri.toString()
-            AppPreferences.setCustomMediaDir(ctx, treeUri, displayName)
-            Toast.makeText(ctx, R.string.settings_media_dir_success, Toast.LENGTH_SHORT).show()
-            updateMediaDirDisplay()
-
-            // 若是 PUBLIC_EXTERNAL pending → 接續 migrate 流程
-            val pending = pendingStorageType
-            pendingStorageType = null
-            if (pending == MediaStorageType.PUBLIC_EXTERNAL) {
-                confirmAndMigrateStorageType(AppPreferences.getMediaStorageType(ctx), pending)
+            if (_binding == null) return@launch
+            when (result) {
+                MediaDirSelectResult.OK -> {
+                    Toast.makeText(ctx, R.string.settings_media_dir_success, Toast.LENGTH_SHORT).show()
+                    updateMediaDirDisplay()
+                    // 若是 PUBLIC_EXTERNAL pending → 接續 migrate 流程
+                    val pending = pendingStorageType
+                    pendingStorageType = null
+                    if (pending == MediaStorageType.PUBLIC_EXTERNAL) {
+                        confirmAndMigrateStorageType(AppPreferences.getMediaStorageType(ctx), pending)
+                    }
+                }
+                MediaDirSelectResult.INVALID -> {
+                    Toast.makeText(ctx, R.string.settings_media_dir_invalid, Toast.LENGTH_SHORT).show()
+                    pendingStorageType = null
+                    refreshStorageRadioFromPrefs()
+                }
             }
-        } catch (e: SecurityException) {
-            Log.w(TAG, "Failed to take persistable URI permission", e)
-            Toast.makeText(ctx, R.string.settings_media_dir_invalid, Toast.LENGTH_SHORT).show()
-            pendingStorageType = null
-            refreshStorageRadioFromPrefs()
         }
     }
+
+    private enum class MediaDirSelectResult { OK, INVALID }
 
     /**
      * 重設 PUBLIC_EXTERNAL 自訂 SAF 目錄（不切換 storage type，僅清掉 tree URI）。
@@ -1246,15 +1279,20 @@ class SettingsFragment : Fragment() {
                 val database = NotificationMasterApp.getInstance().database
                 val exporter = ArchiveExporter(ctx, database)
 
-                val outputStream = ctx.contentResolver.openOutputStream(uri)
-                    ?: throw IllegalStateException("無法開啟輸出串流")
-
-                val stats = exporter.export(
-                    pendingExportStartTime,
-                    pendingExportEndTime,
-                    outputStream
-                )
-                outputStream.close()
+                // W22-mainthread-io：openOutputStream + outputStream.close() 都是
+                // ContentResolver IPC，搬到 IO dispatcher。exporter.export 本身已是
+                // suspend + withContext(IO)，這裡將 open/close 包進來統一在 IO 跑。
+                val stats = withContext(Dispatchers.IO) {
+                    val outputStream = ctx.contentResolver.openOutputStream(uri)
+                        ?: throw IllegalStateException("無法開啟輸出串流")
+                    outputStream.use {
+                        exporter.export(
+                            pendingExportStartTime,
+                            pendingExportEndTime,
+                            it
+                        )
+                    }
+                }
 
                 showResultDialog(
                     "封存匯出完成",
@@ -1503,46 +1541,70 @@ class SettingsFragment : Fragment() {
     }
 
     private fun handleBackupDirSelected(treeUri: android.net.Uri) {
+        // W22-mainthread-io：SAF picker callback 內 takePersistableUriPermission +
+        // DocumentFile + canWrite + readBackupFromDir + countNewRulesInBackup + autoBackup
+        // 全是 ContentResolver / SAF / File IO，搬 IO scope；UI 結果（Toast / Dialog）拉回
+        // main thread。
         val ctx = context ?: return
-        try {
-            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            ctx.contentResolver.takePersistableUriPermission(treeUri, flags)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                try {
+                    val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    ctx.contentResolver.takePersistableUriPermission(treeUri, flags)
 
-            val docFile = DocumentFile.fromTreeUri(ctx, treeUri)
-            if (docFile == null || !docFile.canWrite()) {
-                Toast.makeText(ctx, R.string.settings_filter_backup_dir_invalid, Toast.LENGTH_SHORT).show()
-                return
-            }
+                    val docFile = DocumentFile.fromTreeUri(ctx, treeUri)
+                    if (docFile == null || !docFile.canWrite()) {
+                        return@withContext BackupDirSelectOutcome.Invalid
+                    }
+                    val displayName = docFile.name ?: treeUri.lastPathSegment ?: treeUri.toString()
+                    AppPreferences.setBackupDir(ctx, treeUri, displayName)
 
-            val displayName = docFile.name ?: treeUri.lastPathSegment ?: treeUri.toString()
-            AppPreferences.setBackupDir(ctx, treeUri, displayName)
-
-            Toast.makeText(ctx, R.string.settings_filter_backup_dir_success, Toast.LENGTH_SHORT).show()
-            updateBackupDirDisplay()
-
-            // 備份檔案存在且有未同步規則 → 建議合併匯入
-            val json = RuleRepository.readBackupFromDir(ctx)
-            if (json != null) {
-                val newCount = RuleEngine.countNewRulesInBackup(json)
-                if (newCount > 0) {
-                    AlertDialog.Builder(ctx)
-                        .setTitle(R.string.filter_backup_found_title)
-                        .setMessage(getString(R.string.filter_backup_found_message, newCount))
-                        .setPositiveButton(R.string.ok) { _, _ ->
-                            mergeBackupJson(json)
-                        }
-                        .setNegativeButton(R.string.cancel, null)
-                        .show()
+                    val json = RuleRepository.readBackupFromDir(ctx)
+                    if (json == null) {
+                        // 無備份檔案 → 立即執行一次自動備份
+                        RuleRepository.autoBackup(ctx)
+                        BackupDirSelectOutcome.OkNoBackup
+                    } else {
+                        val newCount = RuleEngine.countNewRulesInBackup(json)
+                        BackupDirSelectOutcome.OkWithBackup(json, newCount)
+                    }
+                } catch (e: SecurityException) {
+                    Log.w(TAG, "Failed to take persistable URI permission for backup dir", e)
+                    BackupDirSelectOutcome.Invalid
                 }
-            } else {
-                // 無備份檔案 → 立即執行一次自動備份
-                RuleRepository.autoBackup(ctx)
             }
-        } catch (e: SecurityException) {
-            Log.w(TAG, "Failed to take persistable URI permission for backup dir", e)
-            Toast.makeText(ctx, R.string.settings_filter_backup_dir_invalid, Toast.LENGTH_SHORT).show()
+            if (_binding == null) return@launch
+            when (outcome) {
+                BackupDirSelectOutcome.Invalid -> {
+                    Toast.makeText(ctx, R.string.settings_filter_backup_dir_invalid, Toast.LENGTH_SHORT).show()
+                }
+                BackupDirSelectOutcome.OkNoBackup -> {
+                    Toast.makeText(ctx, R.string.settings_filter_backup_dir_success, Toast.LENGTH_SHORT).show()
+                    updateBackupDirDisplay()
+                }
+                is BackupDirSelectOutcome.OkWithBackup -> {
+                    Toast.makeText(ctx, R.string.settings_filter_backup_dir_success, Toast.LENGTH_SHORT).show()
+                    updateBackupDirDisplay()
+                    if (outcome.newCount > 0) {
+                        AlertDialog.Builder(requireContext())
+                            .setTitle(R.string.filter_backup_found_title)
+                            .setMessage(getString(R.string.filter_backup_found_message, outcome.newCount))
+                            .setPositiveButton(R.string.ok) { _, _ ->
+                                mergeBackupJson(outcome.json)
+                            }
+                            .setNegativeButton(R.string.cancel, null)
+                            .show()
+                    }
+                }
+            }
         }
+    }
+
+    private sealed class BackupDirSelectOutcome {
+        object Invalid : BackupDirSelectOutcome()
+        object OkNoBackup : BackupDirSelectOutcome()
+        data class OkWithBackup(val json: String, val newCount: Int) : BackupDirSelectOutcome()
     }
 
     private fun resetBackupDir() {
