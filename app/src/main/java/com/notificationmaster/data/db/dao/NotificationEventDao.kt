@@ -203,34 +203,6 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events ORDER BY event_time DESC LIMIT :limit")
     suspend fun getRecentEvents(limit: Int): List<NotificationEventEntity>
 
-    /** 依 App 取得每個 notification_key 的最新一筆 event（Archive 詳情列表用） */
-    @Query("""
-        SELECT * FROM notification_events
-        WHERE id IN (
-            SELECT id FROM (
-                SELECT id, MAX(event_time) FROM notification_events
-                WHERE package_name = :packageName
-                GROUP BY notification_key
-            )
-        )
-        ORDER BY post_time DESC
-    """)
-    fun getLatestEventsByPackage(packageName: String): Flow<List<NotificationEventEntity>>
-
-    /** 依 Channel 取得每個 notification_key 的最新一筆 event（Archive 詳情列表用） */
-    @Query("""
-        SELECT * FROM notification_events
-        WHERE id IN (
-            SELECT id FROM (
-                SELECT id, MAX(event_time) FROM notification_events
-                WHERE package_name = :packageName AND channel_id = :channelId
-                GROUP BY notification_key
-            )
-        )
-        ORDER BY post_time DESC
-    """)
-    fun getLatestEventsByChannel(packageName: String, channelId: String): Flow<List<NotificationEventEntity>>
-
     // === Reconciliation 用（Plan 2 §K） ===
 
     /**

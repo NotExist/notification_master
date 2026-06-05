@@ -12,6 +12,10 @@ import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.notificationmaster.NotificationMasterApp
+import com.notificationmaster.core.filter.Matcher
+import com.notificationmaster.core.filter.OrderBy
+import com.notificationmaster.data.db.dao.query
+import com.notificationmaster.data.filter.EventFilterSpec
 import com.notificationmaster.databinding.FragmentArchiveDetailBinding
 import com.notificationmaster.ui.common.NotificationDisplay
 import com.notificationmaster.core.debug.ProfileLogger
@@ -112,11 +116,18 @@ class ArchiveDetailFragment : Fragment() {
         val tStart = System.currentTimeMillis()
         ProfileLogger.append("Archive", "load start mode=$mode target=$target")
 
-        val flow = if (args.channelId.isNotEmpty()) {
-            eventDao.getLatestEventsByChannel(args.packageName, args.channelId)
-        } else {
-            eventDao.getLatestEventsByPackage(args.packageName)
-        }
+        // 對齊 timeline 預設視角：所有 event row（包含 INITIAL / POSTED / UPDATED），
+        // 不 dedup、不過濾 REMOVED isRemoved 屬性、event_time DESC。REMOVED event row
+        // 本身由 EventFilterSqlBuilder 統一排除（W1 慣例）。
+        val spec = EventFilterSpec(
+            matchers = buildList {
+                add(Matcher.Package(args.packageName))
+                if (args.channelId.isNotEmpty()) add(Matcher.Channel(args.channelId))
+            },
+            deduplicate = false,
+            orderBy = OrderBy.EventTimeDesc
+        )
+        val flow = eventDao.query(spec)
 
         viewLifecycleOwner.lifecycleScope.launch {
             flow.collectLatest { events ->

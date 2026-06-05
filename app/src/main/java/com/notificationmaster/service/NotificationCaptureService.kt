@@ -633,12 +633,17 @@ class NotificationCaptureService : NotificationListenerService() {
         // 4. 快取 PendingIntent 參照（不需 transaction）
         cachePendingIntents(sbn)
 
-        // 5. 更新 App 來源
-        updateAppSource(sbn.packageName, captureTime)
+        // 5. 更新 App 來源（REMOVED 不計入 count：count 語意為「實質新事件」，
+        //    對齊 timeline 預設視角 [EventFilterSqlBuilder] 排除 REMOVED event row）
+        if (eventType != EventType.REMOVED) {
+            updateAppSource(sbn.packageName, captureTime)
+        }
 
         // 6. 更新 Channel (API 26+)
         // 唯一可靠來源：ranking.channel（API 26+）
-        if (ApiVersionHelper.supportsNotificationChannel() && eventEntity.channelId != null) {
+        // REMOVED 同上不計入 count，且 channel metadata 在前面 POSTED/UPDATED 已更新過
+        if (ApiVersionHelper.supportsNotificationChannel() && eventEntity.channelId != null &&
+            eventType != EventType.REMOVED) {
             val notificationChannel: android.app.NotificationChannel? = if (rankingMap != null) {
                 val ranking = Ranking()
                 if (rankingMap.getRanking(key, ranking)) ranking.channel else null
