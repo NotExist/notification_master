@@ -248,6 +248,16 @@ class NotificationDetailFragment : Fragment() {
                 }
                 displayMediaAttachments(attachments)
 
+                // W22ac：同 nkey 跨 event 附件總覽（dedup by content_hash），排除已在本
+                // event 出現的 hash 避免重複呈現。供使用者在點 UPDATED event 時看到本
+                // event 缺漏的附件（POSTED 時曾出現的圖等）。
+                val relatedAll = withContext(Dispatchers.IO) {
+                    mediaDao.getAttachmentsByNotificationKeyDedup(notificationKey)
+                }
+                val currentHashes = attachments.map { it.contentHash }.toSet()
+                val related = relatedAll.filterNot { it.contentHash in currentHashes }
+                displayMediaRelatedAttachments(related)
+
                 // 顯示樣式資訊
                 displayStyleInfo(display)
 
@@ -715,85 +725,100 @@ class NotificationDetailFragment : Fragment() {
             binding.cardMedia.visibility = View.GONE
             return
         }
-
         binding.cardMedia.visibility = View.VISIBLE
         val container = binding.layoutMediaContainer
         container.removeAllViews()
+        for (attachment in attachments) addAttachmentItem(container, attachment)
+    }
 
+    /**
+     * W22ac：同 nkey 跨 event dedup 總覽（已在本 event 顯示的 hash 由 caller 過濾）。
+     * 此區塊 query 已排除 trace state（save_failed_ / extract_failed_ / unavailable_），
+     * 但實體檔案仍可能 mediaFileExists=false（被使用者清理 / migrate 失敗），共用
+     * [addAttachmentItem] 的 fileExists 分支處理。
+     */
+    private fun displayMediaRelatedAttachments(attachments: List<MediaAttachmentEntity>) {
+        if (attachments.isEmpty()) {
+            binding.cardMediaRelated.visibility = View.GONE
+            return
+        }
+        binding.cardMediaRelated.visibility = View.VISIBLE
+        val container = binding.layoutMediaRelatedContainer
+        container.removeAllViews()
+        for (attachment in attachments) addAttachmentItem(container, attachment)
+    }
+
+    private fun addAttachmentItem(container: LinearLayout, attachment: MediaAttachmentEntity) {
         val ctx = requireContext()
         val sizePx = (80 * resources.displayMetrics.density).toInt()
         val marginPx = (8 * resources.displayMetrics.density).toInt()
 
-        for (attachment in attachments) {
-            // W22ab：trace 狀態三態 — unavailable(URI 失敗)、saveFailed(IO 寫入失敗)、
-            // extractFailed(drawable 解析失敗 / API 限制)。詳見 MediaExtractor 內部。
-            val isUnavailable = attachment.filePath.isEmpty() && !attachment.sourceUri.isNullOrEmpty()
-            val isSaveFailed = attachment.filePath.isEmpty() &&
-                attachment.contentHash.startsWith("save_failed_")
-            val isExtractFailed = attachment.filePath.isEmpty() &&
-                attachment.contentHash.startsWith("extract_failed_")
-            val fileExists = !isUnavailable && !isSaveFailed && !isExtractFailed &&
-                MediaExtractor.mediaFileExists(ctx, attachment.filePath)
+        // W22ab：trace 狀態三態 — unavailable(URI 失敗)、saveFailed(IO 寫入失敗)、
+        // extractFailed(drawable 解析失敗 / API 限制)。詳見 MediaExtractor 內部。
+        val isUnavailable = attachment.filePath.isEmpty() && !attachment.sourceUri.isNullOrEmpty()
+        val isSaveFailed = attachment.filePath.isEmpty() &&
+            attachment.contentHash.startsWith("save_failed_")
+        val isExtractFailed = attachment.filePath.isEmpty() &&
+            attachment.contentHash.startsWith("extract_failed_")
+        val fileExists = !isUnavailable && !isSaveFailed && !isExtractFailed &&
+            MediaExtractor.mediaFileExists(ctx, attachment.filePath)
 
-            // 每張圖的容器：圖片 + 類型標籤
-            val itemLayout = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    marginEnd = marginPx
-                }
+        val itemLayout = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginEnd = marginPx
             }
-
-            val imageView = ImageView(ctx).apply {
-                layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                contentDescription = attachment.mediaType.name
-
-                if (fileExists) {
-                    val bitmap = MediaExtractor.loadMediaBitmapSampled(
-                        ctx, attachment.filePath, sizePx, sizePx
-                    )
-                    if (bitmap != null) {
-                        setImageBitmap(bitmap)
-                    }
-                    setOnClickListener {
-                        openMediaFile(attachment.filePath, attachment.mimeType)
-                    }
-                } else {
-                    setImageResource(android.R.drawable.ic_menu_report_image)
-                    alpha = 0.3f
-                }
-
-                // 不可用媒體：長按複製原始 URI
-                if (isUnavailable) {
-                    setOnLongClickListener {
-                        val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("media_uri", attachment.sourceUri))
-                        Toast.makeText(ctx, R.string.media_uri_copied, Toast.LENGTH_SHORT).show()
-                        true
-                    }
-                }
-            }
-
-            val label = TextView(ctx).apply {
-                text = when {
-                    fileExists -> attachment.mediaType.name
-                    isUnavailable -> ctx.getString(R.string.media_unavailable)
-                    isSaveFailed -> ctx.getString(R.string.media_save_failed)
-                    isExtractFailed -> ctx.getString(R.string.media_extract_failed)
-                    else -> ctx.getString(R.string.media_file_removed)
-                }
-                textSize = 10f
-                gravity = android.view.Gravity.CENTER
-                layoutParams = LinearLayout.LayoutParams(sizePx, LinearLayout.LayoutParams.WRAP_CONTENT)
-            }
-
-            itemLayout.addView(imageView)
-            itemLayout.addView(label)
-            container.addView(itemLayout)
         }
+
+        val imageView = ImageView(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(sizePx, sizePx)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            contentDescription = attachment.mediaType.name
+
+            if (fileExists) {
+                val bitmap = MediaExtractor.loadMediaBitmapSampled(
+                    ctx, attachment.filePath, sizePx, sizePx
+                )
+                if (bitmap != null) {
+                    setImageBitmap(bitmap)
+                }
+                setOnClickListener {
+                    openMediaFile(attachment.filePath, attachment.mimeType)
+                }
+            } else {
+                setImageResource(android.R.drawable.ic_menu_report_image)
+                alpha = 0.3f
+            }
+
+            if (isUnavailable) {
+                setOnLongClickListener {
+                    val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("media_uri", attachment.sourceUri))
+                    Toast.makeText(ctx, R.string.media_uri_copied, Toast.LENGTH_SHORT).show()
+                    true
+                }
+            }
+        }
+
+        val label = TextView(ctx).apply {
+            text = when {
+                fileExists -> attachment.mediaType.name
+                isUnavailable -> ctx.getString(R.string.media_unavailable)
+                isSaveFailed -> ctx.getString(R.string.media_save_failed)
+                isExtractFailed -> ctx.getString(R.string.media_extract_failed)
+                else -> ctx.getString(R.string.media_file_removed)
+            }
+            textSize = 10f
+            gravity = android.view.Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(sizePx, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+
+        itemLayout.addView(imageView)
+        itemLayout.addView(label)
+        container.addView(itemLayout)
     }
 
     /**

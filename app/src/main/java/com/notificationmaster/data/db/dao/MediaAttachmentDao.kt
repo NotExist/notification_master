@@ -30,6 +30,33 @@ interface MediaAttachmentDao {
     @Query("SELECT * FROM media_attachments WHERE event_id = :eventId")
     suspend fun getAttachmentsByEventIdSync(eventId: Long): List<MediaAttachmentEntity>
 
+    /**
+     * W22ac：取得同 notification_key 所有 event 的 attachments，按 content_hash dedup
+     * 保留每組最早的 capture_time row（最早出現代表性 row），排除已知失敗 trace
+     * （content_hash 開頭 save_failed_ / extract_failed_）跟 unavailable URI trace。
+     *
+     * 用於 Detail 「該通知歷史附件」總覽：使用者點 UPDATED event detail 看到本 event
+     * 缺某些圖時，可從這區塊看到同 nkey 其他 event 留下的圖（hash 去重避免同樣的
+     * SMALL_ICON 重複呈現）。
+     */
+    @Query("""
+        SELECT m.* FROM media_attachments m
+        INNER JOIN notification_events e ON e.id = m.event_id
+        WHERE e.notification_key = :notificationKey
+          AND m.file_path != ''
+          AND m.content_hash NOT LIKE 'save_failed_%'
+          AND m.content_hash NOT LIKE 'extract_failed_%'
+          AND m.content_hash NOT LIKE 'unavailable_%'
+          AND m.id IN (
+              SELECT MIN(m2.id) FROM media_attachments m2
+              INNER JOIN notification_events e2 ON e2.id = m2.event_id
+              WHERE e2.notification_key = :notificationKey
+              GROUP BY m2.content_hash
+          )
+        ORDER BY m.capture_time DESC
+    """)
+    suspend fun getAttachmentsByNotificationKeyDedup(notificationKey: String): List<MediaAttachmentEntity>
+
     @Query("""
         SELECT * FROM media_attachments
         WHERE event_id = :eventId AND media_type = :mediaType
