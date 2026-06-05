@@ -203,6 +203,8 @@
     <string name="error_no_viewer">找不到可開啟此檔案的應用程式</string>
     <string name="media_file_removed">已移除</string>
     <string name="media_unavailable">無法取得</string>
+    <string name="media_save_failed">儲存失敗</string>
+    <string name="media_extract_failed">解析失敗</string>
     <string name="media_uri_copied">已複製媒體 URI</string>
     <string name="no_title">無標題</string>
     <string name="no_content">無內容</string>

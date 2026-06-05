@@ -46,6 +46,9 @@ class MediaExtractor(private val context: Context) {
     companion object {
         private const val TAG = "MediaExtractor"
         const val MEDIA_DIR = "media"
+        /** W22ab：save retry 預設次數（含首次）跟間隔 */
+        private const val SAVE_RETRY_ATTEMPTS = 2
+        private const val SAVE_RETRY_DELAY_MS = 50L
 
         /**
          * Phase 31l：取得指定 storage type 的媒體基底目錄（不含 MEDIA_DIR）。
@@ -301,33 +304,29 @@ class MediaExtractor(private val context: Context) {
         val attachments = mutableListOf<MediaAttachmentEntity>()
         val extras = notification.extras ?: return attachments
 
+        // W22ab：「曾經嘗試過 bitmap extract」就保證 attachments 有 row（含 save 失敗 trace）。
+        // extras 沒 key（return null）才 silent skip。
+
         // 1. EXTRA_LARGE_ICON
         extractBitmapFromExtras(extras, Notification.EXTRA_LARGE_ICON)?.let { bitmap ->
-            saveBitmap(bitmap, eventId, packageName, MediaType.LARGE_ICON, captureTime)?.let {
-                attachments.add(it)
-            }
+            attachments.add(saveBitmap(bitmap, eventId, packageName, MediaType.LARGE_ICON, captureTime))
         }
 
         // 2. EXTRA_PICTURE (BigPictureStyle)
         extractBitmapFromExtras(extras, Notification.EXTRA_PICTURE)?.let { bitmap ->
-            saveBitmap(bitmap, eventId, packageName, MediaType.PICTURE, captureTime)?.let {
-                attachments.add(it)
-            }
+            attachments.add(saveBitmap(bitmap, eventId, packageName, MediaType.PICTURE, captureTime))
         }
 
         // 3. EXTRA_LARGE_ICON_BIG (BigPictureStyle 大圖示)
         extractBitmapFromExtras(extras, Notification.EXTRA_LARGE_ICON_BIG)?.let { bitmap ->
-            saveBitmap(bitmap, eventId, packageName, MediaType.LARGE_ICON_BIG, captureTime)?.let {
-                attachments.add(it)
-            }
+            attachments.add(saveBitmap(bitmap, eventId, packageName, MediaType.LARGE_ICON_BIG, captureTime))
         }
 
         // 4. Small Icon (API 23+ 使用 Icon 類別)
+        // W22ab：saveIcon 改為 non-null，extract / save 失敗會 fabricate trace row
         if (Build.VERSION.SDK_INT >= 23) {
             notification.smallIcon?.let { icon ->
-                saveIcon(icon, eventId, packageName, MediaType.SMALL_ICON, captureTime)?.let {
-                    attachments.add(it)
-                }
+                attachments.add(saveIcon(icon, eventId, packageName, MediaType.SMALL_ICON, captureTime))
             }
         }
 
@@ -507,71 +506,61 @@ class MediaExtractor(private val context: Context) {
     }
 
     /**
-     * 原始位元組寫入預設目錄
+     * 原始位元組寫入預設目錄。W22ab：retry 2 次。
      */
     private fun saveBytesToDefaultDir(
         bytes: ByteArray, hash: String, ext: String, mimeType: String,
         eventId: Long, packageName: String,
         mediaType: MediaType, captureTime: Long, width: Int, height: Int
-    ): MediaAttachmentEntity? {
-        return try {
-            val fileName = buildMediaFileName(packageName, mediaType, hash, ext)
-            val file = File(currentMediaDir(), fileName)
-            if (!file.exists()) {
-                FileOutputStream(file).use { it.write(bytes) }
-            }
-            MediaAttachmentEntity(
-                eventId = eventId,
-                mediaType = mediaType,
-                filePath = fileName,
-                mimeType = mimeType,
-                fileSize = file.length(),
-                width = width, height = height,
-                captureTime = captureTime,
-                contentHash = hash
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to save bytes to default dir", e)
-            null
+    ): MediaAttachmentEntity? = withSaveRetry("saveBytesToDefaultDir($mediaType)") {
+        val fileName = buildMediaFileName(packageName, mediaType, hash, ext)
+        val file = File(currentMediaDir(), fileName)
+        if (!file.exists()) {
+            FileOutputStream(file).use { it.write(bytes) }
         }
+        MediaAttachmentEntity(
+            eventId = eventId,
+            mediaType = mediaType,
+            filePath = fileName,
+            mimeType = mimeType,
+            fileSize = file.length(),
+            width = width, height = height,
+            captureTime = captureTime,
+            contentHash = hash
+        )
     }
 
     /**
-     * 原始位元組寫入自訂目錄
+     * 原始位元組寫入自訂目錄。W22ab：retry 2 次。
      */
     private fun saveBytesToCustomDir(
         bytes: ByteArray, hash: String, ext: String, mimeType: String,
         eventId: Long, packageName: String,
         mediaType: MediaType, captureTime: Long, width: Int, height: Int
-    ): MediaAttachmentEntity? {
-        val docDir = currentSafDocDir() ?: return null
-        return try {
-            val fileName = buildMediaFileName(packageName, mediaType, hash, ext)
-            val existing = docDir.findFile(fileName)
-            val docFile = if (existing != null && existing.exists()) {
-                existing
-            } else {
-                val baseName = buildMediaBaseName(packageName, mediaType, hash)
-                docDir.createFile(mimeType, baseName) ?: return null
-            }
-            if (existing == null) {
-                context.contentResolver.openOutputStream(docFile.uri)?.use { it.write(bytes) }
-                    ?: return null
-            }
-            MediaAttachmentEntity(
-                eventId = eventId,
-                mediaType = mediaType,
-                filePath = fileName,
-                mimeType = mimeType,
-                fileSize = docFile.length(),
-                width = width, height = height,
-                captureTime = captureTime,
-                contentHash = hash
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to save bytes to custom dir", e)
-            null
+    ): MediaAttachmentEntity? = withSaveRetry("saveBytesToCustomDir($mediaType)") {
+        val docDir = currentSafDocDir() ?: return@withSaveRetry null
+        val fileName = buildMediaFileName(packageName, mediaType, hash, ext)
+        val existing = docDir.findFile(fileName)
+        val docFile = if (existing != null && existing.exists()) {
+            existing
+        } else {
+            val baseName = buildMediaBaseName(packageName, mediaType, hash)
+            docDir.createFile(mimeType, baseName) ?: return@withSaveRetry null
         }
+        if (existing == null) {
+            context.contentResolver.openOutputStream(docFile.uri)?.use { it.write(bytes) }
+                ?: return@withSaveRetry null
+        }
+        MediaAttachmentEntity(
+            eventId = eventId,
+            mediaType = mediaType,
+            filePath = fileName,
+            mimeType = mimeType,
+            fileSize = docFile.length(),
+            width = width, height = height,
+            captureTime = captureTime,
+            contentHash = hash
+        )
     }
 
     /**
@@ -602,9 +591,8 @@ class MediaExtractor(private val context: Context) {
             if (hash in processedHashes) return
             processedHashes.add(hash)
 
-            saveBitmap(bitmap, eventId, packageName, MediaType.MESSAGING_AVATAR, captureTime)?.let {
-                attachments.add(it)
-            }
+            // W22ab：saveBitmap non-null，失敗時 fabricate save_failed trace
+            attachments.add(saveBitmap(bitmap, eventId, packageName, MediaType.MESSAGING_AVATAR, captureTime))
         } catch (e: Exception) {
             Log.w(TAG, "Failed to save messaging avatar icon", e)
         }
@@ -637,7 +625,11 @@ class MediaExtractor(private val context: Context) {
 
     /**
      * 儲存 Bitmap 並建立 Entity
-     * 自訂目錄啟用時優先寫入自訂目錄，失敗時 fallback 到預設目錄
+     *
+     * 自訂目錄啟用時優先寫入自訂目錄，失敗時 fallback 到預設目錄。內部 dir helper
+     * 都有 retry（[withSaveRetry]，2 次嘗試）。custom + default 全失敗時不再 return null
+     * silent drop，改 fabricate 一筆 `save_failed_${hash}` trace entity 保留「曾嘗試
+     * 但失敗」資訊（W22ab）。
      */
     private fun saveBitmap(
         bitmap: Bitmap,
@@ -645,7 +637,7 @@ class MediaExtractor(private val context: Context) {
         packageName: String,
         mediaType: MediaType,
         captureTime: Long
-    ): MediaAttachmentEntity? {
+    ): MediaAttachmentEntity {
         val hash = bitmapHash(bitmap)
 
         if (useSafDir()) {
@@ -653,10 +645,57 @@ class MediaExtractor(private val context: Context) {
                 return it
             }
             // fallback 到預設目錄
-            Log.w(TAG, "Custom dir write failed, falling back to default dir")
+            Log.w(TAG, "Custom dir write failed (after retry), falling back to default dir")
         }
 
-        return saveBitmapToDefaultDir(bitmap, hash, eventId, packageName, mediaType, captureTime)
+        saveBitmapToDefaultDir(bitmap, hash, eventId, packageName, mediaType, captureTime)?.let {
+            return it
+        }
+
+        // 全部嘗試失敗：留 trace row（含 bitmap 尺寸、原始 hash），供 detail UI 顯示「儲存失敗」
+        Log.w(TAG, "saveBitmap fully failed for mediaType=$mediaType pkg=$packageName hash=$hash")
+        return MediaAttachmentEntity(
+            eventId = eventId,
+            mediaType = mediaType,
+            filePath = "",
+            mimeType = "image/png",
+            fileSize = 0,
+            width = bitmap.width,
+            height = bitmap.height,
+            captureTime = captureTime,
+            contentHash = "save_failed_$hash"
+        )
+    }
+
+    /**
+     * W22ab：寫入嘗試 retry helper。`block` 任一次 return non-null 即成功；
+     * 所有 attempt 都 null 或 throw 才視為失敗。回 null 表示「全部嘗試失敗」。
+     *
+     * 設計用途：cover transient IO 錯誤（如 SAF rebind / 短暫 FD 不足 / disk write 干擾），
+     * 對 OOM / disk full 等永久性錯誤 retry 沒效果，但成本極低。
+     */
+    private inline fun <T : Any> withSaveRetry(label: String, block: () -> T?): T? {
+        var lastError: Exception? = null
+        repeat(SAVE_RETRY_ATTEMPTS) { attempt ->
+            try {
+                val result = block()
+                if (result != null) {
+                    if (attempt > 0) Log.i(TAG, "$label succeeded on retry attempt ${attempt + 1}")
+                    return result
+                }
+            } catch (e: Exception) {
+                lastError = e
+                Log.w(TAG, "$label attempt ${attempt + 1}/$SAVE_RETRY_ATTEMPTS threw", e)
+            }
+            if (attempt < SAVE_RETRY_ATTEMPTS - 1) {
+                try { Thread.sleep(SAVE_RETRY_DELAY_MS) } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return null
+                }
+            }
+        }
+        Log.w(TAG, "$label all $SAVE_RETRY_ATTEMPTS attempts failed${lastError?.let { " (last: ${it.javaClass.simpleName})" } ?: ""}")
+        return null
     }
 
     /**
@@ -669,41 +708,36 @@ class MediaExtractor(private val context: Context) {
         packageName: String,
         mediaType: MediaType,
         captureTime: Long
-    ): MediaAttachmentEntity? {
-        val docDir = currentSafDocDir() ?: return null
-        return try {
-            val fileName = buildMediaFileName(packageName, mediaType, hash, "png")
-            val existing = docDir.findFile(fileName)
-            val docFile = if (existing != null && existing.exists()) {
-                existing
-            } else {
-                val baseName = buildMediaBaseName(packageName, mediaType, hash)
-                docDir.createFile("image/png", baseName) ?: return null
-            }
-
-            // 僅新建的檔案需要寫入
-            if (existing == null) {
-                val outputUri = docFile.uri
-                context.contentResolver.openOutputStream(outputUri)?.use { out ->
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-                } ?: return null
-            }
-
-            MediaAttachmentEntity(
-                eventId = eventId,
-                mediaType = mediaType,
-                filePath = fileName,
-                mimeType = "image/png",
-                fileSize = docFile.length(),
-                width = bitmap.width,
-                height = bitmap.height,
-                captureTime = captureTime,
-                contentHash = hash
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to save bitmap to custom dir", e)
-            null
+    ): MediaAttachmentEntity? = withSaveRetry("saveBitmapToCustomDir($mediaType)") {
+        val docDir = currentSafDocDir() ?: return@withSaveRetry null
+        val fileName = buildMediaFileName(packageName, mediaType, hash, "png")
+        val existing = docDir.findFile(fileName)
+        val docFile = if (existing != null && existing.exists()) {
+            existing
+        } else {
+            val baseName = buildMediaBaseName(packageName, mediaType, hash)
+            docDir.createFile("image/png", baseName) ?: return@withSaveRetry null
         }
+
+        // 僅新建的檔案需要寫入
+        if (existing == null) {
+            val outputUri = docFile.uri
+            context.contentResolver.openOutputStream(outputUri)?.use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            } ?: return@withSaveRetry null
+        }
+
+        MediaAttachmentEntity(
+            eventId = eventId,
+            mediaType = mediaType,
+            filePath = fileName,
+            mimeType = "image/png",
+            fileSize = docFile.length(),
+            width = bitmap.width,
+            height = bitmap.height,
+            captureTime = captureTime,
+            contentHash = hash
+        )
     }
 
     /**
@@ -716,36 +750,34 @@ class MediaExtractor(private val context: Context) {
         packageName: String,
         mediaType: MediaType,
         captureTime: Long
-    ): MediaAttachmentEntity? {
-        return try {
-            val fileName = buildMediaFileName(packageName, mediaType, hash, "png")
-            val existingFile = File(currentMediaDir(), fileName)
+    ): MediaAttachmentEntity? = withSaveRetry("saveBitmapToDefaultDir($mediaType)") {
+        val fileName = buildMediaFileName(packageName, mediaType, hash, "png")
+        val existingFile = File(currentMediaDir(), fileName)
 
-            if (!existingFile.exists()) {
-                FileOutputStream(existingFile).use { out ->
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-                }
+        if (!existingFile.exists()) {
+            FileOutputStream(existingFile).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
-
-            MediaAttachmentEntity(
-                eventId = eventId,
-                mediaType = mediaType,
-                filePath = fileName,
-                mimeType = "image/png",
-                fileSize = existingFile.length(),
-                width = bitmap.width,
-                height = bitmap.height,
-                captureTime = captureTime,
-                contentHash = hash
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to save bitmap to default dir", e)
-            null
         }
+
+        MediaAttachmentEntity(
+            eventId = eventId,
+            mediaType = mediaType,
+            filePath = fileName,
+            mimeType = "image/png",
+            fileSize = existingFile.length(),
+            width = bitmap.width,
+            height = bitmap.height,
+            captureTime = captureTime,
+            contentHash = hash
+        )
     }
 
     /**
      * 儲存 Icon (API 23+)
+     *
+     * W22ab：drawable 解析失敗 / 例外 / API 不支援時 fabricate 一筆 `extract_failed_` trace
+     * row 保留「曾嘗試但失敗」資訊。回 null 只用於「呼叫端應主動 skip」的場景（目前無）。
      */
     private fun saveIcon(
         icon: Icon,
@@ -753,11 +785,17 @@ class MediaExtractor(private val context: Context) {
         packageName: String,
         mediaType: MediaType,
         captureTime: Long
-    ): MediaAttachmentEntity? {
-        if (Build.VERSION.SDK_INT < 23) return null
+    ): MediaAttachmentEntity {
+        if (Build.VERSION.SDK_INT < 23) {
+            return extractFailedTrace(eventId, mediaType, captureTime, "api_below_23")
+        }
 
         return try {
-            val drawable = icon.loadDrawable(context) ?: return null
+            val drawable = icon.loadDrawable(context)
+            if (drawable == null) {
+                Log.w(TAG, "saveIcon: icon.loadDrawable returned null for mediaType=$mediaType")
+                return extractFailedTrace(eventId, mediaType, captureTime, "drawable_null_${icon.hashCode()}")
+            }
             val bitmap = Bitmap.createBitmap(
                 drawable.intrinsicWidth.coerceAtLeast(1),
                 drawable.intrinsicHeight.coerceAtLeast(1),
@@ -769,10 +807,30 @@ class MediaExtractor(private val context: Context) {
 
             saveBitmap(bitmap, eventId, packageName, mediaType, captureTime)
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to save icon", e)
-            null
+            Log.w(TAG, "Failed to save icon (mediaType=$mediaType)", e)
+            extractFailedTrace(eventId, mediaType, captureTime, "exception_${e.javaClass.simpleName}")
         }
     }
+
+    /**
+     * W22ab：建立「曾嘗試但 extract 失敗」trace entity。供 Detail UI 顯示「無法取得」狀態。
+     */
+    private fun extractFailedTrace(
+        eventId: Long,
+        mediaType: MediaType,
+        captureTime: Long,
+        reason: String
+    ): MediaAttachmentEntity = MediaAttachmentEntity(
+        eventId = eventId,
+        mediaType = mediaType,
+        filePath = "",
+        mimeType = "image/png",
+        fileSize = 0,
+        width = 0,
+        height = 0,
+        captureTime = captureTime,
+        contentHash = "extract_failed_$reason"
+    )
 
     /**
      * 計算 Bitmap Hash

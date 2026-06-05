@@ -725,8 +725,15 @@ class NotificationDetailFragment : Fragment() {
         val marginPx = (8 * resources.displayMetrics.density).toInt()
 
         for (attachment in attachments) {
+            // W22ab：trace 狀態三態 — unavailable(URI 失敗)、saveFailed(IO 寫入失敗)、
+            // extractFailed(drawable 解析失敗 / API 限制)。詳見 MediaExtractor 內部。
             val isUnavailable = attachment.filePath.isEmpty() && !attachment.sourceUri.isNullOrEmpty()
-            val fileExists = !isUnavailable && MediaExtractor.mediaFileExists(ctx, attachment.filePath)
+            val isSaveFailed = attachment.filePath.isEmpty() &&
+                attachment.contentHash.startsWith("save_failed_")
+            val isExtractFailed = attachment.filePath.isEmpty() &&
+                attachment.contentHash.startsWith("extract_failed_")
+            val fileExists = !isUnavailable && !isSaveFailed && !isExtractFailed &&
+                MediaExtractor.mediaFileExists(ctx, attachment.filePath)
 
             // 每張圖的容器：圖片 + 類型標籤
             val itemLayout = LinearLayout(ctx).apply {
@@ -774,6 +781,8 @@ class NotificationDetailFragment : Fragment() {
                 text = when {
                     fileExists -> attachment.mediaType.name
                     isUnavailable -> ctx.getString(R.string.media_unavailable)
+                    isSaveFailed -> ctx.getString(R.string.media_save_failed)
+                    isExtractFailed -> ctx.getString(R.string.media_extract_failed)
                     else -> ctx.getString(R.string.media_file_removed)
                 }
                 textSize = 10f
