@@ -38,6 +38,12 @@ data class NotificationDisplay(
     val postTime: Long,
     val captureTime: Long,
     val whenTime: Long,
+    /**
+     * W22ad：Notification.timeoutAfter（API 26+）。post 後 N ms 系統自動 REMOVE
+     * （reason=REASON_TIMEOUT, 19）。0 = 未設定（最常見）。從 raw_json
+     * `sbn.notification.timeoutAfter` 反射取得。
+     */
+    val timeoutAfter: Long,
 
     // === 文字內容 ===
     val title: String?,
@@ -150,6 +156,7 @@ data class NotificationDisplay(
                 postTime = event.postTime,
                 captureTime = event.captureTime,
                 whenTime = notif?.optLongOrNull("when") ?: 0L,
+                timeoutAfter = notif?.optLongOrNull("timeoutAfter") ?: 0L,
                 title = event.title ?: snap?.title,
                 text = event.text ?: snap?.text,
                 bigText = snap?.bigText,

@@ -226,6 +226,7 @@
     <string name="label_time">發佈時間</string>
     <string name="label_when_time">事件時間</string>
     <string name="label_capture_time">擷取時間</string>
+    <string name="label_timeout_after">逾時自動移除</string>
     <string name="label_when_not_shown">（通知列不顯示）</string>
     <string name="label_tags_and_status">標籤與狀態</string>
     <string name="label_detail_info">詳細資訊</string>
@@ -268,6 +269,7 @@
     <string name="desc_post_time">Android 系統在 notify() 時記錄的發佈時間，通知更新時會刷新。\n\n與事件時間不同：發佈時間是系統端的實際發佈時刻，事件時間是 App 指定的時間。\n與擷取時間不同：擷取時間是 NLS 收到並寫入的時刻，差值反映處理延遲。</string>
     <string name="desc_when_time">App 透過 setWhen() 設定的事件時間，通知列上 showWhen=true 時顯示此值。可能與發佈時間不同，例如郵件的寄出時間、訊息的發送時間。</string>
     <string name="desc_capture_time">NLS 收到事件並寫入資料庫的時間。與發佈時間的差值反映系統處理和 App 排程的延遲。</string>
+    <string name="desc_timeout_after">App 透過 Notification.Builder.setTimeoutAfter() 設定的逾時時長（API 26+）。從發佈時間起算，到期時系統自動移除通知並產生 reason=19 (REASON_TIMEOUT) 的 REMOVED 事件。通知重新發佈（同 notification_key 再次 notify()）會 reset 計時。</string>
 
     <string name="desc_importance">系統判定的通知重要性（API 26+），決定是否發聲、是否 heads-up、是否顯示。\n\nNONE(0)=不顯示\nMIN(1)=靜音，不在狀態列\nLOW(2)=靜音，在狀態列\nDEFAULT(3)=發聲\nHIGH(4)=發聲 + heads-up\nMAX(5)=同 HIGH</string>
     <string name="desc_channel_id">App 建立的通知頻道 ID，同一 App 的不同類型通知通常使用不同頻道。使用者可在系統設定中對各頻道獨立調整行為。</string>

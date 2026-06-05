@@ -93,6 +93,7 @@ class NotificationDetailFragment : Fragment() {
                 .format(Date(millis))
         }
     }
+
     private val preciseTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
 
     private lateinit var eventAdapter: NotificationEventAdapter
@@ -393,6 +394,22 @@ class NotificationDetailFragment : Fragment() {
                 .setMessage(R.string.desc_post_time)
                 .setPositiveButton(android.R.string.ok, null)
                 .show()
+        }
+
+        // W22ad：逾時自動移除（timeoutAfter，API 26+；0 = 未設定 → 隱藏）。
+        // 忠實呈現原值 + 單位（ms），不做時間單位轉換。
+        if (notification.timeoutAfter > 0L) {
+            binding.layoutTimeoutAfter.visibility = View.VISIBLE
+            binding.textTimeoutAfter.text = "${notification.timeoutAfter} ms"
+            binding.labelTimeoutAfter.setOnClickListener {
+                MaterialAlertDialogBuilder(context)
+                    .setTitle(R.string.label_timeout_after)
+                    .setMessage(R.string.desc_timeout_after)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        } else {
+            binding.layoutTimeoutAfter.visibility = View.GONE
         }
 
         // 事件時間 (whenTime)

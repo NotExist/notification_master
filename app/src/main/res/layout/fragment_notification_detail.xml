@@ -229,6 +229,35 @@
                     android:textIsSelectable="true"
                     tools:text="2026-04-01T14:30:25+08:00" />
 
+                <!-- timeoutAfter（W22ad：API 26+，未設定 = 0 隱藏整個 layout） -->
+                <LinearLayout
+                    android:id="@+id/layout_timeout_after"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/label_timeout_after"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_timeout_after"
+                        app:drawableEndCompat="@drawable/ic_info_outline"
+                        android:drawablePadding="4dp"
+                        android:textAppearance="?attr/textAppearanceLabelMedium"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                    <TextView
+                        android:id="@+id/text_timeout_after"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                        android:textIsSelectable="true"
+                        tools:text="30000 ms" />
+
+                </LinearLayout>
+
                 <!-- 事件時間 -->
                 <LinearLayout
                     android:id="@+id/layout_when_time"

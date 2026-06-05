@@ -170,6 +170,7 @@ object NotificationEnricher {
             postTime = event.postTime,
             captureTime = event.captureTime,
             whenTime = 0L,
+            timeoutAfter = 0L,
             title = event.title ?: "(parse error)",
             text = event.text,
             bigText = null,
