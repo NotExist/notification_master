@@ -235,6 +235,10 @@ class TimelineFragment : Fragment() {
         }
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
+        // W22y：custom ItemAnimator 避免 DefaultItemAnimator.animateAdd / animateChange
+        // 覆寫 bind() 設的 dim alpha（0.55）。詳見
+        // memory/pitfall_recyclerview_alpha_animator.md。
+        binding.recyclerView.itemAnimator = TimelineItemAnimator()
 
         binding.recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             // W22-instrument：onScrolled 高頻（fling 慣性中每 frame fire），throttle 條件：
