@@ -795,9 +795,27 @@ class TimelineFragment : Fragment() {
             // withContext(IO) 切換），長 list 不再 N 次 thread hop 拖累 main thread。
             // Phase 31j：similarCount 與 dedup chip 脫離連動，無論 dedup ON/OFF 都計算
             // 「跨通知同內容」筆數（不同 notification_key 但同 content_hash）。
+            // W22ae：三段 timing instrument — IO dispatch / IO 計算 / main reentry，量化
+            // cold start phase=Loaded → submit 15s gap 卡在哪一段。
+            val tBuildStart = System.currentTimeMillis()
             val timelineItems: List<TimelineItem> = withContext(Dispatchers.IO) {
-                buildTimelineItemsWithSimilarCountInIo(filtered, eventDao)
+                val tIoEntry = System.currentTimeMillis()
+                ProfileLogger.append(
+                    "Fragment",
+                    "buildItems io-enter n=${filtered.size} dispatchDelay=${tIoEntry - tBuildStart}ms"
+                )
+                val r = buildTimelineItemsWithSimilarCountInIo(filtered, eventDao)
+                ProfileLogger.append(
+                    "Fragment",
+                    "buildItems io-done n=${r.size} ioTook=${System.currentTimeMillis() - tIoEntry}ms"
+                )
+                r
             }
+            val tMainReentry = System.currentTimeMillis()
+            ProfileLogger.append(
+                "Fragment",
+                "buildItems main-reentry totalWithDispatch=${tMainReentry - tBuildStart}ms"
+            )
             submitWithFooter(timelineItems, input.footer)
         }
 
@@ -981,8 +999,10 @@ class TimelineFragment : Fragment() {
         eventDao: com.notificationmaster.data.db.dao.NotificationEventDao
     ): List<TimelineItem> {
         // Plan 2 W1.c：removedIds 參數移除 — row.isRemoved 由 NotificationDisplay 自帶（廣義語意）
+        // W22ae：query timing 統計 — N 次 getDeduplicatedCount 加總 / 最大 / 平均 / p99
         val items = mutableListOf<TimelineItem>()
         var lastDate: Long? = null
+        val queryTimings = mutableListOf<Long>()
         for (notification in notifications) {
             val notificationDate = getStartOfDay(notification.postTime)
             if (lastDate != notificationDate) {
@@ -991,14 +1011,26 @@ class TimelineFragment : Fragment() {
             }
             val dayStart = notificationDate
             val dayEnd = dayStart + ONE_DAY_MS
+            val tQ = System.currentTimeMillis()
             val similarCount = eventDao.getDeduplicatedCount(
                 notification.contentHash, dayStart, dayEnd
             )
+            queryTimings.add(System.currentTimeMillis() - tQ)
             items.add(TimelineItem.NotificationItem(
                 notification = notification,
                 similarCount = similarCount,
                 isRemoved = notification.isRemoved
             ))
+        }
+        if (queryTimings.isNotEmpty()) {
+            val sorted = queryTimings.sorted()
+            val p99 = sorted[((sorted.size - 1) * 99 / 100).coerceAtLeast(0)]
+            ProfileLogger.append(
+                "Fragment",
+                "buildItems queries n=${queryTimings.size} " +
+                    "total=${queryTimings.sum()}ms max=${sorted.last()}ms p99=${p99}ms " +
+                    "avg=${queryTimings.average().toInt()}ms"
+            )
         }
         return items
     }
