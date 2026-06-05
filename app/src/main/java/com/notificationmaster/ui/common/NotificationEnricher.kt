@@ -44,7 +44,7 @@ object NotificationEnricher {
         channelDao: ChannelDao,
         rankingObsDao: RankingObservationDao,
         rankingSnapDao: RankingSnapshotDao,
-        eventDao: NotificationEventDao? = null
+        eventDao: NotificationEventDao
     ): List<NotificationDisplay> {
         if (events.isEmpty()) return emptyList()
         val t0 = System.currentTimeMillis()
@@ -81,11 +81,8 @@ object NotificationEnricher {
         // - row 後有同 nkey 任何事件（row.event_time < latest.event_time）→ isRemoved=true
         // - 該 nkey 最終 REMOVED（latest.event_type == REMOVED）→ 該 nkey 所有 row isRemoved=true
         // - row 是 nkey 最新且 latest != REMOVED → isRemoved=false（「活著」代表）
-        // eventDao 為 null（暫時相容）時 fallback 用 row.event_type == REMOVED（狹義舊行為）。
         val latestPerKey: Map<String, NotificationEventEntity> =
-            if (eventDao != null && keys.isNotEmpty()) {
-                eventDao.getLatestEventByKeysSync(keys).associateBy { it.notificationKey }
-            } else emptyMap()
+            eventDao.getLatestEventByKeysSync(keys).associateBy { it.notificationKey }
         val t3b = System.currentTimeMillis()
 
         // W22-instrument：log latest event map 統計 — 確認 isRemoved 計算依據
@@ -112,18 +109,14 @@ object NotificationEnricher {
                 val importance = channelKey?.let { channelMap[it] } ?: -1
                 val mergedJson = rankingJsonMap[event.notificationKey]
                 // Plan 2 W1.b：算廣義 isRemoved 並 inject 到 Enrichment
-                val isRemoved = if (latestPerKey.isEmpty()) {
-                    // fallback 狹義（caller 沒傳 eventDao）
+                val latest = latestPerKey[event.notificationKey]
+                val isRemoved = if (latest == null) {
+                    // 該 key 在 latestPerKey 查不到（DB race / inconsistency）→ 退回狹義
                     event.eventType == EventType.REMOVED
                 } else {
-                    val latest = latestPerKey[event.notificationKey]
-                    if (latest == null) {
-                        event.eventType == EventType.REMOVED
-                    } else {
-                        val rowIsLatest = event.eventTime == latest.eventTime
-                        val nkeyFinallyRemoved = latest.eventType == EventType.REMOVED
-                        !rowIsLatest || nkeyFinallyRemoved
-                    }
+                    val rowIsLatest = event.eventTime == latest.eventTime
+                    val nkeyFinallyRemoved = latest.eventType == EventType.REMOVED
+                    !rowIsLatest || nkeyFinallyRemoved
                 }
                 NotificationDisplay.from(
                     event,
