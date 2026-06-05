@@ -163,11 +163,16 @@ interface NotificationEventDao {
     suspend fun getSimilarEvents(hash: String, startTime: Long, endTime: Long): List<NotificationEventEntity>
 
     /**
-     * UI 搜尋（標題 / 內文 / raw 全文 LIKE）。
+     * UI 搜尋（標題 / 內文 / raw 全文 / 媒體檔名 LIKE）。
      *
      * Plan 2 Phase 16：除 title / text 兩個投影 column，也直接對 event_raw_json 做 LIKE。
      * 這樣 bigText / subText / summaryText / extras 內任何字串值都能被搜尋命中
      * （e.g. MessagingStyle 訊息內容、ticker 等）。
+     *
+     * Plan 2 W22z：回補 LEFT JOIN media_attachments + file_path LIKE，讓使用者以
+     * 另存出來的媒體檔名（`{pkg}_{mediaType}_{hash}.ext`）回查對應 event。Phase 16
+     * 暫時拿掉時的「待 FK 對齊」條件已滿足（MediaAttachmentEntity.event_id 指向
+     * NotificationEventEntity.id 並有 index）。
      *
      * 副作用：raw LIKE 可能命中 JSON 結構字（如 "_type"），但實務上使用者搜尋字串
      * 很少剛好等於 JSON key name，可接受。SQLite LIKE 對中等大小字串（每筆 ≤ 100KB）
@@ -177,11 +182,13 @@ interface NotificationEventDao {
         SELECT * FROM notification_events
         WHERE id IN (
             SELECT id FROM (
-                SELECT id, MAX(event_time) FROM notification_events
-                WHERE title LIKE '%' || :query || '%'
-                   OR text LIKE '%' || :query || '%'
-                   OR event_raw_json LIKE '%' || :query || '%'
-                GROUP BY notification_key
+                SELECT e.id AS id, MAX(e.event_time) FROM notification_events e
+                LEFT JOIN media_attachments m ON m.event_id = e.id
+                WHERE e.title LIKE '%' || :query || '%'
+                   OR e.text LIKE '%' || :query || '%'
+                   OR e.event_raw_json LIKE '%' || :query || '%'
+                   OR m.file_path LIKE '%' || :query || '%'
+                GROUP BY e.notification_key
             )
         )
         ORDER BY event_time DESC
