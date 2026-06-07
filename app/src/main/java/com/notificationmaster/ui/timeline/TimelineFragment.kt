@@ -789,17 +789,17 @@ class TimelineFragment : Fragment() {
                     binding.emptyState.visibility = View.GONE
                     binding.recyclerView.visibility = View.VISIBLE
                     if (input.filterText.isNotEmpty()) {
-                        // W22af：filter 篩 0 → 顯式提示 + 顯式繼續按鈕（canLoadMore=true）
-                        // 或「已搜尋全部無結果」（canLoadMore=false），覆寫 footer 避免重複
-                        // 提示「↓ 繼續滾動載入更多」（filter 篩 0 時無法用 scroll 觸發）。
-                        val noMatchItem = TimelineItem.FilterNoMatch(
+                        // W22af/W22ag：filter 模式 + filtered.isEmpty() → FilterFooter
+                        // matchedCount=0，搭配 canLoadMore 顯示繼續搜尋按鈕或無結果終態
+                        val footerItem = TimelineItem.FilterFooter(
+                            matchedCount = 0,
                             canLoadMore = input.state.canLoadMore
                         )
                         ProfileLogger.append(
                             "Fragment",
-                            "renderList isEmpty case=FilterNoMatch canLoadMore=${input.state.canLoadMore}"
+                            "renderList isEmpty case=FilterFooter matchedCount=0 canLoadMore=${input.state.canLoadMore}"
                         )
-                        submitWithFooter(listOf(noMatchItem), FooterState.None)
+                        submitWithFooter(listOf(footerItem), FooterState.None)
                     } else {
                         // chip 篩 0 結果：明確 submit empty + footer 反映狀態
                         ProfileLogger.append("Fragment", "renderList isEmpty case=Loaded submitEmpty")
@@ -837,7 +837,17 @@ class TimelineFragment : Fragment() {
                 "Fragment",
                 "buildItems main-reentry totalWithDispatch=${tMainReentry - tBuildStart}ms"
             )
-            submitWithFooter(timelineItems, input.footer)
+            // W22ag：filter 模式（filterText 非空）時在 list 末尾加 FilterFooter 取代
+            // 預設 PendingMore footer，敘述跟動作對齊（按鈕觸發 vs 滾動觸發）。
+            if (input.filterText.isNotEmpty()) {
+                val filterFooter = TimelineItem.FilterFooter(
+                    matchedCount = filtered.size,
+                    canLoadMore = input.state.canLoadMore
+                )
+                submitWithFooter(timelineItems + filterFooter, FooterState.None)
+            } else {
+                submitWithFooter(timelineItems, input.footer)
+            }
         }
 
         // W22d：末尾自動 lazyload 走統一入口 [maybeAutoLoadNext]，與 onScrolled prefetch

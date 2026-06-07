@@ -51,8 +51,8 @@ class TimelineAdapter(
         // Plan 1-zippy-thunder B1-ux：Ready(canLoadMore) 狀態下常駐 footer，
         // 使 scrollbar 範圍永遠涵蓋底部 footer 位置（user 期望「快速滑到底時 footer 已在範圍內」）。
         private const val VIEW_TYPE_PENDING_MORE = 4
-        // W22af：filter 篩 0 + 未載完 顯式提示 + 繼續搜尋按鈕
-        private const val VIEW_TYPE_FILTER_NO_MATCH = 5
+        // W22af/W22ag：filter 模式統一 footer，覆寫 PendingMore（敘述跟動作對齊）
+        private const val VIEW_TYPE_FILTER_FOOTER = 5
     }
 
     override fun getItemViewType(position: Int): Int {
@@ -62,7 +62,7 @@ class TimelineAdapter(
             is TimelineItem.LoadingMore -> VIEW_TYPE_LOADING
             is TimelineItem.EndOfTimeline -> VIEW_TYPE_END
             is TimelineItem.PendingMore -> VIEW_TYPE_PENDING_MORE
-            is TimelineItem.FilterNoMatch -> VIEW_TYPE_FILTER_NO_MATCH
+            is TimelineItem.FilterFooter -> VIEW_TYPE_FILTER_FOOTER
         }
     }
 
@@ -85,9 +85,9 @@ class TimelineAdapter(
                 val view = inflater.inflate(R.layout.item_timeline_pending_more, parent, false)
                 SimpleViewHolder(view)
             }
-            VIEW_TYPE_FILTER_NO_MATCH -> {
-                val view = inflater.inflate(R.layout.item_timeline_filter_no_match, parent, false)
-                FilterNoMatchViewHolder(view)
+            VIEW_TYPE_FILTER_FOOTER -> {
+                val view = inflater.inflate(R.layout.item_timeline_filter_footer, parent, false)
+                FilterFooterViewHolder(view)
             }
             else -> {
                 val binding = ItemTimelineNotificationBinding.inflate(inflater, parent, false)
@@ -104,7 +104,7 @@ class TimelineAdapter(
         when (val item = getItem(position)) {
             is TimelineItem.DateHeader -> (holder as DateHeaderViewHolder).bind(item)
             is TimelineItem.NotificationItem -> (holder as NotificationViewHolder).bind(item)
-            is TimelineItem.FilterNoMatch -> (holder as FilterNoMatchViewHolder).bind(item)
+            is TimelineItem.FilterFooter -> (holder as FilterFooterViewHolder).bind(item)
             is TimelineItem.LoadingMore,
             is TimelineItem.EndOfTimeline,
             is TimelineItem.PendingMore -> { /* 靜態佈局，無需綁定 */ }
@@ -113,18 +113,26 @@ class TimelineAdapter(
 
     class SimpleViewHolder(view: View) : RecyclerView.ViewHolder(view)
 
-    inner class FilterNoMatchViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+    inner class FilterFooterViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val textMessage = view.findViewById<android.widget.TextView>(R.id.text_message)
         private val buttonContinue = view.findViewById<android.widget.Button>(R.id.button_continue)
 
-        fun bind(item: TimelineItem.FilterNoMatch) {
+        fun bind(item: TimelineItem.FilterFooter) {
             val ctx = itemView.context
+            textMessage.text = when {
+                item.matchedCount == 0 && item.canLoadMore ->
+                    ctx.getString(R.string.timeline_filter_no_match_in_loaded_range)
+                item.matchedCount == 0 && !item.canLoadMore ->
+                    ctx.getString(R.string.timeline_filter_no_match_exhausted)
+                item.canLoadMore ->
+                    ctx.getString(R.string.timeline_filter_matched_continue, item.matchedCount)
+                else ->
+                    ctx.getString(R.string.timeline_filter_matched_exhausted, item.matchedCount)
+            }
             if (item.canLoadMore) {
-                textMessage.text = ctx.getString(R.string.timeline_filter_no_match_in_loaded_range)
                 buttonContinue.visibility = View.VISIBLE
                 buttonContinue.setOnClickListener { onLoadMoreForSearchClick() }
             } else {
-                textMessage.text = ctx.getString(R.string.timeline_filter_no_match_exhausted)
                 buttonContinue.visibility = View.GONE
                 buttonContinue.setOnClickListener(null)
             }
@@ -370,7 +378,7 @@ class TimelineAdapter(
                 oldItem is TimelineItem.LoadingMore && newItem is TimelineItem.LoadingMore -> true
                 oldItem is TimelineItem.EndOfTimeline && newItem is TimelineItem.EndOfTimeline -> true
                 oldItem is TimelineItem.PendingMore && newItem is TimelineItem.PendingMore -> true
-                oldItem is TimelineItem.FilterNoMatch && newItem is TimelineItem.FilterNoMatch -> true
+                oldItem is TimelineItem.FilterFooter && newItem is TimelineItem.FilterFooter -> true
                 else -> false
             }
         }
@@ -417,8 +425,9 @@ class TimelineAdapter(
                 oldItem is TimelineItem.LoadingMore && newItem is TimelineItem.LoadingMore -> true
                 oldItem is TimelineItem.EndOfTimeline && newItem is TimelineItem.EndOfTimeline -> true
                 oldItem is TimelineItem.PendingMore && newItem is TimelineItem.PendingMore -> true
-                oldItem is TimelineItem.FilterNoMatch && newItem is TimelineItem.FilterNoMatch ->
-                    oldItem.canLoadMore == newItem.canLoadMore
+                oldItem is TimelineItem.FilterFooter && newItem is TimelineItem.FilterFooter ->
+                    oldItem.matchedCount == newItem.matchedCount &&
+                        oldItem.canLoadMore == newItem.canLoadMore
                 else -> false
             }
         }
@@ -440,13 +449,16 @@ sealed class TimelineItem {
     // Plan 1-zippy-thunder B1-ux：Ready(canLoadMore) 對應 footer，靜態 hint「↓ 繼續滾動載入更多」
     object PendingMore : TimelineItem()
     /**
-     * W22af：filterText 非空 + 已載入範圍篩 0 結果時呈現。
-     * - `canLoadMore=true`：顯示「已載入範圍無符合，繼續往前搜尋」+ 按鈕觸發 loadNextDay()
-     * - `canLoadMore=false`：顯示「已搜尋全部紀錄無符合結果」（無按鈕）
+     * W22af/W22ag：filterText 非空時統一使用此 footer 取代 PendingMore。原 footer
+     * 文字「↓ 繼續滾動載入更多」對應 maybeAutoLoadNext 的 scroll 觸發路徑，但 filter
+     * 模式下該 gate `filterText.isNotEmpty() return`（避免稀有字串自動掃 DB 撞底），
+     * scroll 動作實際上無效。改用顯式按鈕讓敘述跟動作對齊。
      *
-     * 用意：filter 篩 0 時 list 沒 item → scroll 無法觸發 lazyload，且 maybeAutoLoadNext
-     * 在 filterText.isNotEmpty() 時 return（避免稀有字串一路掃 DB 撞底）。透過顯式按鈕
-     * 讓 user 自主決定是否續搜，平衡 UX 反饋與 IO 成本。
+     * 4 種組合：
+     * - `matchedCount=0, canLoadMore=true`：「已載入範圍尚無符合過濾的記錄」+ 按鈕
+     * - `matchedCount=0, canLoadMore=false`：「已搜尋全部歷史記錄，無符合過濾的結果」
+     * - `matchedCount>0, canLoadMore=true`：「已篩出 N 筆，可繼續往前搜尋」+ 按鈕
+     * - `matchedCount>0, canLoadMore=false`：「已搜尋全部歷史記錄，共 N 筆符合」
      */
-    data class FilterNoMatch(val canLoadMore: Boolean) : TimelineItem()
+    data class FilterFooter(val matchedCount: Int, val canLoadMore: Boolean) : TimelineItem()
 }
