@@ -83,6 +83,9 @@
     <string name="timeline_loading_more">載入中…</string>
     <string name="timeline_end_of_data">已無更多記錄</string>
     <string name="timeline_pending_more">↓ 繼續滾動載入更多</string>
+    <string name="timeline_filter_no_match_in_loaded_range">已載入範圍無符合過濾的記錄</string>
+    <string name="timeline_filter_no_match_exhausted">已搜尋全部歷史記錄，無符合過濾的結果</string>
+    <string name="timeline_filter_no_match_continue">繼續往前搜尋</string>
 
     <!-- 通知詳情 -->
     <string name="detail_title">通知詳情</string>

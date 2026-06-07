@@ -195,6 +195,13 @@ class TimelineFragment : Fragment() {
                         soundPicker = soundPicker,
                         calendarPicker = calendarPicker
                     )
+                },
+                // W22af：filter 篩 0 + canLoadMore 時用顯式按鈕觸發 loadNextDay，避開
+                // maybeAutoLoadNext 的 `filterText.isNotEmpty() return` gate（避免稀有
+                // 字串自動掃 DB 撞底）
+                onLoadMoreForSearchClick = {
+                    ProfileLogger.append("Fragment", "filterNoMatch user click continue search")
+                    viewModel.loadNextDay()
                 }
             )
             // W22-instrument：監聽 adapter 變動，log itemCount 何時實際更新
@@ -779,11 +786,25 @@ class TimelineFragment : Fragment() {
                     // cold start：保留舊 list；不 submit empty 避免閃白
                 }
                 LoadPhase.Loaded -> {
-                    // chip 篩 0 / search 0 結果：明確 submit empty + footer 反映狀態
-                    ProfileLogger.append("Fragment", "renderList isEmpty case=Loaded submitEmpty")
                     binding.emptyState.visibility = View.GONE
                     binding.recyclerView.visibility = View.VISIBLE
-                    submitWithFooter(emptyList(), input.footer)
+                    if (input.filterText.isNotEmpty()) {
+                        // W22af：filter 篩 0 → 顯式提示 + 顯式繼續按鈕（canLoadMore=true）
+                        // 或「已搜尋全部無結果」（canLoadMore=false），覆寫 footer 避免重複
+                        // 提示「↓ 繼續滾動載入更多」（filter 篩 0 時無法用 scroll 觸發）。
+                        val noMatchItem = TimelineItem.FilterNoMatch(
+                            canLoadMore = input.state.canLoadMore
+                        )
+                        ProfileLogger.append(
+                            "Fragment",
+                            "renderList isEmpty case=FilterNoMatch canLoadMore=${input.state.canLoadMore}"
+                        )
+                        submitWithFooter(listOf(noMatchItem), FooterState.None)
+                    } else {
+                        // chip 篩 0 結果：明確 submit empty + footer 反映狀態
+                        ProfileLogger.append("Fragment", "renderList isEmpty case=Loaded submitEmpty")
+                        submitWithFooter(emptyList(), input.footer)
+                    }
                 }
             }
         } else {
