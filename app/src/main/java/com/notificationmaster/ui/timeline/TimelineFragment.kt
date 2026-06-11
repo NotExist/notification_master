@@ -1089,7 +1089,8 @@ class TimelineFragment : Fragment() {
             is TimelineItem.NotificationItem -> dateFormat.format(Date(item.notification.postTime))
             is TimelineItem.LoadingMore,
             is TimelineItem.EndOfTimeline,
-            is TimelineItem.PendingMore -> return
+            is TimelineItem.PendingMore,
+            is TimelineItem.FilterFooter -> return
         }
         binding.timeBubble.text = dateText
 
