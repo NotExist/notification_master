@@ -242,6 +242,19 @@ class TimelineViewModel(
     // 作為 fallback / 文件用，實際初始值由 AppPreferences 提供。
     private val _pageSize = MutableStateFlow(AppPreferences.getLazyloadInitialPageSize(application))
 
+    /**
+     * W23a：最後一次「enrich 完成並 emit」的 query 對應 limit。
+     *
+     * [loadNextDay] 的 DB-exhausted guard 修前比對 `allNotifications.size < _pageSize`，
+     * 但大資料機器上 query+enrich 超過 10s 時 [loadNextDay] 的 withTimeoutOrNull 會先
+     * 把 _isLoadingMore 重設（footer 回 Pending），此後 `lastQuery(舊) < pageSize(已擴)`
+     * 永遠成立 → 誤判 exhausted → lazyload 永久鎖死、footer 卻顯示「繼續滾動載入更多」。
+     *
+     * 修後 guard 比對本欄位：query 尚未對「當前 pageSize」emit 過 → 走 rewait（不疊加
+     * pageSize、重標 loading 等 in-flight query）；emit 過且 size < limit → 才是真 exhausted。
+     */
+    @Volatile private var lastEmittedLimit = 0
+
     // === 錯誤通道（Phase 26）===
 
     /**
@@ -291,6 +304,9 @@ class TimelineViewModel(
                     )
                 }
                 .map { items -> enrichAndMap(items) }
+                // W23a：enrich 完成才算「此 limit 的 query 已 emit」（onEach 在 map 之前
+                // 記會在 enrich 進行中就標 emitted，loadNextDay guard 提前誤判 exhausted）
+                .onEach { lastEmittedLimit = spec.limit ?: Int.MAX_VALUE }
                 .flowOn(Dispatchers.IO)
                 .conflate()
         }
@@ -643,13 +659,27 @@ class TimelineViewModel(
         val st = loadState.value
         if (st.phase != LoadPhase.Loaded || !st.canLoadMore) return
         if (_isLoadingMore.value) return
-        // canLoadMore 公式已涵蓋 displays>=total / raw exhausted / MAX cap guard
-        // 此處純粹再讀 lastQuery snapshot 防 race（_pageSize 剛 set 但 flatMapLatest 未跑）
-        val lastQuerySize = allNotifications.value.size
-        if (lastQuerySize < _pageSize.value) {
+
+        // W23a：上一次擴張的 query+enrich 還在路上（超過 10s 被 timeout 重設過 loading）→
+        // 不疊加 pageSize，只重標 loading 重新等待，footer 誠實回 Loading。
+        if (lastEmittedLimit < _pageSize.value) {
             ProfileLogger.append(
                 "Timeline",
-                "loadNextDay skip: lastQuery=$lastQuerySize < pageSize=${_pageSize.value} (DB exhausted)"
+                "loadNextDay rewait: emittedLimit=$lastEmittedLimit < pageSize=${_pageSize.value} " +
+                    "(in-flight query not yet emitted)"
+            )
+            _isLoadingMore.value = true
+            awaitQueryGrowth(displayedNotifications.value.size, allNotifications.value.size)
+            return
+        }
+
+        // canLoadMore 公式已涵蓋 displays>=total / raw exhausted / MAX cap guard
+        // 此處再讀「已 emit 的 query」snapshot 防 race：當前 limit 已回但 size 不足 = 真 exhausted
+        val lastQuerySize = allNotifications.value.size
+        if (lastQuerySize < lastEmittedLimit) {
+            ProfileLogger.append(
+                "Timeline",
+                "loadNextDay skip: lastQuery=$lastQuerySize < emittedLimit=$lastEmittedLimit (DB exhausted)"
             )
             return
         }
@@ -664,9 +694,15 @@ class TimelineViewModel(
         )
         _isLoadingMore.value = true
         _pageSize.value = target
+        awaitQueryGrowth(beforeDisplayedSize, beforeItemsSize)
+    }
 
+    /**
+     * W19/W23a：等真實 items 變化或 displays 增加才視為「query 回來」，之後重設 loading。
+     * trigger 與 rewait 兩條路徑共用。
+     */
+    private fun awaitQueryGrowth(beforeDisplayedSize: Int, beforeItemsSize: Int) {
         viewModelScope.launch {
-            // W19：等真實 items 變化或 displays 增加才視為「query 回來」。
             val result = withTimeoutOrNull(10_000L) {
                 combine(displayedNotifications, allNotifications) { displays, items ->
                     displays.size > beforeDisplayedSize || items.size > beforeItemsSize
