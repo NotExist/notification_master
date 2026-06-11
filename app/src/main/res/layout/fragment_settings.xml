@@ -429,6 +429,7 @@
 
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/switch_realtime_calendar"
+                        android:saveEnabled="false"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content" />
 
@@ -520,6 +521,7 @@
 
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/switch_keepalive"
+                        android:saveEnabled="false"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content" />
 
@@ -576,6 +578,7 @@
 
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/switch_process_text"
+                        android:saveEnabled="false"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content" />
 
@@ -609,6 +612,7 @@
 
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/switch_share_text"
+                        android:saveEnabled="false"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content" />
 
@@ -677,6 +681,7 @@
 
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/switch_debug"
+                        android:saveEnabled="false"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content" />
 
@@ -752,6 +757,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/input_lazyload_footer_min"
+                        android:saveEnabled="false"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:inputType="number" />
@@ -766,6 +772,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/input_lazyload_initial_page_size"
+                        android:saveEnabled="false"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:inputType="number" />
@@ -780,6 +787,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/input_lazyload_auto_threshold"
+                        android:saveEnabled="false"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:inputType="number" />
@@ -802,6 +810,7 @@
 
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/switch_calendar_export_log"
+                        android:saveEnabled="false"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content" />
 

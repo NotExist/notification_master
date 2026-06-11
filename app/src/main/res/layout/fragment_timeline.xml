@@ -31,6 +31,7 @@
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/edit_filter"
+                android:saveEnabled="false"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="@string/timeline_filter_hint"
@@ -56,6 +57,7 @@
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chip_deduplicated"
+                    android:saveEnabled="false"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/timeline_show_deduplicated"
@@ -68,6 +70,7 @@
                 <!-- Plan 2 W1：「已移除」view-level filter chip，與 dedup 並列、分隔線之前 -->
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chip_is_removed"
+                    android:saveEnabled="false"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
