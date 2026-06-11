@@ -14,6 +14,7 @@ import com.google.android.material.tabs.TabLayout
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.compat.ApiVersionHelper
+import com.notificationmaster.core.debug.ProfileLogger
 import com.notificationmaster.databinding.FragmentArchiveBinding
 import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import com.notificationmaster.ui.filter.FilterRuleDialogHelper
@@ -194,15 +195,27 @@ class ArchiveFragment : Fragment() {
             Tab.BY_CHANNEL -> viewModel.channelTabScrollState
         }
 
+        // W23c-instrument：byApp 入口「黑屏許久」嫌疑盤查 — query emit / submit commit 各段時間
+        val tStart = System.currentTimeMillis()
+        ProfileLogger.append("ArchiveHome", "load start tab=${viewModel.currentTab}")
         dataJob = viewLifecycleOwner.lifecycleScope.launch {
             when (viewModel.currentTab) {
                 Tab.BY_APP -> {
                     binding.recyclerView.adapter = appSourceAdapter
                     database.appSourceDao().getAllAppSources().collectLatest { apps ->
+                        ProfileLogger.append(
+                            "ArchiveHome",
+                            "byApp emit size=${apps.size} since-start=${System.currentTimeMillis() - tStart}ms"
+                        )
                         val binding = _binding ?: return@collectLatest
+                        val tSubmit = System.currentTimeMillis()
                         appSourceAdapter.submitList(apps) {
+                            ProfileLogger.append(
+                                "ArchiveHome",
+                                "byApp submit done size=${apps.size} commit=${System.currentTimeMillis() - tSubmit}ms"
+                            )
                             pendingScrollRestore?.let {
-                                binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
+                                _binding?.recyclerView?.layoutManager?.onRestoreInstanceState(it)
                                 pendingScrollRestore = null
                             }
                         }
@@ -217,10 +230,14 @@ class ArchiveFragment : Fragment() {
                     }
                     binding.recyclerView.adapter = channelAdapter
                     database.channelDao().getAllChannels().collectLatest { channels ->
+                        ProfileLogger.append(
+                            "ArchiveHome",
+                            "byChannel emit size=${channels.size} since-start=${System.currentTimeMillis() - tStart}ms"
+                        )
                         val binding = _binding ?: return@collectLatest
                         channelAdapter.submitList(channels) {
                             pendingScrollRestore?.let {
-                                binding.recyclerView.layoutManager?.onRestoreInstanceState(it)
+                                _binding?.recyclerView?.layoutManager?.onRestoreInstanceState(it)
                                 pendingScrollRestore = null
                             }
                         }

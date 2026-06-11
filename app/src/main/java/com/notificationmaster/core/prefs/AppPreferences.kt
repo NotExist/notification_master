@@ -263,7 +263,9 @@ object AppPreferences {
         "Removed", "Chip", "Enricher", "Display",
         "State", "Displays", "Fragment", "Timeline",
         // W22-instrument：counter/scrollbar/list timing 釐清
-        "Counter", "Scroll", "Adapter"
+        "Counter", "Scroll", "Adapter",
+        // W23-instrument：archive 入口 / detail 兩段式 / 封存匯出 timing
+        "ArchiveHome", "Detail", "Export"
     )
 
     /**
