@@ -26,6 +26,10 @@ interface NotificationRecordDao {
     @Query("SELECT * FROM notification_records WHERE notification_key = :key")
     suspend fun getByKey(key: String): NotificationRecordEntity?
 
+    /** W23d：封存匯出 batch IN（呼叫端自行 chunk 控制 SQLite 變數上限） */
+    @Query("SELECT * FROM notification_records WHERE notification_key IN (:keys)")
+    suspend fun getByKeysSync(keys: List<String>): List<NotificationRecordEntity>
+
     @Query("SELECT * FROM notification_records WHERE package_name = :packageName ORDER BY last_seen DESC")
     fun getByPackage(packageName: String): Flow<List<NotificationRecordEntity>>
 

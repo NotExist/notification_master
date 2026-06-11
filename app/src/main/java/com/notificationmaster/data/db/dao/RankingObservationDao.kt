@@ -27,6 +27,10 @@ interface RankingObservationDao {
     @Query("SELECT * FROM ranking_observations WHERE notification_key = :key ORDER BY observed_at ASC")
     suspend fun getByKeySync(key: String): List<RankingObservationEntity>
 
+    /** W23d：封存匯出 batch IN（呼叫端自行 chunk 控制 SQLite 變數上限） */
+    @Query("SELECT * FROM ranking_observations WHERE notification_key IN (:keys) ORDER BY observed_at ASC")
+    suspend fun getByKeysSync(keys: List<String>): List<RankingObservationEntity>
+
     @Query("SELECT * FROM ranking_observations WHERE notification_key = :key ORDER BY observed_at DESC LIMIT 1")
     suspend fun getLatestByKey(key: String): RankingObservationEntity?
 

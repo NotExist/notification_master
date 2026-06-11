@@ -30,6 +30,10 @@ interface MediaAttachmentDao {
     @Query("SELECT * FROM media_attachments WHERE event_id = :eventId")
     suspend fun getAttachmentsByEventIdSync(eventId: Long): List<MediaAttachmentEntity>
 
+    /** W23d：封存匯出 batch IN（呼叫端自行 chunk 控制 SQLite 變數上限） */
+    @Query("SELECT * FROM media_attachments WHERE event_id IN (:eventIds)")
+    suspend fun getAttachmentsByEventIdsSync(eventIds: List<Long>): List<MediaAttachmentEntity>
+
     /**
      * W22ac：取得同 notification_key 所有 event 的 attachments，按 content_hash dedup
      * 保留每組最早的 capture_time row（最早出現代表性 row），排除已知失敗 trace

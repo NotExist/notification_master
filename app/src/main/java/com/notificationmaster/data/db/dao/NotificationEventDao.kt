@@ -68,6 +68,23 @@ interface NotificationEventDao {
     @Query("SELECT EXISTS(SELECT 1 FROM notification_events WHERE notification_key = :key)")
     suspend fun existsByKey(key: String): Boolean
 
+    /**
+     * W23d：封存匯出分批用 — keyset（id 遞增）分批撈時間範圍內 events，
+     * 一次載入整個範圍（含 raw_json）會撐爆記憶體造成 main thread 卡死 / ANR。
+     */
+    @Query("""
+        SELECT * FROM notification_events
+        WHERE event_time BETWEEN :startTime AND :endTime AND id > :afterId
+        ORDER BY id ASC
+        LIMIT :limit
+    """)
+    suspend fun getEventsByTimeRangePagedSync(
+        startTime: Long,
+        endTime: Long,
+        afterId: Long,
+        limit: Int
+    ): List<NotificationEventEntity>
+
     @Query("""
         SELECT * FROM notification_events
         WHERE event_time BETWEEN :startTime AND :endTime
