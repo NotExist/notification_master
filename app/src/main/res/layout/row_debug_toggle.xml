@@ -14,9 +14,14 @@
         android:layout_weight="1"
         android:textAppearance="?attr/textAppearanceBodyMedium" />
 
+    <!-- W23g：此 layout 被動態 inflate 多列，所有 Switch 共用同一 ID。
+         view state save/restore 以 ID 為 key，同 ID 互相覆寫 → 還原時全部
+         被設成樹序最後一列的狀態，且 listener 會把錯值持久化進 prefs。
+         狀態以 SharedPreferences 為 SSOT（每次進頁重讀），關閉 view state 保存。 -->
     <com.google.android.material.switchmaterial.SwitchMaterial
         android:id="@+id/toggle_switch"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+        android:saveEnabled="false" />
 
 </LinearLayout>
