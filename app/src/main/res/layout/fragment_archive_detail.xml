@@ -24,6 +24,16 @@
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
         tools:listitem="@layout/item_timeline_notification" />
 
+    <!-- W23b：首次載入指示（query+enrich 完成前顯示） -->
+    <ProgressBar
+        android:id="@+id/progress_loading"
+        style="?android:attr/progressBarStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone"
+        tools:visibility="visible" />
+
     <!-- 空狀態 -->
     <LinearLayout
         tools:ignore="UseCompoundDrawables"
