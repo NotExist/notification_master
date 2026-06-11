@@ -32,6 +32,7 @@ import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.cache.AppLabelCache
 import com.notificationmaster.core.cache.PendingIntentCache
+import com.notificationmaster.core.debug.ProfileLogger
 import com.notificationmaster.core.media.MediaExtractor
 import com.notificationmaster.core.compat.ApiVersionHelper
 import com.notificationmaster.data.db.entity.ChannelEntity
@@ -193,16 +194,24 @@ class NotificationDetailFragment : Fragment() {
             // Plan 2 Phase 9-7：Detail 入口以 notificationKey 為主，摘要 / chips / details 全部以
             // anchor event 的 NotificationDisplay（攤平 snapshot）渲染。
             val notificationKey = args.notificationKey
-            val sameKeyEvents = withContext(Dispatchers.IO) {
-                eventDao.getEventsByKeySync(notificationKey)
+            val tStart = System.currentTimeMillis()
+            // W23e：anchor 單事件直接 query（getById / latest-by-key），不再先撈同 nkey 全部
+            // events — ongoing 通知上千 UPDATED 時 getEventsByKeySync 會阻塞整個首屏。
+            // anchor：args 帶入優先；查無（已被清理）fallback 最新一筆；仍無 events
+            // （極少 race）退化為 null → 摘要區隱藏，時間軸仍可呈現空態
+            val anchorEvent = withContext(Dispatchers.IO) {
+                (if (args.anchorEventId > 0) eventDao.getById(args.anchorEventId) else null)
+                    ?: eventDao.getLatestEventByKey(notificationKey)
             }
-            // anchor event：args 帶入優先；fallback 為最新一筆 event（依 event_time）；
-            // 仍無 events（極少 race）退化為 null → 摘要區隱藏，時間軸仍可呈現空態
-            val anchorEvent = when {
-                args.anchorEventId > 0 -> sameKeyEvents.firstOrNull { it.id == args.anchorEventId }
-                else -> null
-            } ?: sameKeyEvents.maxByOrNull { it.eventTime }
             val anchorEventId = anchorEvent?.id ?: -1L
+            ProfileLogger.append(
+                "Detail",
+                "anchor query id=$anchorEventId since-start=${System.currentTimeMillis() - tStart}ms"
+            )
+
+            // W23e：生命週期時間軸（同 nkey events ∪ observations）分批非同步載入，
+            // 不阻塞 anchor 區塊 render
+            loadTimelineRows(notificationKey, anchorEventId, tStart)
 
             if (anchorEvent != null) {
                 // Phase 14 Q2-A/B：走 NotificationEnricher 注入 channel importance + ranking 屬性
@@ -286,29 +295,67 @@ class NotificationDetailFragment : Fragment() {
                 // 顯示自訂 View 資訊
                 displayRemoteViewsInfo(display)
             }
+            ProfileLogger.append(
+                "Detail",
+                "anchor render done since-start=${System.currentTimeMillis() - tStart}ms"
+            )
+        }
+    }
 
-            // Phase 7b-B-4：時間軸 = events ∪ ranking observations，按時間升冪排序
-            val rows = withContext(Dispatchers.IO) {
+    /**
+     * W23e：生命週期時間軸 = 同 nkey events ∪ ranking observations（Phase 7b-B-4 結構不變），
+     * events 由新到舊每批 [EVENT_BATCH_SIZE] 筆分批載入、每批與 observations 合併排序後
+     * submit — 首批先見、舊資料陸續補上（RecyclerView 對可視區上方的 prepend 保持視窗穩定）。
+     */
+    private fun loadTimelineRows(notificationKey: String, anchorEventId: Long, tStart: Long) {
+        val database = NotificationMasterApp.getInstance().database
+        val eventDao = database.notificationEventDao()
+        eventAdapter.setFocusedEventId(anchorEventId)
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            // observations 通常少量，一次載入
+            val obsRows = withContext(Dispatchers.IO) {
                 val observations = database.rankingObservationDao().getByKeySync(notificationKey)
                 val snapshotById = observations.map { it.rankingSnapshotId }.toSet()
                     .mapNotNull { id -> database.rankingSnapshotDao().getById(id)?.let { id to it } }
                     .toMap()
-                val eventRows = sameKeyEvents.map { TimelineRow.Event(it) }
-                val obsRows = observations.mapNotNull { obs ->
+                observations.mapNotNull { obs ->
                     snapshotById[obs.rankingSnapshotId]?.let { TimelineRow.Observation(obs, it) }
                 }
-                (eventRows + obsRows).sortedBy { it.time }
             }
-            eventAdapter.setFocusedEventId(anchorEventId)
-            eventAdapter.submitList(rows) {
-                // 滾到 anchor event 對應的 row（若有）
-                val idx = rows.indexOfFirst { it is TimelineRow.Event && it.event.id == anchorEventId }
-                if (idx >= 0) {
-                    (binding.recyclerEvents.layoutManager as? LinearLayoutManager)
-                        ?.scrollToPositionWithOffset(idx, 0)
+
+            val eventRows = mutableListOf<TimelineRow.Event>()
+            val seenIds = HashSet<Long>()
+            var anchorScrolled = false
+            var offset = 0
+            while (true) {
+                val (rows, batchSize) = withContext(Dispatchers.IO) {
+                    val batch = eventDao.getEventsByKeyPagedDesc(notificationKey, EVENT_BATCH_SIZE, offset)
+                    // 載入期間有新事件寫入會使 OFFSET 視窗偏移 → 以 id 去重
+                    eventRows += batch.filter { seenIds.add(it.id) }.map { TimelineRow.Event(it) }
+                    (eventRows + obsRows).sortedBy { it.time } to batch.size
                 }
+                offset += batchSize
+                ProfileLogger.append(
+                    "Detail",
+                    "timeline batch offset=$offset rows=${rows.size} " +
+                        "since-start=${System.currentTimeMillis() - tStart}ms"
+                )
+                if (_binding == null) return@launch
+                eventAdapter.submitList(rows) {
+                    // 滾到 anchor event 對應的 row（只在首次出現時滾一次）
+                    if (!anchorScrolled) {
+                        val idx = rows.indexOfFirst { it is TimelineRow.Event && it.event.id == anchorEventId }
+                        if (idx >= 0) {
+                            anchorScrolled = true
+                            (_binding?.recyclerEvents?.layoutManager as? LinearLayoutManager)
+                                ?.scrollToPositionWithOffset(idx, 0)
+                        }
+                    }
+                }
+                updateEventCount(rows.size)
+                if (batchSize < EVENT_BATCH_SIZE) break
             }
-            updateEventCount(rows.size)
         }
     }
 
@@ -1576,5 +1623,10 @@ class NotificationDetailFragment : Fragment() {
             }
         }
         binding.chipGroupFlags.addView(chip)
+    }
+
+    companion object {
+        /** W23e：生命週期時間軸每批載入的 event 筆數 */
+        private const val EVENT_BATCH_SIZE = 300
     }
 }

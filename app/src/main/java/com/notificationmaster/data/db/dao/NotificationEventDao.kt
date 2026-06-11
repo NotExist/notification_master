@@ -65,6 +65,18 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE notification_key = :key ORDER BY event_time DESC LIMIT 1")
     suspend fun getLatestEventByKey(key: String): NotificationEventEntity?
 
+    /**
+     * W23e：Detail 生命週期時間軸分批載入用 — 由新到舊一批一批撈，
+     * 避免同 nkey 上千 event（含 raw_json）單一 query 撐爆 CursorWindow / 阻塞首屏。
+     */
+    @Query("""
+        SELECT * FROM notification_events
+        WHERE notification_key = :key
+        ORDER BY event_time DESC, id DESC
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun getEventsByKeyPagedDesc(key: String, limit: Int, offset: Int): List<NotificationEventEntity>
+
     @Query("SELECT EXISTS(SELECT 1 FROM notification_events WHERE notification_key = :key)")
     suspend fun existsByKey(key: String): Boolean
 
