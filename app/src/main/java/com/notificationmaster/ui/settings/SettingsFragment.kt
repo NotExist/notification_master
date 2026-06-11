@@ -437,6 +437,9 @@ class SettingsFragment : Fragment() {
                 .show()
         }
 
+        // W23f：DB 統計（除錯用）
+        binding.btnDbStats.setOnClickListener { showDbStatsDialog() }
+
         binding.btnTestAlert.setOnClickListener {
             Toast.makeText(requireContext(), R.string.settings_debug_test_alert_scheduled, Toast.LENGTH_SHORT).show()
             val handler = android.os.Handler(requireContext().mainLooper)
@@ -489,6 +492,67 @@ class SettingsFragment : Fragment() {
         }
 
         displaySigningInfo()
+    }
+
+    /**
+     * W23f：DB 統計 dialog — 大資料量測試時快速掌握各表規模與 raw_json 體積，
+     * 全部統計 query 在 IO 執行。
+     */
+    private fun showDbStatsDialog() {
+        val loading = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.settings_debug_db_stats)
+            .setMessage("計算中…")
+            .show()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val ctx = requireContext().applicationContext
+            val text = withContext(Dispatchers.IO) {
+                val db = NotificationMasterApp.getInstance().database
+                val eventDao = db.notificationEventDao()
+                val total = eventDao.getTotalCountSync()
+                val byType = eventDao.getCountByTypeSync()
+                val rawBytes = eventDao.getRawJsonTotalBytesSync()
+                val topPackages = eventDao.getTopPackagesByCountSync(10)
+                val topKeys = eventDao.getTopKeysByCountSync(10)
+                val recordCount = db.notificationRecordDao().getTotalCount()
+                val observationCount = db.rankingObservationDao().getTotalCount()
+                val snapshotCount = db.rankingSnapshotDao().getTotalCount()
+                val mediaCount = db.mediaAttachmentDao().getTotalCount()
+                val mediaBytes = db.mediaAttachmentDao().getTotalSize() ?: 0L
+                val fmt = { bytes: Long ->
+                    android.text.format.Formatter.formatShortFileSize(ctx, bytes)
+                }
+                buildString {
+                    appendLine("events: $total（raw_json ${fmt(rawBytes)}）")
+                    for (t in byType) appendLine("  ${t.name}: ${t.cnt}")
+                    appendLine()
+                    appendLine("records: $recordCount")
+                    appendLine("observations: $observationCount")
+                    appendLine("snapshots: $snapshotCount")
+                    appendLine("attachments: $mediaCount（${fmt(mediaBytes)}）")
+                    appendLine()
+                    appendLine("Top packages（by events）:")
+                    for (g in topPackages) appendLine("  ${g.cnt} × ${g.name}")
+                    appendLine()
+                    appendLine("Top nkeys（by events）:")
+                    for (g in topKeys) appendLine("  ${g.cnt} × ${g.name}")
+                }
+            }
+            loading.dismiss()
+            if (_binding == null) return@launch
+            val textView = TextView(requireContext()).apply {
+                this.text = text
+                typeface = android.graphics.Typeface.MONOSPACE
+                textSize = 12f
+                setPadding(48, 24, 48, 24)
+                setTextIsSelectable(true)
+            }
+            val scrollView = android.widget.ScrollView(requireContext()).apply { addView(textView) }
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.settings_debug_db_stats)
+                .setView(scrollView)
+                .setPositiveButton(R.string.ok, null)
+                .show()
+        }
     }
 
     private fun sendRankingMapTrigger() {

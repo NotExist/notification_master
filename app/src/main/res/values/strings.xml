@@ -28,6 +28,7 @@
     <string name="settings_debug_mode">Debug 模式</string>
     <string name="settings_debug_mode_summary">將原始通知資料 dump 到外部儲存</string>
     <string name="settings_debug_clear">清除 Debug 資料</string>
+    <string name="settings_debug_db_stats">DB 統計</string>
     <string name="settings_debug_profile_log_tags_header">Profile Log Tags %1$s</string>
     <string name="settings_debug_dump_types_header">Dump Types %1$s</string>
     <string name="settings_debug_collapsed_arrow">▸</string>

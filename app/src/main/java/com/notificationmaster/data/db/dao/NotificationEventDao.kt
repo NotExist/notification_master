@@ -265,7 +265,36 @@ interface NotificationEventDao {
 
     @Query("DELETE FROM notification_events")
     suspend fun deleteAll()
+
+    // === W23f：DB 統計（Settings debug 用） ===
+
+    @Query("SELECT COUNT(*) FROM notification_events")
+    suspend fun getTotalCountSync(): Int
+
+    @Query("""
+        SELECT event_type AS name, COUNT(*) AS cnt FROM notification_events
+        GROUP BY event_type ORDER BY cnt DESC
+    """)
+    suspend fun getCountByTypeSync(): List<GroupCount>
+
+    @Query("SELECT IFNULL(SUM(LENGTH(event_raw_json)), 0) FROM notification_events")
+    suspend fun getRawJsonTotalBytesSync(): Long
+
+    @Query("""
+        SELECT notification_key AS name, COUNT(*) AS cnt FROM notification_events
+        GROUP BY notification_key ORDER BY cnt DESC LIMIT :limit
+    """)
+    suspend fun getTopKeysByCountSync(limit: Int): List<GroupCount>
+
+    @Query("""
+        SELECT package_name AS name, COUNT(*) AS cnt FROM notification_events
+        GROUP BY package_name ORDER BY cnt DESC LIMIT :limit
+    """)
+    suspend fun getTopPackagesByCountSync(limit: Int): List<GroupCount>
 }
+
+/** W23f：GROUP BY 統計回傳列（name = 分組值，cnt = 筆數） */
+data class GroupCount(val name: String, val cnt: Int)
 
 // === FilterSpec 快捷 extension（Plan 1 / Plan 2 共用） ===
 
