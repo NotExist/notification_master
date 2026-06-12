@@ -198,6 +198,9 @@ class ArchiveFragment : Fragment() {
         // W23c-instrument：byApp 入口「黑屏許久」嫌疑盤查 — query emit / submit commit 各段時間
         val tStart = System.currentTimeMillis()
         ProfileLogger.append("ArchiveHome", "load start tab=${viewModel.currentTab}")
+        // W23k：首次 emit 前顯示載入指示（query 本身只撈 app_sources ~數十列，
+        // 但可能被同 process 其他慢 query 排隊拖延 — 期間至少要有 spinner）
+        binding.progressLoading.visibility = View.VISIBLE
         dataJob = viewLifecycleOwner.lifecycleScope.launch {
             when (viewModel.currentTab) {
                 Tab.BY_APP -> {
@@ -208,6 +211,7 @@ class ArchiveFragment : Fragment() {
                             "byApp emit size=${apps.size} since-start=${System.currentTimeMillis() - tStart}ms"
                         )
                         val binding = _binding ?: return@collectLatest
+                        binding.progressLoading.visibility = View.GONE
                         val tSubmit = System.currentTimeMillis()
                         appSourceAdapter.submitList(apps) {
                             ProfileLogger.append(
@@ -225,6 +229,7 @@ class ArchiveFragment : Fragment() {
                 }
                 Tab.BY_CHANNEL -> {
                     if (!isChannelSupported) {
+                        binding.progressLoading.visibility = View.GONE
                         showChannelNotSupportedMessage()
                         return@launch
                     }
@@ -235,6 +240,7 @@ class ArchiveFragment : Fragment() {
                             "byChannel emit size=${channels.size} since-start=${System.currentTimeMillis() - tStart}ms"
                         )
                         val binding = _binding ?: return@collectLatest
+                        binding.progressLoading.visibility = View.GONE
                         channelAdapter.submitList(channels) {
                             pendingScrollRestore?.let {
                                 _binding?.recyclerView?.layoutManager?.onRestoreInstanceState(it)

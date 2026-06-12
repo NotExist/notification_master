@@ -44,4 +44,12 @@
         android:textColor="?android:attr/textColorSecondary"
         android:visibility="gone" />
 
+    <!-- W23k：入口列表首次 emit 前的載入指示（同 fragment_archive_detail progress_loading 模式） -->
+    <ProgressBar
+        android:id="@+id/progress_loading"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone" />
+
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
