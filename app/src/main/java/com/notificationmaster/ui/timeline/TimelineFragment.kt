@@ -11,6 +11,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.view.doOnLayout
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
@@ -696,7 +697,14 @@ class TimelineFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.loadState.collectLatest { st ->
                 if (_binding == null) return@collectLatest
-                _binding?.swipeRefresh?.isRefreshing = st.phase == LoadPhase.Initial
+                // W23i：SwipeRefreshLayout 在首次 layout 前 setRefreshing(true) 是視覺
+                // no-op（圓圈 offset 未初始化）。冷啟時 collect 首發早於首次 measure，
+                // 「冷啟黑屏避免器」實際從未顯示過 — doOnLayout 確保 layout 後才設
+                // （已 laid out 時立即執行，不改既有時序）。
+                val refreshing = st.phase == LoadPhase.Initial
+                _binding?.swipeRefresh?.doOnLayout {
+                    _binding?.swipeRefresh?.isRefreshing = refreshing
+                }
                 st.error?.let { showErrorSnackbar(it) }
             }
         }
