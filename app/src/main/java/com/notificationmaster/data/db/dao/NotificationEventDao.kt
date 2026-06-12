@@ -147,14 +147,19 @@ interface NotificationEventDao {
      *
      * **不過 EventFilterSqlBuilder 排除 REMOVED**：此 query 走自己的 SQL 不過 builder，
      * 才能拿到「最新事件可能是 REMOVED」的真實狀態。
+     *
+     * W23i：correlated subquery（外層每列 × 內層重掃同 key 全列 = O(K²)）改寫為
+     * GROUP BY 形式（單次掃描 = O(K)，同 EventFilterSqlBuilder dedup 模式）。
+     * 熱點 key（常駐通知整夜 UPDATED）累積數千列時，舊寫法單條 query 可達 30 秒。
      */
     @Query("""
-        SELECT e.* FROM notification_events e
-        WHERE notification_key IN (:keys)
-          AND event_time = (
-              SELECT MAX(event_time) FROM notification_events e2
-              WHERE e2.notification_key = e.notification_key
-          )
+        SELECT * FROM notification_events WHERE id IN (
+            SELECT id FROM (
+                SELECT id, MAX(event_time) FROM notification_events
+                WHERE notification_key IN (:keys)
+                GROUP BY notification_key
+            )
+        )
     """)
     suspend fun getLatestEventByKeysSync(keys: List<String>): List<NotificationEventEntity>
 

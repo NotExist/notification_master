@@ -36,15 +36,19 @@ interface RankingObservationDao {
 
     /**
      * Phase 14 Q2-B：batch query 多個 key 各自最新 observation。
-     * 用 correlated subquery 對每個 key 取 observed_at MAX 的 row。
+     *
+     * W23i：correlated subquery（O(K²)）改寫為 GROUP BY 形式（O(K)），
+     * 同 NotificationEventDao.getLatestEventByKeysSync — observations 隨每次
+     * RANKING update 累積，熱點 key 數千列時舊寫法達秒級。
      */
     @Query("""
-        SELECT * FROM ranking_observations o
-        WHERE notification_key IN (:keys)
-          AND observed_at = (
-              SELECT MAX(observed_at) FROM ranking_observations
-              WHERE notification_key = o.notification_key
-          )
+        SELECT * FROM ranking_observations WHERE id IN (
+            SELECT id FROM (
+                SELECT id, MAX(observed_at) FROM ranking_observations
+                WHERE notification_key IN (:keys)
+                GROUP BY notification_key
+            )
+        )
     """)
     suspend fun getLatestByKeysSync(keys: List<String>): List<RankingObservationEntity>
 
