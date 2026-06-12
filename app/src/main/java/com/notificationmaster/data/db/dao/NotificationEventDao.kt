@@ -164,39 +164,6 @@ interface NotificationEventDao {
     suspend fun getLatestEventByKeysSync(keys: List<String>): List<NotificationEventEntity>
 
     /**
-     * 同 content_hash 的不同 notification_key 數量（去重模式 similar 提示）
-     */
-    @Query("""
-        SELECT COUNT(DISTINCT notification_key) FROM notification_events
-        WHERE id IN (
-            SELECT id FROM (
-                SELECT id, MAX(event_time) FROM notification_events
-                WHERE post_time BETWEEN :startTime AND :endTime
-                GROUP BY notification_key
-            )
-        )
-        AND content_hash = :hash
-    """)
-    suspend fun getDeduplicatedCount(hash: String, startTime: Long, endTime: Long): Int
-
-    /**
-     * 取同 content_hash 的相似事件（每個 notification_key 取最新 event_time 一筆）
-     */
-    @Query("""
-        SELECT * FROM notification_events
-        WHERE id IN (
-            SELECT id FROM (
-                SELECT id, MAX(event_time) FROM notification_events
-                WHERE post_time BETWEEN :startTime AND :endTime
-                GROUP BY notification_key
-            )
-        )
-        AND content_hash = :hash
-        ORDER BY post_time DESC
-    """)
-    suspend fun getSimilarEvents(hash: String, startTime: Long, endTime: Long): List<NotificationEventEntity>
-
-    /**
      * UI 搜尋（標題 / 內文 / raw 全文 / 媒體檔名 LIKE）。
      *
      * Plan 2 Phase 16：除 title / text 兩個投影 column，也直接對 event_raw_json 做 LIKE。

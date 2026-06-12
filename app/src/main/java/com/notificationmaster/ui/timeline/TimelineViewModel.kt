@@ -195,8 +195,8 @@ class TimelineViewModel(
      * 邏輯 spec：給 fragment 用於渲染決策（dedup 是否啟用、是否有 rule 篩選等）。
      * 由 chip state 衍生而成，**不參與 DB query**。
      *
-     * Phase 31j：similarCount 已脫離 deduplicate（永遠顯示「+N 同內容」）。
      * W6：多 ruleIds 場景把所有 rule.matchers concat（AND），單 rule 行為與舊版等價。
+     * W23m：similarCount（「+N 同內容」）已整個移除。
      */
     val coreSpec: StateFlow<EventFilterSpec> = _chipState.map { chip ->
         combineRulesToSpec(chip.activeRuleIds, chip.dedupChecked)

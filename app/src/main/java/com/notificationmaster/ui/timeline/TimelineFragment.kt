@@ -21,7 +21,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
-import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
 import com.notificationmaster.core.debug.ProfileLogger
 import com.notificationmaster.core.cache.AppLabelCache
@@ -40,12 +39,10 @@ import com.notificationmaster.ui.filter.FilterRuleDialogHelper
 import com.notificationmaster.ui.filter.CalendarPickerLauncher
 import com.notificationmaster.ui.filter.SoundPickerLauncher
 import com.notificationmaster.ui.main.MainActivity
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -186,7 +183,6 @@ class TimelineFragment : Fragment() {
         if (adapter == null) {
             adapter = TimelineAdapter(
                 onItemClick = { display -> navigateToDetail(display) },
-                onSimilarClick = { display -> showSimilarNotifications(display) },
                 onItemLongClick = { display ->
                     FilterRuleDialogHelper.showAddRuleDialog(
                         context = requireContext(),
@@ -819,31 +815,14 @@ class TimelineFragment : Fragment() {
             binding.emptyState.visibility = View.GONE
             binding.recyclerView.visibility = View.VISIBLE
 
-            val eventDao = NotificationMasterApp.getInstance().database.notificationEventDao()
-            // Phase 26：buildTimelineItemsWithSimilarCount 改為單一 IO 包覆（vs 之前每 item 一次
-            // withContext(IO) 切換），長 list 不再 N 次 thread hop 拖累 main thread。
-            // Phase 31j：similarCount 與 dedup chip 脫離連動，無論 dedup ON/OFF 都計算
-            // 「跨通知同內容」筆數（不同 notification_key 但同 content_hash）。
-            // W22ae：三段 timing instrument — IO dispatch / IO 計算 / main reentry，量化
-            // cold start phase=Loaded → submit 15s gap 卡在哪一段。
+            // W23m：similarCount（「+N 同內容」）需求放棄移除 — buildItems 不再有任何
+            // DB query（先前 per-item getDeduplicatedCount 整日 GROUP BY 是 N+1，熱點日
+            // 數千列時單輪數秒，連帶卡住 footer 換裝 pass）。純 CPU 組裝直接在 main 算。
             val tBuildStart = System.currentTimeMillis()
-            val timelineItems: List<TimelineItem> = withContext(Dispatchers.IO) {
-                val tIoEntry = System.currentTimeMillis()
-                ProfileLogger.append(
-                    "Fragment",
-                    "buildItems io-enter n=${filtered.size} dispatchDelay=${tIoEntry - tBuildStart}ms"
-                )
-                val r = buildTimelineItemsWithSimilarCountInIo(filtered, eventDao)
-                ProfileLogger.append(
-                    "Fragment",
-                    "buildItems io-done n=${r.size} ioTook=${System.currentTimeMillis() - tIoEntry}ms"
-                )
-                r
-            }
-            val tMainReentry = System.currentTimeMillis()
+            val timelineItems: List<TimelineItem> = buildTimelineItems(filtered)
             ProfileLogger.append(
                 "Fragment",
-                "buildItems main-reentry totalWithDispatch=${tMainReentry - tBuildStart}ms"
+                "buildItems n=${filtered.size} took=${System.currentTimeMillis() - tBuildStart}ms"
             )
             // W22ag：filter 模式（filterText 非空）時在 list 末尾加 FilterFooter 取代
             // 預設 PendingMore footer，敘述跟動作對齊（按鈕觸發 vs 滾動觸發）。
@@ -1027,49 +1006,21 @@ class TimelineFragment : Fragment() {
     }
 
     /**
-     * Phase 26：呼叫端負責 `withContext(Dispatchers.IO)`，本函式內不再 per-item 切 thread。
-     * 對 100 筆 list 從 N 次 dispatcher hop 變 0 次，避免 main thread 等候 IO pool 排程。
-     * 仍須是 suspend — `getDeduplicatedCount` 是 DAO suspend method。
-     *
-     * Phase 31j：「+N 同內容」與 dedup chip 脫離連動，唯一 list builder（移除 non-similar 版本）。
+     * W23m：similarCount 移除後為純 CPU 組裝（日期分組 + item 包裝），無 DB query。
      */
-    private suspend fun buildTimelineItemsWithSimilarCountInIo(
-        notifications: List<NotificationDisplay>,
-        eventDao: com.notificationmaster.data.db.dao.NotificationEventDao
-    ): List<TimelineItem> {
-        // Plan 2 W1.c：removedIds 參數移除 — row.isRemoved 由 NotificationDisplay 自帶（廣義語意）
-        // W22ae：query timing 統計 — N 次 getDeduplicatedCount 加總 / 最大 / 平均 / p99
+    private fun buildTimelineItems(notifications: List<NotificationDisplay>): List<TimelineItem> {
         val items = mutableListOf<TimelineItem>()
         var lastDate: Long? = null
-        val queryTimings = mutableListOf<Long>()
         for (notification in notifications) {
             val notificationDate = getStartOfDay(notification.postTime)
             if (lastDate != notificationDate) {
                 items.add(TimelineItem.DateHeader(notificationDate))
                 lastDate = notificationDate
             }
-            val dayStart = notificationDate
-            val dayEnd = dayStart + ONE_DAY_MS
-            val tQ = System.currentTimeMillis()
-            val similarCount = eventDao.getDeduplicatedCount(
-                notification.contentHash, dayStart, dayEnd
-            )
-            queryTimings.add(System.currentTimeMillis() - tQ)
             items.add(TimelineItem.NotificationItem(
                 notification = notification,
-                similarCount = similarCount,
                 isRemoved = notification.isRemoved
             ))
-        }
-        if (queryTimings.isNotEmpty()) {
-            val sorted = queryTimings.sorted()
-            val p99 = sorted[((sorted.size - 1) * 99 / 100).coerceAtLeast(0)]
-            ProfileLogger.append(
-                "Fragment",
-                "buildItems queries n=${queryTimings.size} " +
-                    "total=${queryTimings.sum()}ms max=${sorted.last()}ms p99=${p99}ms " +
-                    "avg=${queryTimings.average().toInt()}ms"
-            )
         }
         return items
     }
@@ -1159,48 +1110,6 @@ class TimelineFragment : Fragment() {
         NotificationCaptureService.showRankingBanner.observe(viewLifecycleOwner) { show ->
             _binding?.bannerRankingWarning?.visibility =
                 if (show) View.VISIBLE else View.GONE
-        }
-    }
-
-    /**
-     * Phase 31j：dialog 改寫 — 排除自己、標示「列表內 / 列表外」。
-     * 「列表內」= 對應 key 已在 ViewModel.displayedNotifications.value（user 當下可滾到）；
-     * 「列表外」= 在當天但不在當前 displays（因為被 dedup 或不在 page 範圍）。
-     */
-    private fun showSimilarNotifications(notification: NotificationDisplay) {
-        val eventDao = NotificationMasterApp.getInstance().database.notificationEventDao()
-        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-        val dayStart = getStartOfDay(notification.postTime)
-        val dayEnd = dayStart + ONE_DAY_MS
-        viewLifecycleOwner.lifecycleScope.launch {
-            val similarEvents = withContext(Dispatchers.IO) {
-                eventDao.getSimilarEvents(notification.contentHash, dayStart, dayEnd)
-            }
-            if (_binding == null) return@launch
-            // 排除自己（同 notification_key），剩下才是「其他同內容通知」
-            val others = similarEvents.filter { it.notificationKey != notification.notificationKey }
-            if (others.isEmpty()) return@launch
-
-            val displayedKeys = viewModel.displayedNotifications.value
-                .map { it.notificationKey }
-                .toSet()
-            val similar = withContext(Dispatchers.IO) { others.map(NotificationDisplay::from) }
-            val inListLabel = getString(R.string.similar_in_list)
-            val offListLabel = getString(R.string.similar_off_list)
-            val items = similar.map { n ->
-                val appLabel = getAppLabel(n.packageName)
-                val time = timeFormat.format(Date(n.postTime))
-                val locationLabel = if (n.notificationKey in displayedKeys) inListLabel else offListLabel
-                "$appLabel · $time · $locationLabel\n${n.notificationKey}"
-            }.toTypedArray<CharSequence>()
-
-            MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.similar_notifications_title)
-                .setItems(items) { _, which ->
-                    navigateToDetail(similar[which])
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
         }
     }
 

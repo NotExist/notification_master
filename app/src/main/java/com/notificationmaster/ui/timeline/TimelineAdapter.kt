@@ -29,7 +29,6 @@ import java.util.Locale
  */
 class TimelineAdapter(
     private val onItemClick: (NotificationDisplay) -> Unit,
-    private val onSimilarClick: (NotificationDisplay) -> Unit = {},
     private val onItemLongClick: (NotificationDisplay) -> Unit = {},
     // W22af：filter 篩 0 + canLoadMore 時，user 點「繼續往前搜尋」按鈕觸發 loadNextDay
     private val onLoadMoreForSearchClick: () -> Unit = {}
@@ -325,21 +324,6 @@ class TimelineAdapter(
                     addTag(binding.tagsContainer, "Call", R.color.tag_call_style, R.string.tag_call_style_desc, "CallStyle")
                 // MessagingStyle 和 DecoratedCustomViewStyle 已被其他標籤涵蓋
             }
-
-            // 相似通知數量
-            if (item.similarCount > 1) {
-                binding.textSimilarCount.visibility = View.VISIBLE
-                binding.textSimilarCount.text = context.getString(
-                    R.string.timeline_similar_count,
-                    item.similarCount - 1
-                )
-                binding.textSimilarCount.setOnClickListener {
-                    onSimilarClick(display)
-                }
-            } else {
-                binding.textSimilarCount.visibility = View.GONE
-                binding.textSimilarCount.setOnClickListener(null)
-            }
         }
 
         private fun addTag(container: ViewGroup, text: String, colorRes: Int, descriptionRes: Int, fullName: String = text) {
@@ -393,8 +377,7 @@ class TimelineAdapter(
                 oldItem is TimelineItem.NotificationItem && newItem is TimelineItem.NotificationItem -> {
                     val o = oldItem.notification
                     val n = newItem.notification
-                    val same = oldItem.similarCount == newItem.similarCount &&
-                        oldItem.isRemoved == newItem.isRemoved &&
+                    val same = oldItem.isRemoved == newItem.isRemoved &&
                         o.contentHash == n.contentHash &&
                         o.title == n.title &&
                         o.text == n.text &&
@@ -441,7 +424,6 @@ sealed class TimelineItem {
     data class DateHeader(val date: Long) : TimelineItem()
     data class NotificationItem(
         val notification: NotificationDisplay,
-        val similarCount: Int = 1,
         val isRemoved: Boolean = false
     ) : TimelineItem()
     object LoadingMore : TimelineItem()

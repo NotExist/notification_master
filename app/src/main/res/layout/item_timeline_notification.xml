@@ -93,18 +93,6 @@
 
             </LinearLayout>
 
-            <!-- 相似通知數量（去重模式顯示） -->
-            <TextView
-                android:id="@+id/text_similar_count"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:textAppearance="?attr/textAppearanceLabelSmall"
-                android:textColor="?attr/colorPrimary"
-                android:visibility="gone"
-                tools:visibility="visible"
-                tools:text="+5 筆相似" />
-
         </LinearLayout>
 
     </LinearLayout>
