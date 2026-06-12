@@ -39,6 +39,7 @@ import com.notificationmaster.service.NotificationCaptureService
 import com.notificationmaster.service.NlsKeepaliveService
 import com.notificationmaster.data.db.dao.querySync
 import com.notificationmaster.data.filter.EventFilterSpec
+import com.notificationmaster.export.archive.ArchiveAggregateRebuilder
 import com.notificationmaster.export.archive.ArchiveExporter
 import com.notificationmaster.export.archive.ArchiveImporter
 import com.notificationmaster.core.content.ExportDetailLevel
@@ -1394,6 +1395,7 @@ class SettingsFragment : Fragment() {
                 // 將匯入的資料存入資料庫
                 // 寫入順序遵循 FK：records → snapshots → events → observations
                 val database = NotificationMasterApp.getInstance().database
+                var rebuiltAggregates: Pair<Int, Int> = 0 to 0
                 withContext(Dispatchers.IO) {
                     // records（自然主鍵 = notificationKey）：保留原狀
                     for (record in data.records) {
@@ -1420,6 +1422,9 @@ class SettingsFragment : Fragment() {
                             obs.copy(id = 0, rankingSnapshotId = mappedSnapId)
                         )
                     }
+                    // W23q：app_sources / channels 不在匯出範圍且由 service 增量維護，
+                    // 匯入後以 events 表為 SSOT 重建聚合，否則 archive 頁看不到匯入資料
+                    rebuiltAggregates = ArchiveAggregateRebuilder.rebuild(ctx, database)
                 }
 
                 showResultDialog(
@@ -1429,6 +1434,7 @@ class SettingsFragment : Fragment() {
                         append("\n事件：${data.events.size} 筆")
                         if (data.observations.isNotEmpty()) append("\nRanking 觀察：${data.observations.size} 筆")
                         if (data.snapshots.isNotEmpty()) append("\nRanking 快照：${data.snapshots.size} 筆")
+                        append("\n歸檔聚合重建：${rebuiltAggregates.first} apps / ${rebuiltAggregates.second} channels")
                         data.environment?.let {
                             append("\n\n來源裝置：${it.deviceManufacturer} ${it.deviceModel}")
                             append("\nAPI：${it.apiLevel}")

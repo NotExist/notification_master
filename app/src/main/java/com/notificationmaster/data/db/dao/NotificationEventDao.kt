@@ -263,10 +263,44 @@ interface NotificationEventDao {
         GROUP BY package_name ORDER BY cnt DESC LIMIT :limit
     """)
     suspend fun getTopPackagesByCountSync(limit: Int): List<GroupCount>
+
+    // === W23q：匯入後重建 archive 聚合（app_sources / channels）===
+    // count 語意對齊 service gate（POSTED+UPDATED+INITIAL 累計、排除 REMOVED，
+    // 同 EventFilterSqlBuilder 的統一排除）
+
+    @Query("""
+        SELECT package_name AS packageName, COUNT(*) AS cnt,
+               MIN(event_time) AS firstTime, MAX(event_time) AS lastTime
+        FROM notification_events
+        WHERE event_type != 'REMOVED'
+        GROUP BY package_name
+    """)
+    suspend fun getPackageAggregatesSync(): List<PackageAggregate>
+
+    @Query("""
+        SELECT package_name AS packageName, channel_id AS channelId, COUNT(*) AS cnt,
+               MIN(event_time) AS firstTime, MAX(event_time) AS lastTime
+        FROM notification_events
+        WHERE event_type != 'REMOVED' AND channel_id IS NOT NULL
+        GROUP BY package_name, channel_id
+    """)
+    suspend fun getChannelAggregatesSync(): List<ChannelAggregate>
 }
 
 /** W23f：GROUP BY 統計回傳列（name = 分組值，cnt = 筆數） */
 data class GroupCount(val name: String, val cnt: Int)
+
+/** W23q：per-package 聚合（匯入後重建 app_sources 用） */
+data class PackageAggregate(val packageName: String, val cnt: Int, val firstTime: Long, val lastTime: Long)
+
+/** W23q：per-channel 聚合（匯入後重建 channels 用） */
+data class ChannelAggregate(
+    val packageName: String,
+    val channelId: String,
+    val cnt: Int,
+    val firstTime: Long,
+    val lastTime: Long
+)
 
 // === FilterSpec 快捷 extension（Plan 1 / Plan 2 共用） ===
 
