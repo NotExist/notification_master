@@ -161,7 +161,7 @@ class ArchiveDetailFragment : Fragment() {
             orderBy = OrderBy.EventTimeDesc
         )
 
-        binding.progressLoading.visibility = View.VISIBLE
+        binding.progressLoading.show()
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.pageSize
                 .flatMapLatest { size ->
@@ -179,7 +179,7 @@ class ArchiveDetailFragment : Fragment() {
                     if (events.isEmpty()) {
                         isExpanding = false
                         currentItems = emptyList()
-                        binding.progressLoading.visibility = View.GONE
+                        binding.progressLoading.hide()
                         binding.emptyState.visibility = View.VISIBLE
                         binding.recyclerView.visibility = View.GONE
                     } else {
@@ -209,7 +209,7 @@ class ArchiveDetailFragment : Fragment() {
                                     "enrich+build=${tSubmit - tEnrich}ms commit=${System.currentTimeMillis() - tSubmit}ms"
                             )
                             val b = _binding ?: return@submitList
-                            b.progressLoading.visibility = View.GONE
+                            b.progressLoading.hide()
                             pendingScrollRestore?.let {
                                 b.recyclerView.layoutManager?.onRestoreInstanceState(it)
                                 pendingScrollRestore = null

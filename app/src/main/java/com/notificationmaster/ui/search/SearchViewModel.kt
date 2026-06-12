@@ -28,6 +28,10 @@ class SearchViewModel : ViewModel() {
     private val _results = MutableLiveData<List<NotificationDisplay>>(emptyList())
     val results: LiveData<List<NotificationDisplay>> = _results
 
+    /** W23l：搜尋進行中（searchEvents + enrich 大資料時達秒級，期間 UI 顯示光條） */
+    private val _isSearching = MutableLiveData(false)
+    val isSearching: LiveData<Boolean> = _isSearching
+
     /**
      * RecyclerView LayoutManager.onSaveInstanceState() 結果；view 重建（含從 Detail 返回）後還原。
      * 純 in-memory，process death 不保留（搜尋結果本身也不保留，重啟後行為一致）。
@@ -42,9 +46,11 @@ class SearchViewModel : ViewModel() {
 
         if (query.isBlank()) {
             _results.value = emptyList()
+            _isSearching.value = false
             return
         }
 
+        _isSearching.value = true
         searchJob = viewModelScope.launch {
             delay(300)
             val database = NotificationMasterApp.getInstance().database
@@ -59,6 +65,7 @@ class SearchViewModel : ViewModel() {
                 )
             }
             _results.value = results
+            _isSearching.value = false
         }
     }
 }

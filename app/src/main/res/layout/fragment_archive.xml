@@ -44,12 +44,14 @@
         android:textColor="?android:attr/textColorSecondary"
         android:visibility="gone" />
 
-    <!-- W23k：入口列表首次 emit 前的載入指示（同 fragment_archive_detail progress_loading 模式） -->
-    <ProgressBar
+    <!-- W23k/W23l：入口列表首次 emit 前的載入指示。
+         M3 LinearProgressIndicator 頂部光條 — 與 timeline「等待資料」語彙統一 -->
+    <com.google.android.material.progressindicator.LinearProgressIndicator
         android:id="@+id/progress_loading"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="center"
+        android:layout_marginTop="48dp"
+        android:indeterminate="true"
         android:visibility="gone" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

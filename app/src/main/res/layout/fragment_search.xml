@@ -25,6 +25,15 @@
 
     </com.google.android.material.textfield.TextInputLayout>
 
+    <!-- W23l：搜尋進行中指示（searchEvents LIKE 全表掃 + enrich 在大資料時達秒級）。
+         M3 LinearProgressIndicator 頂部光條 — 與 timeline / archive「等待資料」語彙統一 -->
+    <com.google.android.material.progressindicator.LinearProgressIndicator
+        android:id="@+id/progress_loading"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:indeterminate="true"
+        android:visibility="gone" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recycler_view"
         android:layout_width="match_parent"

@@ -115,6 +115,11 @@ class SearchFragment : Fragment() {
     }
 
     private fun observeResults() {
+        // W23l：搜尋進行中光條（與 timeline / archive「等待資料」語彙統一）
+        viewModel.isSearching.observe(viewLifecycleOwner) { searching ->
+            val binding = _binding ?: return@observe
+            if (searching) binding.progressLoading.show() else binding.progressLoading.hide()
+        }
         viewModel.results.observe(viewLifecycleOwner) { results ->
             val binding = _binding ?: return@observe
             notificationAdapter.submitList(results) {
