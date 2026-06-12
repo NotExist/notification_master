@@ -68,6 +68,8 @@
     <string name="timeline_error_snackbar">載入失敗：%1$s</string>
     <string name="timeline_error_dismiss">關閉</string>
     <string name="timeline_error_oom">記憶體不足，請關閉並重新開啟 App</string>
+    <!-- W23o：lazyload 連續多輪等待無成長，放手退 Pending 時的提示 -->
+    <string name="timeline_lazyload_timeout">載入逾時，繼續滾動可重試</string>
     <string name="timeline_load_detail_title">載入詳情</string>
     <string name="timeline_load_detail_col_loaded">已載入</string>
     <string name="timeline_load_detail_col_total">總數</string>

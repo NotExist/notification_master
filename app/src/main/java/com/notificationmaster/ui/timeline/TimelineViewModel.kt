@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.notificationmaster.NotificationMasterApp
+import com.notificationmaster.R
 import com.notificationmaster.core.debug.ProfileLogger
 import com.notificationmaster.core.filter.MatchContext
 import com.notificationmaster.core.filter.Rule
@@ -700,19 +701,38 @@ class TimelineViewModel(
     /**
      * W19/W23a：等真實 items 變化或 displays 增加才視為「query 回來」，之後重設 loading。
      * trigger 與 rewait 兩條路徑共用。
+     *
+     * W23o：timeout 不再立即退 Pending — footer 維持 Loading 自動續等（原則：lazyload
+     * footer 應撐到資料出現），連續 [MAX_GROWTH_ATTEMPTS] 輪（共 ~30s）仍無成長才放手
+     * 退 Pending + 經 _errorCh 發 Snackbar 告知（防 query 永久卡死時無限轉圈）。
      */
-    private fun awaitQueryGrowth(beforeDisplayedSize: Int, beforeItemsSize: Int) {
+    private fun awaitQueryGrowth(beforeDisplayedSize: Int, beforeItemsSize: Int, attempt: Int = 1) {
         viewModelScope.launch {
-            val result = withTimeoutOrNull(10_000L) {
+            val result = withTimeoutOrNull(GROWTH_TIMEOUT_MS) {
                 combine(displayedNotifications, allNotifications) { displays, items ->
                     displays.size > beforeDisplayedSize || items.size > beforeItemsSize
                 }.first { it }
             }
+            if (result == null && attempt < MAX_GROWTH_ATTEMPTS) {
+                ProfileLogger.append(
+                    "Timeline",
+                    "loadNextDay timeout attempt=$attempt/$MAX_GROWTH_ATTEMPTS — keep Loading, auto rewait"
+                )
+                // _isLoadingMore 不動（維持 true），footer 持續 Loading
+                awaitQueryGrowth(beforeDisplayedSize, beforeItemsSize, attempt + 1)
+                return@launch
+            }
             ProfileLogger.append(
                 "Timeline",
-                "loadNextDay done reason=${if (result == null) "timeout" else "condition_met"} " +
+                "loadNextDay done reason=${if (result == null) "timeout_giveup" else "condition_met"} " +
+                    "attempts=$attempt " +
                     "afterDisplayed=${displayedNotifications.value.size} afterItems=${allNotifications.value.size}"
             )
+            if (result == null) {
+                _errorCh.value = RuntimeException(
+                    getApplication<Application>().getString(R.string.timeline_lazyload_timeout)
+                )
+            }
             // W22f：debug 用「LoadingMore 最少可見時間」純粹延後 `_isLoadingMore=false`
             // 的執行時機 — 整段 lazyload+delay 用單一 isLazyloading=true 表示，cooldown
             // 結束跟 lazyload 結束是同一個 set，combine 只 emit 一次 state change，
@@ -736,6 +756,10 @@ class TimelineViewModel(
         NotificationEnricher.enrich(events, channelDao, rankingObsDao, rankingSnapDao, eventDao)
 
     companion object {
+        /** W23o：awaitQueryGrowth 單輪等待時間 / 自動續等輪數（共 ~30s 才放手退 Pending） */
+        const val GROWTH_TIMEOUT_MS = 10_000L
+        const val MAX_GROWTH_ATTEMPTS = 3
+
         const val KEY_DEDUP_CHECKED = "timeline.dedupChecked"
         const val KEY_ACTIVE_RULE_IDS = "timeline.activeRuleIds"
         const val KEY_FILTER_TEXT = "timeline.filterText"
