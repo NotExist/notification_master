@@ -11,7 +11,6 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.core.view.doOnLayout
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
@@ -675,32 +674,27 @@ class TimelineFragment : Fragment() {
                 }
         }
 
-        // Phase 26 indicator 對應（單一映射，無重複）：
-        // - progress_loading 光條（頂部） → service.isProcessingInitial（大事件 5-30s）
-        // - SwipeRefresh 圓圈 → state is InitialLoading（冷啟 < 1s 黑屏避免器）
+        // indicator 對應（W23n 統一後）：
+        // - progress_loading 光條（頂部） → 冷啟 phase=Initial 或 service.isProcessingInitial
+        //   （「等待資料」全 app 統一語彙 = 頂部光條；SwipeRefresh 圓圈只留給使用者下拉手勢）
         // - LoadingMore footer → state is LoadingMore（lazyload 中，list 內慣例）
         // - EndOfTimeline footer → state is EndReached（list 內靜態指示）
         // - emptyState → state is EmptyDb（DB 真空）
         // - Snackbar → state is Error
         viewLifecycleOwner.lifecycleScope.launch {
-            NotificationCaptureService.isProcessingInitial.collectLatest { processing ->
-                if (_binding == null) return@collectLatest
-                val b = _binding ?: return@collectLatest
-                if (processing) b.progressLoading.show() else b.progressLoading.hide()
-            }
+            combine(
+                viewModel.loadState,
+                NotificationCaptureService.isProcessingInitial
+            ) { st, processing -> (st.phase == LoadPhase.Initial) || processing }
+                .collectLatest { waiting ->
+                    val b = _binding ?: return@collectLatest
+                    if (waiting) b.progressLoading.show() else b.progressLoading.hide()
+                }
         }
         // W20.b：各 UI 投影獨立 derive 對應 field，不再共用 sealed when 短路
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.loadState.collectLatest { st ->
                 if (_binding == null) return@collectLatest
-                // W23i：SwipeRefreshLayout 在首次 layout 前 setRefreshing(true) 是視覺
-                // no-op（圓圈 offset 未初始化）。冷啟時 collect 首發早於首次 measure，
-                // 「冷啟黑屏避免器」實際從未顯示過 — doOnLayout 確保 layout 後才設
-                // （已 laid out 時立即執行，不改既有時序）。
-                val refreshing = st.phase == LoadPhase.Initial
-                _binding?.swipeRefresh?.doOnLayout {
-                    _binding?.swipeRefresh?.isRefreshing = refreshing
-                }
                 st.error?.let { showErrorSnackbar(it) }
             }
         }
