@@ -32,6 +32,12 @@ class SearchViewModel : ViewModel() {
     private val _isSearching = MutableLiveData(false)
     val isSearching: LiveData<Boolean> = _isSearching
 
+    /** W23p：當前 limit 下結果已撈完（events.size < limit）— footer End/Pending 判定用 */
+    private val _endReached = MutableLiveData(true)
+    val endReached: LiveData<Boolean> = _endReached
+
+    private var currentLimit = INITIAL_LIMIT
+
     /**
      * RecyclerView LayoutManager.onSaveInstanceState() 結果；view 重建（含從 Detail 返回）後還原。
      * 純 in-memory，process death 不保留（搜尋結果本身也不保留，重啟後行為一致）。
@@ -41,31 +47,56 @@ class SearchViewModel : ViewModel() {
     private var searchJob: Job? = null
 
     fun search(query: String) {
-        searchJob?.cancel()
         _query.value = query
+        currentLimit = INITIAL_LIMIT
 
         if (query.isBlank()) {
+            searchJob?.cancel()
             _results.value = emptyList()
+            _endReached.value = true
             _isSearching.value = false
             return
         }
 
+        runSearch(query, debounce = true)
+    }
+
+    /**
+     * W23p：lazyload — 滑近底部時擴增 limit 重查（重查整批，與 searchEvents 的
+     * LIMIT 模型一致；endReached 後不再觸發）。
+     */
+    fun loadMore() {
+        val query = _query.value ?: return
+        if (query.isBlank() || _isSearching.value == true || _endReached.value == true) return
+        currentLimit += PAGE_INCREMENT
+        runSearch(query, debounce = false)
+    }
+
+    private fun runSearch(query: String, debounce: Boolean) {
+        searchJob?.cancel()
         _isSearching.value = true
+        val limit = currentLimit
         searchJob = viewModelScope.launch {
-            delay(300)
+            if (debounce) delay(300)
             val database = NotificationMasterApp.getInstance().database
-            val results = withContext(Dispatchers.IO) {
-                val events = database.notificationEventDao().searchEvents(query, 100)
+            val (results, rawCount) = withContext(Dispatchers.IO) {
+                val events = database.notificationEventDao().searchEvents(query, limit)
                 NotificationEnricher.enrich(
                     events,
                     database.channelDao(),
                     database.rankingObservationDao(),
                     database.rankingSnapshotDao(),
                     database.notificationEventDao()
-                )
+                ) to events.size
             }
             _results.value = results
+            _endReached.value = rawCount < limit
             _isSearching.value = false
         }
+    }
+
+    companion object {
+        const val INITIAL_LIMIT = 100
+        const val PAGE_INCREMENT = 100
     }
 }
