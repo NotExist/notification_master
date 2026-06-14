@@ -21,6 +21,10 @@ interface RankingObservationDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(observation: RankingObservationEntity): Long
 
+    /** W23r：串流匯入批次插入（單一 transaction，取代逐筆 insert 的 N 次 fsync） */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(observations: List<RankingObservationEntity>): List<Long>
+
     @Query("SELECT * FROM ranking_observations WHERE notification_key = :key ORDER BY observed_at ASC")
     fun getByKey(key: String): Flow<List<RankingObservationEntity>>
 

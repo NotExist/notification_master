@@ -33,7 +33,7 @@ import java.util.TimeZone
  * N+1 query + `JSONObject.toString(2)` 把整包 JSON 組成單一 String（大資料量數百 MB →
  * OOM / GC 風暴 → 卡死 ANR）。改用 [JsonWriter] 直寫 OutputStream，events 以 keyset 分批
  * 撈、其餘 entity 以 batch IN 查詢。頂層 key 改為 events 先寫、archiveRange（統計）最後寫
- * — ArchiveImporter 整包 parse，不依賴 key 順序。
+ * — ArchiveImporter（W23r 起亦串流）逐 key 處理、不依賴 key 順序。
  */
 class ArchiveExporter(
     private val context: Context,

@@ -7,6 +7,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.util.Log
 import android.view.LayoutInflater
@@ -23,6 +26,8 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import androidx.room.withTransaction
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.notificationmaster.BuildConfig
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
@@ -1383,71 +1388,96 @@ class SettingsFragment : Fragment() {
 
     private fun importArchiveFromUri(uri: android.net.Uri) {
         val ctx = context ?: return
+        val totalBytes = queryUriSize(uri)
+
+        // W23r：determinate 進度條（位元組）+ 即時計數文字。setCancelable(false)：
+        // transaction 進行中不可中途取消（會留半套；rollback 由例外路徑負責）。
+        val bar = LinearProgressIndicator(ctx).apply {
+            isIndeterminate = totalBytes <= 0
+            max = 100
+        }
+        val text = TextView(ctx).apply {
+            setPadding(0, 24, 0, 0)
+            setText(R.string.import_progress_preparing)
+        }
+        val content = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(64, 48, 64, 16)
+            addView(bar)
+            addView(text)
+        }
+        val progressDialog = MaterialAlertDialogBuilder(ctx)
+            .setTitle(R.string.import_progress_title)
+            .setView(content)
+            .setCancelable(false)
+            .show()
+
+        val mainHandler = Handler(Looper.getMainLooper())
+
         viewLifecycleOwner.lifecycleScope.launch {
+            val database = NotificationMasterApp.getInstance().database
             try {
-                val inputStream = ctx.contentResolver.openInputStream(uri)
-                    ?: throw IllegalStateException("無法開啟輸入串流")
-
                 val importer = ArchiveImporter(ctx)
-                val data = importer.import(inputStream)
-                inputStream.close()
-
-                // 將匯入的資料存入資料庫
-                // 寫入順序遵循 FK：records → snapshots → events → observations
-                val database = NotificationMasterApp.getInstance().database
-                var rebuiltAggregates: Pair<Int, Int> = 0 to 0
-                withContext(Dispatchers.IO) {
-                    // records（自然主鍵 = notificationKey）：保留原狀
-                    for (record in data.records) {
-                        database.notificationRecordDao().insertIfAbsent(record)
-                    }
-                    // snapshots：依 contentHash 去重，ID 重新分配；保留 old→new 映射供 observation FK 用
-                    val oldToNewSnapshotId = mutableMapOf<Long, Long>()
-                    for (snap in data.snapshots) {
-                        val existing = database.rankingSnapshotDao().getByHash(snap.contentHash)
-                        val newId = if (existing != null) {
-                            existing.id
-                        } else {
-                            database.rankingSnapshotDao().insertIfAbsent(snap.copy(id = 0))
+                var rebuilt: Pair<Int, Int> = 0 to 0
+                // 整段串流匯入 + 聚合重建包在單一 transaction：JSON 截斷 / 壞格式
+                // 途中拋例外 → rollback 全有或全無，不留半套資料
+                val result = database.withTransaction {
+                    val r = ctx.contentResolver.openInputStream(uri)?.use { ins ->
+                        importer.import(ins, database, totalBytes) { p ->
+                            mainHandler.post {
+                                if (!progressDialog.isShowing) return@post
+                                if (totalBytes > 0) {
+                                    bar.isIndeterminate = false
+                                    bar.progress = ((p.bytesRead * 100) / totalBytes)
+                                        .toInt().coerceIn(0, 100)
+                                }
+                                text.text = getString(
+                                    R.string.import_progress_counts,
+                                    p.events, p.observations, p.snapshots, p.records
+                                )
+                            }
                         }
-                        oldToNewSnapshotId[snap.id] = newId
-                    }
-                    // events：ID=0 自動產生新 ID（FK 由 notificationKey 維繫）
-                    val events = data.events.map { it.copy(id = 0) }
-                    database.notificationEventDao().insertAll(events)
-                    // observations：FK rankingSnapshotId 重映射；ID=0 自動產生
-                    for (obs in data.observations) {
-                        val mappedSnapId = oldToNewSnapshotId[obs.rankingSnapshotId] ?: continue
-                        database.rankingObservationDao().insert(
-                            obs.copy(id = 0, rankingSnapshotId = mappedSnapId)
-                        )
-                    }
-                    // W23q：app_sources / channels 不在匯出範圍且由 service 增量維護，
-                    // 匯入後以 events 表為 SSOT 重建聚合，否則 archive 頁看不到匯入資料
-                    rebuiltAggregates = ArchiveAggregateRebuilder.rebuild(ctx, database)
+                    } ?: throw IllegalStateException("無法開啟輸入串流")
+                    // W23q：聚合重建放同一 transaction，原子性 + 可見剛插入的 events
+                    rebuilt = ArchiveAggregateRebuilder.rebuild(ctx, database)
+                    r
                 }
 
+                progressDialog.dismiss()
                 showResultDialog(
-                    "封存匯入完成",
+                    getString(R.string.import_done_title),
                     buildString {
-                        append("通知：${data.records.size} 筆")
-                        append("\n事件：${data.events.size} 筆")
-                        if (data.observations.isNotEmpty()) append("\nRanking 觀察：${data.observations.size} 筆")
-                        if (data.snapshots.isNotEmpty()) append("\nRanking 快照：${data.snapshots.size} 筆")
-                        append("\n歸檔聚合重建：${rebuiltAggregates.first} apps / ${rebuiltAggregates.second} channels")
-                        data.environment?.let {
+                        append("通知：${result.records} 筆")
+                        append("\n事件：${result.events} 筆")
+                        if (result.observations > 0) append("\nRanking 觀察：${result.observations} 筆")
+                        if (result.snapshots > 0) append("\nRanking 快照：${result.snapshots} 筆")
+                        if (result.mediaRestored > 0) append("\n媒體還原：${result.mediaRestored} 筆")
+                        append("\n歸檔聚合重建：${rebuilt.first} apps / ${rebuilt.second} channels")
+                        result.environment?.let {
                             append("\n\n來源裝置：${it.deviceManufacturer} ${it.deviceModel}")
                             append("\nAPI：${it.apiLevel}")
                         }
                     }
                 )
             } catch (e: Exception) {
-                Toast.makeText(
-                    ctx,
-                    "匯入失敗：${e.message}",
-                    Toast.LENGTH_LONG
-                ).show()
+                progressDialog.dismiss()
+                Toast.makeText(ctx, "匯入失敗：${e.message}", Toast.LENGTH_LONG).show()
             }
+        }
+    }
+
+    /** 從 content uri 取檔案大小（OpenableColumns.SIZE）；取不到回 0 → 進度條 indeterminate */
+    private fun queryUriSize(uri: android.net.Uri): Long {
+        val ctx = context ?: return 0L
+        return try {
+            ctx.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val idx = c.getColumnIndex(OpenableColumns.SIZE)
+                    if (idx >= 0 && !c.isNull(idx)) c.getLong(idx) else 0L
+                } else 0L
+            } ?: 0L
+        } catch (e: Exception) {
+            0L
         }
     }
 

@@ -2,138 +2,272 @@ package com.notificationmaster.export.archive
 
 import android.content.Context
 import android.util.Base64
+import android.util.JsonReader
+import android.util.JsonToken
 import android.util.Log
 import com.notificationmaster.core.media.MediaExtractor
+import com.notificationmaster.data.db.NotificationDatabase
 import com.notificationmaster.data.db.entity.EventType
 import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.data.db.entity.NotificationRecordEntity
 import com.notificationmaster.data.db.entity.ObservationSource
 import com.notificationmaster.data.db.entity.RankingObservationEntity
 import com.notificationmaster.data.db.entity.RankingSnapshotEntity
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.File
 import java.io.InputStream
+import java.io.File
+import java.io.InputStreamReader
 
 /**
- * JSON 封存匯入器（Plan 2 Phase 8 重寫）
+ * JSON 封存匯入器（W23r：串流改寫）
  *
- * 僅支援匯出格式 v2.0：records / events / rankingObservations / rankingSnapshots / mediaIndex。
- * 舊 v1.0 格式（NotificationEntity 為主體）不再支援。
+ * 舊版用 `readText()` + `JSONObject` 整檔 DOM parse，記憶體成本按 JSON **節點數**
+ * 計（org.json 每節點一個 HashMap）。大型備份（萬筆 events + 數萬筆 mediaIndex
+ * metadata）節點暴增逼近預設 heap → stop-the-world GC 凍結 main thread → ANR。
+ *
+ * 改用 [JsonReader] 串流：頂層 key 逐一處理，陣列元素逐筆解析後即插入 DB
+ * （events/snapshots 邊讀邊批次 insert，不累積），唯一 buffer 是輕量的
+ * observations（需等 snapshots 插完才能 remap snapshotId，故先緩存後 flush）。
+ * 峰值記憶體與檔案大小脫鉤。對稱 [ArchiveExporter] 的 JsonWriter 串流。
+ *
+ * 僅支援匯出格式 v2.0。
  */
 class ArchiveImporter(private val context: Context) {
 
     companion object {
         private const val TAG = "ArchiveImporter"
         private const val SUPPORTED_VERSION_PREFIX = "2."
+        private const val EVENT_BATCH = 500
+        private const val OBS_BATCH = 1000
+        /** 進度回呼節流：每處理這麼多筆元素回報一次 */
+        private const val PROGRESS_EVERY = 500
     }
+
+    /** 匯入進度（bytesRead/totalBytes 供 determinate 進度條；各 section count 供文字） */
+    data class ImportProgress(
+        val bytesRead: Long,
+        val totalBytes: Long,
+        val records: Int,
+        val events: Int,
+        val observations: Int,
+        val snapshots: Int,
+        val media: Int
+    )
+
+    /** 匯入結果摘要（不再回傳整批資料） */
+    data class ImportResult(
+        val exportInfo: ExportInfo,
+        val environment: ArchiveEnvironment?,
+        val records: Int,
+        val events: Int,
+        val observations: Int,
+        val snapshots: Int,
+        val mediaRestored: Int
+    )
 
     /**
-     * 解析封存檔案
+     * 串流解析 + 邊讀邊寫入 [database]。
      *
-     * @param inputStream 輸入串流
-     * @return 解析後的封存資料；不支援版本時 throws
+     * **dispatcher 中立**：本函式不切 dispatcher，由呼叫端在
+     * `database.withTransaction { }`（room-ktx）內呼叫以取得原子性 — transaction
+     * 的 context element 不可被 withContext(IO) 覆蓋，故此處不自行切。
+     *
+     * @param totalBytes 檔案總位元組（供進度條；未知傳 0 → 進度條 indeterminate）
+     * @param onProgress 進度回呼（在 transaction/背景 thread 觸發，呼叫端自行 marshal 到 main）
      */
-    suspend fun import(inputStream: InputStream): ArchiveData = withContext(Dispatchers.IO) {
-        val jsonStr = inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-        val json = JSONObject(jsonStr)
+    suspend fun import(
+        inputStream: InputStream,
+        database: NotificationDatabase,
+        totalBytes: Long,
+        onProgress: (ImportProgress) -> Unit
+    ): ImportResult {
+        val counting = CountingInputStream(inputStream)
+        val reader = JsonReader(InputStreamReader(counting, Charsets.UTF_8))
 
-        val exportInfo = parseExportInfo(json.getJSONObject("exportInfo"))
-        require(exportInfo.exportVersion.startsWith(SUPPORTED_VERSION_PREFIX)) {
-            "不支援的匯出版本：${exportInfo.exportVersion}（需 $SUPPORTED_VERSION_PREFIX*）"
+        var exportInfo: ExportInfo? = null
+        var environment: ArchiveEnvironment? = null
+        val oldToNewSnapshotId = HashMap<Long, Long>()
+        val pendingObs = ArrayList<RankingObservationEntity>()
+
+        var recordCount = 0
+        var eventCount = 0
+        var snapshotCount = 0
+        var mediaRestored = 0
+        var sinceProgress = 0
+
+        fun emitProgress() {
+            onProgress(
+                ImportProgress(
+                    counting.bytesRead, totalBytes,
+                    recordCount, eventCount, pendingObs.size, snapshotCount, mediaRestored
+                )
+            )
         }
 
-        val environment = parseEnvironment(json.optJSONObject("environment"))
-        val archiveRange = parseArchiveRange(json.optJSONObject("archiveRange"))
+        val eventBuf = ArrayList<NotificationEventEntity>(EVENT_BATCH)
+        suspend fun flushEvents() {
+            if (eventBuf.isEmpty()) return
+            database.notificationEventDao().insertAll(eventBuf.map { it.copy(id = 0) })
+            eventBuf.clear()
+        }
 
-        val records = parseArray(json.optJSONArray("records"), "record", ::parseRecord)
-        val events = parseArray(json.optJSONArray("events"), "event", ::parseEvent)
-        val observations = parseArray(
-            json.optJSONArray("rankingObservations"), "rankingObservation", ::parseObservation
-        )
-        val snapshots = parseArray(
-            json.optJSONArray("rankingSnapshots"), "rankingSnapshot", ::parseSnapshot
-        )
-
-        // 提取內嵌的 Base64 媒體
-        val mediaArray = json.optJSONArray("mediaIndex")
-        if (mediaArray != null) {
-            for (i in 0 until mediaArray.length()) {
-                try {
-                    val mediaJson = mediaArray.getJSONObject(i)
-                    val base64 = mediaJson.optString("base64", "")
-                    if (base64.isNotEmpty()) {
-                        val fileName = mediaJson.getString("filePath")
-                        val mediaDir = File(MediaExtractor.getMediaBaseDir(context), "media")
-                        mediaDir.mkdirs()
-                        val file = File(mediaDir, fileName)
-                        file.writeBytes(Base64.decode(base64, Base64.NO_WRAP))
+        reader.beginObject()
+        while (reader.hasNext()) {
+            when (reader.nextName()) {
+                "exportInfo" -> {
+                    exportInfo = parseExportInfo(readObject(reader))
+                    require(exportInfo!!.exportVersion.startsWith(SUPPORTED_VERSION_PREFIX)) {
+                        "不支援的匯出版本：${exportInfo!!.exportVersion}（需 $SUPPORTED_VERSION_PREFIX*）"
                     }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to restore media at index $i", e)
                 }
+                "environment" -> environment = parseEnvironment(readObject(reader))
+                "records" -> {
+                    reader.beginArray()
+                    while (reader.hasNext()) {
+                        runCatching { parseRecord(readObject(reader)) }.getOrNull()?.let {
+                            database.notificationRecordDao().insertIfAbsent(it)
+                            recordCount++
+                        }
+                        if (++sinceProgress >= PROGRESS_EVERY) { sinceProgress = 0; emitProgress() }
+                    }
+                    reader.endArray()
+                }
+                "events" -> {
+                    reader.beginArray()
+                    while (reader.hasNext()) {
+                        runCatching { parseEvent(readObject(reader)) }.getOrNull()?.let {
+                            eventBuf.add(it)
+                            eventCount++
+                            if (eventBuf.size >= EVENT_BATCH) flushEvents()
+                        }
+                        if (++sinceProgress >= PROGRESS_EVERY) { sinceProgress = 0; emitProgress() }
+                    }
+                    flushEvents()
+                    reader.endArray()
+                }
+                "rankingSnapshots" -> {
+                    reader.beginArray()
+                    while (reader.hasNext()) {
+                        runCatching { parseSnapshot(readObject(reader)) }.getOrNull()?.let { snap ->
+                            val existing = database.rankingSnapshotDao().getByHash(snap.contentHash)
+                            val newId = existing?.id
+                                ?: database.rankingSnapshotDao().insertIfAbsent(snap.copy(id = 0))
+                            oldToNewSnapshotId[snap.id] = newId
+                            snapshotCount++
+                        }
+                        if (++sinceProgress >= PROGRESS_EVERY) { sinceProgress = 0; emitProgress() }
+                    }
+                    reader.endArray()
+                }
+                "rankingObservations" -> {
+                    reader.beginArray()
+                    while (reader.hasNext()) {
+                        // 先緩存（輕量 entity），endObject 後才能 remap snapshotId
+                        runCatching { parseObservation(readObject(reader)) }.getOrNull()
+                            ?.let { pendingObs.add(it) }
+                        if (++sinceProgress >= PROGRESS_EVERY) { sinceProgress = 0; emitProgress() }
+                    }
+                    reader.endArray()
+                }
+                "mediaIndex" -> {
+                    reader.beginArray()
+                    while (reader.hasNext()) {
+                        val m = readObject(reader)
+                        val base64 = m.optString("base64", "")
+                        if (base64.isNotEmpty()) {
+                            runCatching {
+                                val fileName = m.getString("filePath")
+                                val mediaDir = File(MediaExtractor.getMediaBaseDir(context), "media")
+                                mediaDir.mkdirs()
+                                File(mediaDir, fileName).writeBytes(Base64.decode(base64, Base64.NO_WRAP))
+                                mediaRestored++
+                            }.onFailure { Log.w(TAG, "Failed to restore media", it) }
+                        }
+                        if (++sinceProgress >= PROGRESS_EVERY) { sinceProgress = 0; emitProgress() }
+                    }
+                    reader.endArray()
+                }
+                else -> reader.skipValue()  // archiveRange 等：略過（計數由本地重算）
             }
         }
+        reader.endObject()
 
-        ArchiveData(
-            exportInfo = exportInfo,
+        // observations：snapshotId remap 後批次 flush
+        var obsCount = 0
+        val obsBatch = ArrayList<RankingObservationEntity>(OBS_BATCH)
+        for (obs in pendingObs) {
+            val mapped = oldToNewSnapshotId[obs.rankingSnapshotId] ?: continue
+            obsBatch.add(obs.copy(id = 0, rankingSnapshotId = mapped))
+            if (obsBatch.size >= OBS_BATCH) {
+                database.rankingObservationDao().insertAll(obsBatch)
+                obsCount += obsBatch.size
+                obsBatch.clear()
+            }
+        }
+        if (obsBatch.isNotEmpty()) {
+            database.rankingObservationDao().insertAll(obsBatch)
+            obsCount += obsBatch.size
+        }
+        emitProgress()
+
+        val info = exportInfo ?: throw IllegalStateException("缺少 exportInfo，非合法封存檔")
+        return ImportResult(
+            exportInfo = info,
             environment = environment,
-            archiveRange = archiveRange,
-            records = records,
-            events = events,
-            observations = observations,
-            snapshots = snapshots
+            records = recordCount,
+            events = eventCount,
+            observations = obsCount,
+            snapshots = snapshotCount,
+            mediaRestored = mediaRestored
         )
     }
 
-    private fun <T> parseArray(
-        array: org.json.JSONArray?,
-        kind: String,
-        parser: (JSONObject) -> T
-    ): MutableList<T> {
-        val out = mutableListOf<T>()
-        if (array == null) return out
-        for (i in 0 until array.length()) {
-            try {
-                out.add(parser(array.getJSONObject(i)))
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to parse $kind at index $i", e)
-            }
+    // === JsonReader → 單一 JSONObject（每元素一次，讀完即丟，記憶體 O(1 元素)） ===
+
+    /** 把當前 JsonReader 位置的一個 object 讀成 [JSONObject]（巢狀沿用 org.json 表示） */
+    private fun readObject(reader: JsonReader): JSONObject {
+        val obj = JSONObject()
+        reader.beginObject()
+        while (reader.hasNext()) {
+            val name = reader.nextName()
+            obj.put(name, readValue(reader))
         }
-        return out
+        reader.endObject()
+        return obj
     }
 
-    private fun parseExportInfo(json: JSONObject): ExportInfo {
-        return ExportInfo(
-            exportTime = json.optString("exportTime", ""),
-            exportVersion = json.optString("exportVersion", "1.0"),
-            appVersion = json.optString("appVersion", ""),
-            appVersionCode = json.optLong("appVersionCode", 0)
-        )
+    private fun readValue(reader: JsonReader): Any? = when (reader.peek()) {
+        JsonToken.BEGIN_OBJECT -> readObject(reader)
+        JsonToken.BEGIN_ARRAY -> {
+            val arr = org.json.JSONArray()
+            reader.beginArray()
+            while (reader.hasNext()) arr.put(readValue(reader))
+            reader.endArray()
+            arr
+        }
+        JsonToken.STRING -> reader.nextString()
+        // 數字一律以字串收（避免 long/double 歧義），entity builder 再依欄位轉型
+        JsonToken.NUMBER -> reader.nextString()
+        JsonToken.BOOLEAN -> reader.nextBoolean()
+        JsonToken.NULL -> { reader.nextNull(); JSONObject.NULL }
+        else -> { reader.skipValue(); JSONObject.NULL }
     }
 
-    private fun parseEnvironment(json: JSONObject?): ArchiveEnvironment? {
-        if (json == null) return null
-        return ArchiveEnvironment(
-            androidVersion = json.optString("androidVersion", ""),
-            apiLevel = json.optInt("apiLevel", 0),
-            deviceModel = json.optString("deviceModel", ""),
-            deviceManufacturer = json.optString("deviceManufacturer", "")
-        )
-    }
+    // === entity 解析（與舊版語意一致，吃 JSONObject） ===
 
-    private fun parseArchiveRange(json: JSONObject?): ArchiveRange? {
-        if (json == null) return null
-        return ArchiveRange(
-            startTime = json.optString("startTime", ""),
-            endTime = json.optString("endTime", ""),
-            recordCount = json.optInt("recordCount", 0),
-            eventCount = json.optInt("eventCount", 0),
-            observationCount = json.optInt("observationCount", 0),
-            snapshotCount = json.optInt("snapshotCount", 0)
-        )
-    }
+    private fun parseExportInfo(json: JSONObject): ExportInfo = ExportInfo(
+        exportTime = json.optString("exportTime", ""),
+        exportVersion = json.optString("exportVersion", "1.0"),
+        appVersion = json.optString("appVersion", ""),
+        appVersionCode = json.optLong("appVersionCode", 0)
+    )
+
+    private fun parseEnvironment(json: JSONObject): ArchiveEnvironment = ArchiveEnvironment(
+        androidVersion = json.optString("androidVersion", ""),
+        apiLevel = json.optInt("apiLevel", 0),
+        deviceModel = json.optString("deviceModel", ""),
+        deviceManufacturer = json.optString("deviceManufacturer", "")
+    )
 
     private fun parseRecord(json: JSONObject): NotificationRecordEntity {
         val notificationKey = json.getString("notificationKey")
@@ -156,9 +290,7 @@ class ArchiveImporter(private val context: Context) {
         val notificationKey = json.getString("notificationKey")
         require(notificationKey.isNotBlank()) { "Event notificationKey must not be blank" }
 
-        // Phase 16：removalReason / removalReasonCategory column 已移除，
-        // 改從 eventRawJson.removalReason 取。若舊匯出檔含 removalReason 但 eventRawJson 缺，
-        // 補進 eventRawJson root（向下相容）。
+        // Phase 16 向下相容：舊匯出檔含 removalReason column 但 eventRawJson 缺 → 補進 root
         var rawJsonStr = json.optString("eventRawJson", "")
         if (json.has("removalReason") && rawJsonStr.isNotEmpty()) {
             try {
@@ -191,7 +323,6 @@ class ArchiveImporter(private val context: Context) {
     private fun parseObservation(json: JSONObject): RankingObservationEntity {
         val notificationKey = json.getString("notificationKey")
         require(notificationKey.isNotBlank()) { "Observation notificationKey must not be blank" }
-        // Phase 31t：rank 從 schema 移除（向後相容：舊匯出檔有 rank 欄位忽略）
         val lastAudiblyRaw = if (json.has("lastAudiblyAlertedMillis"))
             json.optLong("lastAudiblyAlertedMillis", Long.MIN_VALUE) else Long.MIN_VALUE
         return RankingObservationEntity(
@@ -217,20 +348,23 @@ class ArchiveImporter(private val context: Context) {
 
     private fun JSONObject.optStringOrNull(key: String): String? =
         if (has(key) && !isNull(key)) optString(key).takeIf { it.isNotEmpty() } else null
+
+    /** 計數用 InputStream wrapper（供進度條 bytesRead） */
+    private class CountingInputStream(private val src: InputStream) : InputStream() {
+        @Volatile var bytesRead: Long = 0L
+            private set
+
+        override fun read(): Int = src.read().also { if (it >= 0) bytesRead++ }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int =
+            src.read(b, off, len).also { if (it > 0) bytesRead += it }
+
+        override fun close() = src.close()
+        override fun available(): Int = src.available()
+    }
 }
 
-/**
- * 封存資料模型
- */
-data class ArchiveData(
-    val exportInfo: ExportInfo,
-    val environment: ArchiveEnvironment?,
-    val archiveRange: ArchiveRange?,
-    val records: List<NotificationRecordEntity>,
-    val events: List<NotificationEventEntity>,
-    val observations: List<RankingObservationEntity>,
-    val snapshots: List<RankingSnapshotEntity>
-)
+// === 匯出資料模型（exportInfo / environment 仍供結果摘要與相容） ===
 
 data class ExportInfo(
     val exportTime: String,
@@ -244,13 +378,4 @@ data class ArchiveEnvironment(
     val apiLevel: Int,
     val deviceModel: String,
     val deviceManufacturer: String
-)
-
-data class ArchiveRange(
-    val startTime: String,
-    val endTime: String,
-    val recordCount: Int,
-    val eventCount: Int,
-    val observationCount: Int,
-    val snapshotCount: Int
 )
