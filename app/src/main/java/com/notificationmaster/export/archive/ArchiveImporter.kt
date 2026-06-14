@@ -65,6 +65,105 @@ class ArchiveImporter(private val context: Context) {
         val mediaRestored: Int
     )
 
+    /** Pass 1 驗證報告：實際讀到的各 section 筆數 + 是否通過計數核對 */
+    data class ValidationReport(
+        val exportInfo: ExportInfo,
+        val environment: ArchiveEnvironment?,
+        val records: Int,
+        val events: Int,
+        val observations: Int,
+        val snapshots: Int,
+        val media: Int,
+        /** archiveRange 宣告值存在且與實際相符（無 archiveRange → false，只做結構驗證） */
+        val countVerified: Boolean
+    )
+
+    /**
+     * Pass 1：純串流驗證，**不寫 DB**。涵蓋
+     * (1) JSON 結構合法 + 截斷偵測（JsonReader 讀到 EOF 缺收尾即拋）
+     * (2) exportInfo 版本閘
+     * (3) 計數完整性：實際讀到的陣列筆數 vs 檔尾 archiveRange 宣告值，不符即拋
+     *
+     * O(1) 記憶體：只 skipValue 數陣列元素 + 累計計數，不持有資料。通過後呼叫端才進
+     * pass 2 [import] 寫入。
+     */
+    suspend fun validate(
+        inputStream: InputStream,
+        totalBytes: Long,
+        onProgress: (ImportProgress) -> Unit
+    ): ValidationReport {
+        val counting = CountingInputStream(inputStream)
+        val reader = JsonReader(InputStreamReader(counting, Charsets.UTF_8))
+
+        var exportInfo: ExportInfo? = null
+        var environment: ArchiveEnvironment? = null
+        var declRecords = -1; var declEvents = -1; var declObs = -1; var declSnaps = -1
+        var nRecords = 0; var nEvents = 0; var nObs = 0; var nSnaps = 0; var nMedia = 0
+        var sinceProgress = 0
+
+        fun bump() {
+            if (++sinceProgress >= PROGRESS_EVERY) {
+                sinceProgress = 0
+                onProgress(ImportProgress(counting.bytesRead, totalBytes, nRecords, nEvents, nObs, nSnaps, nMedia))
+            }
+        }
+        fun countArray(onEach: () -> Unit): Int {
+            var n = 0
+            reader.beginArray()
+            while (reader.hasNext()) { reader.skipValue(); n++; onEach() }
+            reader.endArray()
+            return n
+        }
+
+        reader.beginObject()
+        while (reader.hasNext()) {
+            when (reader.nextName()) {
+                "exportInfo" -> {
+                    exportInfo = parseExportInfo(readObject(reader))
+                    require(exportInfo!!.exportVersion.startsWith(SUPPORTED_VERSION_PREFIX)) {
+                        "不支援的匯出版本：${exportInfo!!.exportVersion}（需 $SUPPORTED_VERSION_PREFIX*）"
+                    }
+                }
+                "environment" -> environment = parseEnvironment(readObject(reader))
+                "archiveRange" -> {
+                    val o = readObject(reader)
+                    declRecords = o.optInt("recordCount", -1)
+                    declEvents = o.optInt("eventCount", -1)
+                    declObs = o.optInt("observationCount", -1)
+                    declSnaps = o.optInt("snapshotCount", -1)
+                }
+                "records" -> nRecords = countArray { bump() }
+                "events" -> nEvents = countArray { bump() }
+                "rankingObservations" -> nObs = countArray { bump() }
+                "rankingSnapshots" -> nSnaps = countArray { bump() }
+                "mediaIndex" -> nMedia = countArray { bump() }
+                else -> reader.skipValue()
+            }
+        }
+        reader.endObject()  // 截斷檔在此拋（缺頂層收尾）
+
+        val info = exportInfo ?: throw IllegalStateException("缺少 exportInfo，非合法封存檔")
+
+        val hasDecl = declRecords >= 0 || declEvents >= 0 || declObs >= 0 || declSnaps >= 0
+        if (hasDecl) {
+            val mism = buildList {
+                if (declRecords >= 0 && declRecords != nRecords) add("records 宣告 $declRecords / 實際 $nRecords")
+                if (declEvents >= 0 && declEvents != nEvents) add("events 宣告 $declEvents / 實際 $nEvents")
+                if (declObs >= 0 && declObs != nObs) add("observations 宣告 $declObs / 實際 $nObs")
+                if (declSnaps >= 0 && declSnaps != nSnaps) add("snapshots 宣告 $declSnaps / 實際 $nSnaps")
+            }
+            if (mism.isNotEmpty()) {
+                throw IllegalStateException("封存檔不完整（計數不符）：${mism.joinToString("；")}")
+            }
+        }
+
+        return ValidationReport(
+            exportInfo = info, environment = environment,
+            records = nRecords, events = nEvents, observations = nObs,
+            snapshots = nSnaps, media = nMedia, countVerified = hasDecl
+        )
+    }
+
     /**
      * 串流解析 + 邊讀邊寫入 [database]。
      *

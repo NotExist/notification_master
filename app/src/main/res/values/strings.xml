@@ -52,10 +52,12 @@
     <string name="settings_export_ical">匯出到指定日曆</string>
     <string name="settings_export_json">匯出為 JSON 封存</string>
     <string name="settings_import_json">匯入 JSON 封存</string>
-    <!-- W23r：串流匯入進度 UI -->
+    <!-- W23r：串流匯入進度 UI（兩段式：驗證 → 寫入） -->
     <string name="import_progress_title">匯入封存中…</string>
     <string name="import_progress_preparing">準備中…</string>
-    <string name="import_progress_counts">事件 %1$d · 觀察 %2$d · 快照 %3$d · 通知 %4$d</string>
+    <string name="import_progress_validating">驗證封存完整性…</string>
+    <string name="import_progress_writing">寫入資料庫…</string>
+    <string name="import_progress_phase">%1$s\n事件 %2$d · 觀察 %3$d · 快照 %4$d · 通知 %5$d</string>
     <string name="import_done_title">封存匯入完成</string>
     <string name="settings_storage">儲存空間</string>
     <string name="settings_data">資料管理</string>

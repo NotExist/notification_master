@@ -1414,29 +1414,38 @@ class SettingsFragment : Fragment() {
 
         val mainHandler = Handler(Looper.getMainLooper())
 
+        // 進度回呼 → main：phase 標籤 + 位元組進度條 + 即時計數
+        fun postProgress(phaseLabel: String, p: ArchiveImporter.ImportProgress) {
+            mainHandler.post {
+                if (!progressDialog.isShowing) return@post
+                if (totalBytes > 0) {
+                    bar.isIndeterminate = false
+                    bar.progress = ((p.bytesRead * 100) / totalBytes).toInt().coerceIn(0, 100)
+                }
+                text.text = getString(
+                    R.string.import_progress_phase, phaseLabel,
+                    p.events, p.observations, p.snapshots, p.records
+                )
+            }
+        }
+
         viewLifecycleOwner.lifecycleScope.launch {
             val database = NotificationMasterApp.getInstance().database
             try {
                 val importer = ArchiveImporter(ctx)
+                val validateLabel = getString(R.string.import_progress_validating)
+                val writeLabel = getString(R.string.import_progress_writing)
+
+                // PASS 1：純驗證（結構 + 版本 + 計數），不寫 DB；不通過直接拋、零寫入
+                val report = ctx.contentResolver.openInputStream(uri)?.use { ins ->
+                    importer.validate(ins, totalBytes) { p -> postProgress(validateLabel, p) }
+                } ?: throw IllegalStateException("無法開啟輸入串流")
+
+                // PASS 2：通過後才寫入；整段 + 聚合重建包單一 transaction（crash-safe）
                 var rebuilt: Pair<Int, Int> = 0 to 0
-                // 整段串流匯入 + 聚合重建包在單一 transaction：JSON 截斷 / 壞格式
-                // 途中拋例外 → rollback 全有或全無，不留半套資料
                 val result = database.withTransaction {
                     val r = ctx.contentResolver.openInputStream(uri)?.use { ins ->
-                        importer.import(ins, database, totalBytes) { p ->
-                            mainHandler.post {
-                                if (!progressDialog.isShowing) return@post
-                                if (totalBytes > 0) {
-                                    bar.isIndeterminate = false
-                                    bar.progress = ((p.bytesRead * 100) / totalBytes)
-                                        .toInt().coerceIn(0, 100)
-                                }
-                                text.text = getString(
-                                    R.string.import_progress_counts,
-                                    p.events, p.observations, p.snapshots, p.records
-                                )
-                            }
-                        }
+                        importer.import(ins, database, totalBytes) { p -> postProgress(writeLabel, p) }
                     } ?: throw IllegalStateException("無法開啟輸入串流")
                     // W23q：聚合重建放同一 transaction，原子性 + 可見剛插入的 events
                     rebuilt = ArchiveAggregateRebuilder.rebuild(ctx, database)
@@ -1453,8 +1462,12 @@ class SettingsFragment : Fragment() {
                         if (result.snapshots > 0) append("\nRanking 快照：${result.snapshots} 筆")
                         if (result.mediaRestored > 0) append("\n媒體還原：${result.mediaRestored} 筆")
                         append("\n歸檔聚合重建：${rebuilt.first} apps / ${rebuilt.second} channels")
+                        append(
+                            if (report.countVerified) "\n\n✓ 已通過完整性驗證（計數核對）"
+                            else "\n\n✓ 已通過結構驗證（此檔無計數中繼資料）"
+                        )
                         result.environment?.let {
-                            append("\n\n來源裝置：${it.deviceManufacturer} ${it.deviceModel}")
+                            append("\n來源裝置：${it.deviceManufacturer} ${it.deviceModel}")
                             append("\nAPI：${it.apiLevel}")
                         }
                     }
