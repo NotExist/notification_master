@@ -1444,6 +1444,12 @@ class SettingsFragment : Fragment() {
                 // PASS 2：通過後才寫入；整段 + 聚合重建包單一 transaction（crash-safe）
                 var rebuilt: Pair<Int, Int> = 0 to 0
                 val result = database.withTransaction {
+                    // W23t：匯出檔 key 順序為 events 先於 records，但 events 對 records
+                    // 有 FK（notification_key）。串流按檔案順序插入 → events 早於其
+                    // 父 record → 立即 FK 違反。defer_foreign_keys 把 FK 檢查延到
+                    // commit（records/snapshots 屆時都已在本 transaction 內），插入
+                    // 順序即無關。pragma 於每次 commit/rollback 自動關閉，僅作用本 txn。
+                    database.openHelper.writableDatabase.execSQL("PRAGMA defer_foreign_keys = ON")
                     val r = ctx.contentResolver.openInputStream(uri)?.use { ins ->
                         importer.import(ins, database, totalBytes) { p -> postProgress(writeLabel, p) }
                     } ?: throw IllegalStateException("無法開啟輸入串流")
