@@ -62,10 +62,12 @@ class ArchiveImporter(private val context: Context) {
         val events: Int,
         val observations: Int,
         val snapshots: Int,
-        val mediaRestored: Int
+        val mediaRestored: Int,
+        /** W23u：為孤兒 event key（無對應 record）補建的 placeholder record 數 */
+        val placeholderRecords: Int
     )
 
-    /** Pass 1 驗證報告：實際讀到的各 section 筆數 + 是否通過計數核對 */
+    /** Pass 1 驗證報告：實際讀到的各 section 筆數 + 是否通過計數核對 + 參照完整性 */
     data class ValidationReport(
         val exportInfo: ExportInfo,
         val environment: ArchiveEnvironment?,
@@ -75,7 +77,13 @@ class ArchiveImporter(private val context: Context) {
         val snapshots: Int,
         val media: Int,
         /** archiveRange 宣告值存在且與實際相符（無 archiveRange → false，只做結構驗證） */
-        val countVerified: Boolean
+        val countVerified: Boolean,
+        /**
+         * 參照完整性：notification_key 出現在 events 卻不在 records 的孤兒集合。
+         * events 對 records 有 FK，孤兒會在寫入 commit 時 FK 失敗。pass 2 對這些 key
+         * 補 placeholder record 修復（observations 的 key ⊆ event key，故一併涵蓋）。
+         */
+        val orphanEventKeys: Set<String>
     )
 
     /**
@@ -83,9 +91,10 @@ class ArchiveImporter(private val context: Context) {
      * (1) JSON 結構合法 + 截斷偵測（JsonReader 讀到 EOF 缺收尾即拋）
      * (2) exportInfo 版本閘
      * (3) 計數完整性：實際讀到的陣列筆數 vs 檔尾 archiveRange 宣告值，不符即拋
+     * (4) 參照完整性：收集 event keys / record keys，算出孤兒 event key（不拋，回報供
+     *     pass 2 補 placeholder）
      *
-     * O(1) 記憶體：只 skipValue 數陣列元素 + 累計計數，不持有資料。通過後呼叫端才進
-     * pass 2 [import] 寫入。
+     * O(unique key 數) 記憶體：只持有 key 字串集合 + 計數，不持有資料本體。
      */
     suspend fun validate(
         inputStream: InputStream,
@@ -100,6 +109,8 @@ class ArchiveImporter(private val context: Context) {
         var declRecords = -1; var declEvents = -1; var declObs = -1; var declSnaps = -1
         var nRecords = 0; var nEvents = 0; var nObs = 0; var nSnaps = 0; var nMedia = 0
         var sinceProgress = 0
+        val recordKeys = HashSet<String>()
+        val eventKeys = HashSet<String>()
 
         fun bump() {
             if (++sinceProgress >= PROGRESS_EVERY) {
@@ -111,6 +122,22 @@ class ArchiveImporter(private val context: Context) {
             var n = 0
             reader.beginArray()
             while (reader.hasNext()) { reader.skipValue(); n++; onEach() }
+            reader.endArray()
+            return n
+        }
+        // 輕量擷取陣列元素的單一字串欄位（其餘 skipValue，不建整個 JSONObject）
+        fun countKeys(field: String, into: HashSet<String>): Int {
+            var n = 0
+            reader.beginArray()
+            while (reader.hasNext()) {
+                reader.beginObject()
+                while (reader.hasNext()) {
+                    if (reader.nextName() == field && reader.peek() == JsonToken.STRING) into.add(reader.nextString())
+                    else reader.skipValue()
+                }
+                reader.endObject()
+                n++; bump()
+            }
             reader.endArray()
             return n
         }
@@ -132,8 +159,8 @@ class ArchiveImporter(private val context: Context) {
                     declObs = o.optInt("observationCount", -1)
                     declSnaps = o.optInt("snapshotCount", -1)
                 }
-                "records" -> nRecords = countArray { bump() }
-                "events" -> nEvents = countArray { bump() }
+                "records" -> nRecords = countKeys("notificationKey", recordKeys)
+                "events" -> nEvents = countKeys("notificationKey", eventKeys)
                 "rankingObservations" -> nObs = countArray { bump() }
                 "rankingSnapshots" -> nSnaps = countArray { bump() }
                 "mediaIndex" -> nMedia = countArray { bump() }
@@ -157,10 +184,14 @@ class ArchiveImporter(private val context: Context) {
             }
         }
 
+        // 參照完整性：event key 不在 records → 孤兒（不拋，pass 2 補 placeholder）
+        val orphan = eventKeys.filterTo(HashSet()) { it !in recordKeys }
+
         return ValidationReport(
             exportInfo = info, environment = environment,
             records = nRecords, events = nEvents, observations = nObs,
-            snapshots = nSnaps, media = nMedia, countVerified = hasDecl
+            snapshots = nSnaps, media = nMedia, countVerified = hasDecl,
+            orphanEventKeys = orphan
         )
     }
 
@@ -172,12 +203,15 @@ class ArchiveImporter(private val context: Context) {
      * 的 context element 不可被 withContext(IO) 覆蓋，故此處不自行切。
      *
      * @param totalBytes 檔案總位元組（供進度條；未知傳 0 → 進度條 indeterminate）
+     * @param placeholderKeys pass 1 算出的孤兒 event key（無對應 record）；遇到該 key 的
+     *                        event 時補建 placeholder record 滿足 FK
      * @param onProgress 進度回呼（在 transaction/背景 thread 觸發，呼叫端自行 marshal 到 main）
      */
     suspend fun import(
         inputStream: InputStream,
         database: NotificationDatabase,
         totalBytes: Long,
+        placeholderKeys: Set<String>,
         onProgress: (ImportProgress) -> Unit
     ): ImportResult {
         val counting = CountingInputStream(inputStream)
@@ -187,6 +221,7 @@ class ArchiveImporter(private val context: Context) {
         var environment: ArchiveEnvironment? = null
         val oldToNewSnapshotId = HashMap<Long, Long>()
         val pendingObs = ArrayList<RankingObservationEntity>()
+        val createdPlaceholders = HashSet<String>()
 
         var recordCount = 0
         var eventCount = 0
@@ -234,8 +269,13 @@ class ArchiveImporter(private val context: Context) {
                 "events" -> {
                     reader.beginArray()
                     while (reader.hasNext()) {
-                        runCatching { parseEvent(readObject(reader)) }.getOrNull()?.let {
-                            eventBuf.add(it)
+                        runCatching { parseEvent(readObject(reader)) }.getOrNull()?.let { ev ->
+                            // W23u：孤兒 event key（無對應 record）首次出現時補 placeholder record，
+                            // 用該 event 的 packageName/channel/時間填充（defer_foreign_keys 容順序）
+                            if (ev.notificationKey in placeholderKeys && createdPlaceholders.add(ev.notificationKey)) {
+                                database.notificationRecordDao().insertIfAbsent(placeholderRecord(ev))
+                            }
+                            eventBuf.add(ev)
                             eventCount++
                             if (eventBuf.size >= EVENT_BATCH) flushEvents()
                         }
@@ -317,9 +357,26 @@ class ArchiveImporter(private val context: Context) {
             events = eventCount,
             observations = obsCount,
             snapshots = snapshotCount,
-            mediaRestored = mediaRestored
+            mediaRestored = mediaRestored,
+            placeholderRecords = createdPlaceholders.size
         )
     }
+
+    /**
+     * W23u：為孤兒 event（其 notification_key 在檔內無對應 record）補建的最小 record。
+     * packageName/channelId/時間取自該 event；notificationId/tag 留預設、eventCount=0。
+     */
+    private fun placeholderRecord(ev: NotificationEventEntity): NotificationRecordEntity =
+        NotificationRecordEntity(
+            notificationKey = ev.notificationKey,
+            packageName = ev.packageName,
+            channelId = ev.channelId,
+            notificationId = 0,
+            tag = null,
+            firstSeen = ev.postTime,
+            lastSeen = ev.postTime,
+            eventCount = 0
+        )
 
     // === JsonReader → 單一 JSONObject（每元素一次，讀完即丟，記憶體 O(1 元素)） ===
 

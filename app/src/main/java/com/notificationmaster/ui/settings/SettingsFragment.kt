@@ -1451,7 +1451,9 @@ class SettingsFragment : Fragment() {
                     // 順序即無關。pragma 於每次 commit/rollback 自動關閉，僅作用本 txn。
                     database.openHelper.writableDatabase.execSQL("PRAGMA defer_foreign_keys = ON")
                     val r = ctx.contentResolver.openInputStream(uri)?.use { ins ->
-                        importer.import(ins, database, totalBytes) { p -> postProgress(writeLabel, p) }
+                        importer.import(ins, database, totalBytes, report.orphanEventKeys) { p ->
+                            postProgress(writeLabel, p)
+                        }
                     } ?: throw IllegalStateException("無法開啟輸入串流")
                     // W23q：聚合重建放同一 transaction，原子性 + 可見剛插入的 events
                     rebuilt = ArchiveAggregateRebuilder.rebuild(ctx, database)
@@ -1468,9 +1470,13 @@ class SettingsFragment : Fragment() {
                         if (result.snapshots > 0) append("\nRanking 快照：${result.snapshots} 筆")
                         if (result.mediaRestored > 0) append("\n媒體還原：${result.mediaRestored} 筆")
                         append("\n歸檔聚合重建：${rebuilt.first} apps / ${rebuilt.second} channels")
+                        if (result.placeholderRecords > 0) {
+                            append("\n⚠ 補建佔位通知：${result.placeholderRecords} 筆")
+                            append("（事件缺對應通知記錄，已補 placeholder 以保留事件）")
+                        }
                         append(
-                            if (report.countVerified) "\n\n✓ 已通過完整性驗證（計數核對）"
-                            else "\n\n✓ 已通過結構驗證（此檔無計數中繼資料）"
+                            if (report.countVerified) "\n\n✓ 已通過完整性驗證（計數核對 + 參照完整性）"
+                            else "\n\n✓ 已通過結構與參照完整性驗證（此檔無計數中繼資料）"
                         )
                         result.environment?.let {
                             append("\n來源裝置：${it.deviceManufacturer} ${it.deviceModel}")
