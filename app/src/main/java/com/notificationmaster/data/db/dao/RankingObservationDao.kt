@@ -66,9 +66,23 @@ interface RankingObservationDao {
     @Query("SELECT COUNT(*) FROM ranking_observations")
     suspend fun getTotalCount(): Int
 
+    /** W23x：匯入去重用 — 既有 observation 內容身分投影（輕量） */
+    @Query("SELECT notification_key AS notificationKey, observed_at AS observedAt, ranking_snapshot_id AS rankingSnapshotId, source AS source FROM ranking_observations")
+    suspend fun getAllObservationIdentitiesSync(): List<ObservationIdentity>
+
     @Query("DELETE FROM ranking_observations WHERE observed_at < :beforeTime")
     suspend fun deleteBeforeTime(beforeTime: Long): Int
 
     @Query("DELETE FROM ranking_observations")
     suspend fun deleteAll()
+}
+
+/** W23x：observation 內容身分投影（匯入去重） */
+data class ObservationIdentity(
+    val notificationKey: String,
+    val observedAt: Long,
+    val rankingSnapshotId: Long,
+    val source: ObservationSource
+) {
+    fun key(): String = "$notificationKey|$observedAt|$rankingSnapshotId|${source.name}"
 }

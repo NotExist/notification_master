@@ -1419,7 +1419,33 @@ class SettingsFragment : Fragment() {
 
     // === JSON 封存匯入 ===
 
+    /**
+     * W23x：匯入前若 DB 非空，先讓使用者選「合併（去重）」或「先清空再匯入」。
+     * 空 DB 直接合併（去重無作用）。
+     */
     private fun importArchiveFromUri(uri: android.net.Uri) {
+        val ctx = context ?: return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val database = NotificationMasterApp.getInstance().database
+            val existing = withContext(Dispatchers.IO) {
+                database.notificationEventDao().getTotalCountSync()
+            }
+            if (_binding == null) return@launch
+            if (existing <= 0) {
+                runArchiveImport(uri, clearFirst = false)
+                return@launch
+            }
+            MaterialAlertDialogBuilder(ctx)
+                .setTitle("資料庫已有資料")
+                .setMessage("目前已有 $existing 筆事件。\n\n• 合併匯入：重複記錄自動略過\n• 先清空再匯入：完全還原此封存")
+                .setPositiveButton("合併匯入") { _, _ -> runArchiveImport(uri, clearFirst = false) }
+                .setNeutralButton("先清空再匯入") { _, _ -> runArchiveImport(uri, clearFirst = true) }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
+    }
+
+    private fun runArchiveImport(uri: android.net.Uri, clearFirst: Boolean) {
         val ctx = context ?: return
         val totalBytes = queryUriSize(uri)
 
@@ -1483,6 +1509,18 @@ class SettingsFragment : Fragment() {
                     // commit（records/snapshots 屆時都已在本 transaction 內），插入
                     // 順序即無關。pragma 於每次 commit/rollback 自動關閉，僅作用本 txn。
                     database.openHelper.writableDatabase.execSQL("PRAGMA defer_foreign_keys = ON")
+                    // W23x：clear-first（使用者選擇）— 在同 transaction 內先清空，與匯入原子
+                    if (clearFirst) {
+                        database.rankingObservationDao().deleteAll()
+                        database.notificationEventDao().deleteAll()
+                        database.notificationRecordDao().deleteAll()
+                        database.rankingSnapshotDao().deleteAll()
+                        database.mediaAttachmentDao().deleteAll()
+                        database.actionDao().deleteAll()
+                        database.appSourceDao().deleteAll()
+                        database.channelDao().deleteAll()
+                        database.deviceStateDao().deleteAll()
+                    }
                     val r = ctx.contentResolver.openInputStream(uri)?.use { ins ->
                         importer.import(ins, database, totalBytes, report.orphanEventKeys) { p ->
                             postProgress(writeLabel, p)
@@ -1506,6 +1544,10 @@ class SettingsFragment : Fragment() {
                         if (result.placeholderRecords > 0) {
                             append("\n⚠ 補建佔位通知：${result.placeholderRecords} 筆")
                             append("（事件缺對應通知記錄，已補 placeholder 以保留事件）")
+                        }
+                        if (result.dedupedEvents > 0 || result.dedupedObservations > 0) {
+                            append("\n略過重複：事件 ${result.dedupedEvents} 筆")
+                            if (result.dedupedObservations > 0) append(" / 觀察 ${result.dedupedObservations} 筆")
                         }
                         append(
                             if (report.countVerified) "\n\n✓ 已通過完整性驗證（計數核對 + 參照完整性）"

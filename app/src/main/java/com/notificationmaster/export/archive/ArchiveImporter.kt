@@ -64,7 +64,10 @@ class ArchiveImporter(private val context: Context) {
         val snapshots: Int,
         val mediaRestored: Int,
         /** W23u：為孤兒 event key（無對應 record）補建的 placeholder record 數 */
-        val placeholderRecords: Int
+        val placeholderRecords: Int,
+        /** W23x：因內容身分已存在（DB 既有或檔內重複）而略過的 event / observation 數 */
+        val dedupedEvents: Int,
+        val dedupedObservations: Int
     )
 
     /** Pass 1 驗證報告：實際讀到的各 section 筆數 + 是否通過計數核對 + 參照完整性 */
@@ -223,10 +226,21 @@ class ArchiveImporter(private val context: Context) {
         val pendingObs = ArrayList<RankingObservationEntity>()
         val createdPlaceholders = HashSet<String>()
 
+        // W23x：去重 — 既有內容身分集合（DB 既有 + 本次已插入，後者防檔內重複）。
+        // clear-first 路徑已在同 transaction 內清空，故此處查得空集合 → 去重自然 no-op。
+        val seenEventIds = HashSet<String>().apply {
+            database.notificationEventDao().getAllEventIdentitiesSync().forEach { add(it.key()) }
+        }
+        val seenObsIds = HashSet<String>().apply {
+            database.rankingObservationDao().getAllObservationIdentitiesSync().forEach { add(it.key()) }
+        }
+
         var recordCount = 0
         var eventCount = 0
         var snapshotCount = 0
         var mediaRestored = 0
+        var dedupedEvents = 0
+        var dedupedObs = 0
         var sinceProgress = 0
 
         fun emitProgress() {
@@ -270,6 +284,12 @@ class ArchiveImporter(private val context: Context) {
                     reader.beginArray()
                     while (reader.hasNext()) {
                         runCatching { parseEvent(readObject(reader)) }.getOrNull()?.let { ev ->
+                            // W23x：內容身分已存在（DB 既有或檔內重複）→ 略過，確保重複匯入 idempotent
+                            val idKey = "${ev.notificationKey}|${ev.eventType.name}|${ev.eventTime}|${ev.contentHash}"
+                            if (!seenEventIds.add(idKey)) {
+                                dedupedEvents++
+                                return@let
+                            }
                             // W23u：孤兒 event key（無對應 record）首次出現時補 placeholder record，
                             // 用該 event 的 packageName/channel/時間填充（defer_foreign_keys 容順序）
                             if (ev.notificationKey in placeholderKeys && createdPlaceholders.add(ev.notificationKey)) {
@@ -336,6 +356,12 @@ class ArchiveImporter(private val context: Context) {
         val obsBatch = ArrayList<RankingObservationEntity>(OBS_BATCH)
         for (obs in pendingObs) {
             val mapped = oldToNewSnapshotId[obs.rankingSnapshotId] ?: continue
+            // W23x：去重（身分含 remap 後的 snapshotId）
+            val idKey = "${obs.notificationKey}|${obs.observedAt}|$mapped|${obs.source.name}"
+            if (!seenObsIds.add(idKey)) {
+                dedupedObs++
+                continue
+            }
             obsBatch.add(obs.copy(id = 0, rankingSnapshotId = mapped))
             if (obsBatch.size >= OBS_BATCH) {
                 database.rankingObservationDao().insertAll(obsBatch)
@@ -358,7 +384,9 @@ class ArchiveImporter(private val context: Context) {
             observations = obsCount,
             snapshots = snapshotCount,
             mediaRestored = mediaRestored,
-            placeholderRecords = createdPlaceholders.size
+            placeholderRecords = createdPlaceholders.size,
+            dedupedEvents = dedupedEvents,
+            dedupedObservations = dedupedObs
         )
     }
 
