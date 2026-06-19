@@ -1347,6 +1347,25 @@ class SettingsFragment : Fragment() {
 
     private fun exportArchiveToUri(uri: android.net.Uri) {
         val ctx = context ?: return
+
+        // W23w：匯出進度（determinate by event 數）+ 即時計數，與匯入對稱
+        val bar = LinearProgressIndicator(ctx).apply { isIndeterminate = true; max = 100 }
+        val text = TextView(ctx).apply {
+            setPadding(0, 24, 0, 0)
+            setText(R.string.export_progress_preparing)
+        }
+        val content = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(64, 48, 64, 16)
+            addView(bar); addView(text)
+        }
+        val progressDialog = MaterialAlertDialogBuilder(ctx)
+            .setTitle(R.string.export_progress_title)
+            .setView(content)
+            .setCancelable(false)
+            .show()
+        val mainHandler = Handler(Looper.getMainLooper())
+
         viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val database = NotificationMasterApp.getInstance().database
@@ -1363,10 +1382,20 @@ class SettingsFragment : Fragment() {
                             pendingExportStartTime,
                             pendingExportEndTime,
                             it
-                        )
+                        ) { written, total ->
+                            mainHandler.post {
+                                if (!progressDialog.isShowing) return@post
+                                if (total > 0) {
+                                    bar.isIndeterminate = false
+                                    bar.progress = ((written.toLong() * 100) / total).toInt().coerceIn(0, 100)
+                                }
+                                text.text = getString(R.string.export_progress_events, written, total)
+                            }
+                        }
                     }
                 }
 
+                progressDialog.dismiss()
                 showResultDialog(
                     "封存匯出完成",
                     buildString {
@@ -1378,6 +1407,7 @@ class SettingsFragment : Fragment() {
                     }
                 )
             } catch (e: Exception) {
+                progressDialog.dismiss()
                 Toast.makeText(
                     ctx,
                     "匯出失敗：${e.message}",

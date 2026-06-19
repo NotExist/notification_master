@@ -59,6 +59,10 @@
     <string name="import_progress_writing">寫入資料庫…</string>
     <string name="import_progress_phase">%1$s\n事件 %2$d · 觀察 %3$d · 快照 %4$d · 通知 %5$d</string>
     <string name="import_done_title">封存匯入完成</string>
+    <!-- W23w：串流匯出進度 UI -->
+    <string name="export_progress_title">匯出封存中…</string>
+    <string name="export_progress_preparing">準備中…</string>
+    <string name="export_progress_events">事件 %1$d / %2$d</string>
     <string name="settings_storage">儲存空間</string>
     <string name="settings_data">資料管理</string>
     <string name="settings_clear_data">清除通知記錄資料庫</string>

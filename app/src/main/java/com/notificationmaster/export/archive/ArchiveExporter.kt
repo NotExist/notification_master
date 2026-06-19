@@ -66,13 +66,17 @@ class ArchiveExporter(
         startTime: Long,
         endTime: Long,
         outputStream: OutputStream,
-        includeMediaBase64: Boolean = false
+        includeMediaBase64: Boolean = false,
+        onProgress: (written: Int, total: Int) -> Unit = { _, _ -> }
     ): ArchiveStats = withContext(Dispatchers.IO) {
         val tStart = System.currentTimeMillis()
         fun stage(msg: String) =
             ProfileLogger.append("Export", "$msg since-start=${System.currentTimeMillis() - tStart}ms")
 
         stage("export start range=$startTime..$endTime")
+        // W23w：進度分母 — 範圍內 event 總數（events 是匯出主成本，以此驅動進度條）
+        val totalEvents = database.notificationEventDao().getCountByTimeRangeSync(startTime, endTime)
+        onProgress(0, totalEvents)
         val writer = JsonWriter(
             BufferedWriter(OutputStreamWriter(outputStream, Charsets.UTF_8), 128 * 1024)
         )
@@ -97,6 +101,7 @@ class ArchiveExporter(
                 eventKeyById[e.id] = e.notificationKey
             }
             afterId = batch.last().id
+            onProgress(eventKeyById.size, totalEvents)
             if (batch.size < EVENT_BATCH_SIZE) break
         }
         writer.endArray()

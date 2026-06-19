@@ -97,6 +97,17 @@ interface NotificationEventDao {
         limit: Int
     ): List<NotificationEventEntity>
 
+    /** W23w：匯出進度分母 — 範圍內 event 總數 */
+    @Query("SELECT COUNT(*) FROM notification_events WHERE event_time BETWEEN :startTime AND :endTime")
+    suspend fun getCountByTimeRangeSync(startTime: Long, endTime: Long): Int
+
+    /**
+     * W23x：匯入去重用 — 既有 events 的內容身分投影（不含 raw_json，輕量）。
+     * 身分 = notification_key + event_type + event_time + content_hash。
+     */
+    @Query("SELECT notification_key AS notificationKey, event_type AS eventType, event_time AS eventTime, content_hash AS contentHash FROM notification_events")
+    suspend fun getAllEventIdentitiesSync(): List<EventIdentity>
+
     @Query("""
         SELECT * FROM notification_events
         WHERE event_time BETWEEN :startTime AND :endTime
@@ -289,6 +300,17 @@ interface NotificationEventDao {
 
 /** W23f：GROUP BY 統計回傳列（name = 分組值，cnt = 筆數） */
 data class GroupCount(val name: String, val cnt: Int)
+
+/** W23x：event 內容身分投影（匯入去重；不含 raw_json） */
+data class EventIdentity(
+    val notificationKey: String,
+    val eventType: com.notificationmaster.data.db.entity.EventType,
+    val eventTime: Long,
+    val contentHash: String
+) {
+    /** 去重比對鍵 */
+    fun key(): String = "$notificationKey|${eventType.name}|$eventTime|$contentHash"
+}
 
 /** W23q：per-package 聚合（匯入後重建 app_sources 用） */
 data class PackageAggregate(val packageName: String, val cnt: Int, val firstTime: Long, val lastTime: Long)
