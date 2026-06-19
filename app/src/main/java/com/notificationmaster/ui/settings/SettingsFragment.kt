@@ -1333,7 +1333,10 @@ class SettingsFragment : Fragment() {
             .setItems(ranges) { _, which ->
                 pendingExportStartTime = calculateStartTime(which)
                 pendingExportEndTime = System.currentTimeMillis()
-                exportJsonLauncher.launch("notification_master_archive.json")
+                // W23v：預設檔名帶 timestamp，避免多次匯出互相覆蓋、便於辨識版本
+                val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
+                    .format(java.util.Date(pendingExportEndTime))
+                exportJsonLauncher.launch("notification_master_archive_$stamp.json")
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
