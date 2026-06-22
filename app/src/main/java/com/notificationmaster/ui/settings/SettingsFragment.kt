@@ -1419,42 +1419,13 @@ class SettingsFragment : Fragment() {
 
     // === JSON 封存匯入 ===
 
-    /**
-     * W23x：匯入前若 DB 非空，先讓使用者選「合併（去重）」或「先清空再匯入」。
-     * 空 DB 直接合併（去重無作用）。
-     */
-    private fun importArchiveFromUri(uri: android.net.Uri) {
-        val ctx = context ?: return
-        viewLifecycleOwner.lifecycleScope.launch {
-            val database = NotificationMasterApp.getInstance().database
-            val existing = withContext(Dispatchers.IO) {
-                database.notificationEventDao().getTotalCountSync()
-            }
-            if (_binding == null) return@launch
-            if (existing <= 0) {
-                runArchiveImport(uri, clearFirst = false)
-                return@launch
-            }
-            MaterialAlertDialogBuilder(ctx)
-                .setTitle("資料庫已有資料")
-                .setMessage("目前已有 $existing 筆事件。\n\n• 合併匯入：重複記錄自動略過\n• 先清空再匯入：完全還原此封存")
-                .setPositiveButton("合併匯入") { _, _ -> runArchiveImport(uri, clearFirst = false) }
-                .setNeutralButton("先清空再匯入") { _, _ -> runArchiveImport(uri, clearFirst = true) }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
-        }
-    }
-
-    private fun runArchiveImport(uri: android.net.Uri, clearFirst: Boolean) {
-        val ctx = context ?: return
-        val totalBytes = queryUriSize(uri)
-
-        // W23r：determinate 進度條（位元組）+ 即時計數文字。setCancelable(false)：
-        // transaction 進行中不可中途取消（會留半套；rollback 由例外路徑負責）。
-        val bar = LinearProgressIndicator(ctx).apply {
-            isIndeterminate = totalBytes <= 0
-            max = 100
-        }
+    /** W23y：串流進度框 helper（validate / write 兩段共用），回傳 dialog + 進度回呼 */
+    private fun buildStreamProgress(
+        @androidx.annotation.StringRes titleRes: Int,
+        totalBytes: Long
+    ): Pair<AlertDialog, (String, ArchiveImporter.ImportProgress) -> Unit> {
+        val ctx = requireContext()
+        val bar = LinearProgressIndicator(ctx).apply { isIndeterminate = totalBytes <= 0; max = 100 }
         val text = TextView(ctx).apply {
             setPadding(0, 24, 0, 0)
             setText(R.string.import_progress_preparing)
@@ -1462,45 +1433,124 @@ class SettingsFragment : Fragment() {
         val content = android.widget.LinearLayout(ctx).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             setPadding(64, 48, 64, 16)
-            addView(bar)
-            addView(text)
+            addView(bar); addView(text)
         }
-        val progressDialog = MaterialAlertDialogBuilder(ctx)
-            .setTitle(R.string.import_progress_title)
+        // setCancelable(false)：transaction 進行中不可中途取消（會留半套；rollback 由例外路徑負責）
+        val dialog = MaterialAlertDialogBuilder(ctx)
+            .setTitle(titleRes)
             .setView(content)
             .setCancelable(false)
             .show()
-
         val mainHandler = Handler(Looper.getMainLooper())
-
-        // 進度回呼 → main：phase 標籤 + 位元組進度條 + 即時計數
-        fun postProgress(phaseLabel: String, p: ArchiveImporter.ImportProgress) {
+        val post: (String, ArchiveImporter.ImportProgress) -> Unit = { phaseLabel, p ->
             mainHandler.post {
-                if (!progressDialog.isShowing) return@post
-                if (totalBytes > 0) {
-                    bar.isIndeterminate = false
-                    bar.progress = ((p.bytesRead * 100) / totalBytes).toInt().coerceIn(0, 100)
+                if (dialog.isShowing) {
+                    if (totalBytes > 0) {
+                        bar.isIndeterminate = false
+                        bar.progress = ((p.bytesRead * 100) / totalBytes).toInt().coerceIn(0, 100)
+                    }
+                    text.text = getString(
+                        R.string.import_progress_phase, phaseLabel,
+                        p.events, p.observations, p.snapshots, p.records
+                    )
                 }
-                text.text = getString(
-                    R.string.import_progress_phase, phaseLabel,
-                    p.events, p.observations, p.snapshots, p.records
-                )
             }
         }
+        return dialog to post
+    }
+
+    /**
+     * W23y：匯入三段式 — PASS 1 validate（含進度）→ preview 確認框（metadata + 模式選擇）
+     * → PASS 2 write。preview 顯示的筆數是 validate 實際掃出的真實值（非檔尾宣告值），
+     * 建立時間/版本/裝置取自 exportInfo / environment。
+     */
+    private fun importArchiveFromUri(uri: android.net.Uri) {
+        val ctx = context ?: return
+        val totalBytes = queryUriSize(uri)
+        val (dialog, post) = buildStreamProgress(R.string.import_progress_title, totalBytes)
+        val validateLabel = getString(R.string.import_progress_validating)
 
         viewLifecycleOwner.lifecycleScope.launch {
             val database = NotificationMasterApp.getInstance().database
             try {
                 val importer = ArchiveImporter(ctx)
-                val validateLabel = getString(R.string.import_progress_validating)
-                val writeLabel = getString(R.string.import_progress_writing)
-
-                // PASS 1：純驗證（結構 + 版本 + 計數），不寫 DB；不通過直接拋、零寫入
+                // PASS 1：純驗證（不寫 DB），順便取得 preview metadata；不通過直接拋
                 val report = ctx.contentResolver.openInputStream(uri)?.use { ins ->
-                    importer.validate(ins, totalBytes) { p -> postProgress(validateLabel, p) }
+                    importer.validate(ins, totalBytes) { p -> post(validateLabel, p) }
                 } ?: throw IllegalStateException("無法開啟輸入串流")
+                val existing = withContext(Dispatchers.IO) {
+                    database.notificationEventDao().getTotalCountSync()
+                }
+                dialog.dismiss()
+                if (_binding == null) return@launch
+                showImportPreview(uri, report, existing)
+            } catch (e: Exception) {
+                dialog.dismiss()
+                Toast.makeText(ctx, "驗證失敗：${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
-                // PASS 2：通過後才寫入；整段 + 聚合重建包單一 transaction（crash-safe）
+    /** W23y：preview 確認框 — 顯示 metadata + 完整性結果，非空 DB 時併入合併/清空選擇 */
+    private fun showImportPreview(
+        uri: android.net.Uri,
+        report: ArchiveImporter.ValidationReport,
+        existing: Int
+    ) {
+        val ctx = context ?: return
+        val msg = buildString {
+            append("建立時間：${report.exportInfo.exportTime}")
+            if (report.exportInfo.appVersion.isNotEmpty()) append("\n來源版本：${report.exportInfo.appVersion}")
+            report.environment?.let {
+                append("\n來源裝置：${it.deviceManufacturer} ${it.deviceModel}（API ${it.apiLevel}）")
+            }
+            append("\n\n通知：${report.records} 筆")
+            append("\n事件：${report.events} 筆")
+            if (report.observations > 0) append("\nRanking 觀察：${report.observations} 筆")
+            if (report.snapshots > 0) append("\nRanking 快照：${report.snapshots} 筆")
+            if (report.media > 0) append("\n媒體索引：${report.media} 筆")
+            append(
+                if (report.countVerified) "\n\n✓ 完整性驗證通過（計數核對）"
+                else "\n\n✓ 結構驗證通過（此檔無計數中繼資料）"
+            )
+            if (report.orphanEventKeys.isNotEmpty()) {
+                append("\n⚠ ${report.orphanEventKeys.size} 個事件缺對應通知，匯入時補佔位")
+            }
+            if (existing > 0) {
+                append("\n\n目前 DB 已有 $existing 筆事件：")
+                append("\n• 合併匯入：重複記錄自動略過")
+                append("\n• 先清空再匯入：完全還原此封存")
+            }
+        }
+        val builder = MaterialAlertDialogBuilder(ctx).setTitle("確認匯入").setMessage(msg)
+        if (existing > 0) {
+            builder.setPositiveButton("合併匯入") { _, _ -> runArchiveImportWrite(uri, report, clearFirst = false) }
+            builder.setNeutralButton("先清空再匯入") { _, _ -> runArchiveImportWrite(uri, report, clearFirst = true) }
+            builder.setNegativeButton(R.string.cancel, null)
+        } else {
+            builder.setPositiveButton("確認匯入") { _, _ -> runArchiveImportWrite(uri, report, clearFirst = false) }
+            builder.setNegativeButton(R.string.cancel, null)
+        }
+        builder.show()
+    }
+
+    /** W23y：PASS 2 寫入（preview 確認後才呼叫）。report 由 PASS 1 傳入，含 orphanEventKeys */
+    private fun runArchiveImportWrite(
+        uri: android.net.Uri,
+        report: ArchiveImporter.ValidationReport,
+        clearFirst: Boolean
+    ) {
+        val ctx = context ?: return
+        val totalBytes = queryUriSize(uri)
+        val (progressDialog, postProgress) = buildStreamProgress(R.string.import_progress_title, totalBytes)
+        val writeLabel = getString(R.string.import_progress_writing)
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val database = NotificationMasterApp.getInstance().database
+            try {
+                val importer = ArchiveImporter(ctx)
+
+                // PASS 2：寫入；整段 + 聚合重建包單一 transaction（crash-safe）
                 var rebuilt: Pair<Int, Int> = 0 to 0
                 val result = database.withTransaction {
                     // W23t：匯出檔 key 順序為 events 先於 records，但 events 對 records
