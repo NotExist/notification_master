@@ -2,7 +2,6 @@ package com.notificationmaster.ui.archive
 
 import android.os.Parcelable
 import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Archive Detail 列表頁 ViewModel
@@ -14,14 +13,16 @@ class ArchiveDetailViewModel : ViewModel() {
     var scrollState: Parcelable? = null
 
     /**
-     * W23b：漸進載入 page size。修前 spec 無 limit — 單一 package 上萬 events 時
-     * 一次撈全部（含 raw_json）+ enrich 萬筆 + main thread diff 萬筆，畫面長時間空白。
-     * 放 ViewModel 讓「進 Notification Detail 返回」時保留已擴張的載入量。
+     * W23z：append 式分頁的已載入量（OFFSET 游標）。
+     *
+     * W23b 的 pageSize MutableStateFlow「重查整窗」模型（每次擴頁 flatMapLatest 重查
+     * + 重 enrich 整個視窗）在 9000+ 筆單一 app 深滑時線性劣化，改為 append：每批只查
+     * offset 之後的 PAGE_SIZE 筆、enrich 該批、接到清單尾端。放 ViewModel 讓「進
+     * Notification Detail 返回」時知道要一次載回多少（重建累積狀態）。
      */
-    val pageSize = MutableStateFlow(INITIAL_PAGE_SIZE)
+    var loadedCount = 0
 
     companion object {
-        const val INITIAL_PAGE_SIZE = 200
-        const val PAGE_INCREMENT = 200
+        const val PAGE_SIZE = 200
     }
 }

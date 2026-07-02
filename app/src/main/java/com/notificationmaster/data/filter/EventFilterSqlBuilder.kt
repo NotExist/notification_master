@@ -48,7 +48,11 @@ object EventFilterSqlBuilder {
         }
 
         val orderSql = orderBySql(spec.orderBy)
-        val limitSql = if (spec.limit != null) " LIMIT ${spec.limit.toInt()}" else ""
+        // W23z：OFFSET 僅在有 limit 時附加（SQLite OFFSET 需 LIMIT 並用），供分頁 append
+        val limitSql = if (spec.limit != null) {
+            " LIMIT ${spec.limit.toInt()}" +
+                if (spec.offset != null) " OFFSET ${spec.offset.toInt()}" else ""
+        } else ""
 
         val sql = when {
             count && spec.deduplicate -> """

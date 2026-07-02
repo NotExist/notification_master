@@ -40,7 +40,9 @@ data class EventFilterSpec(
     /** Plan 2 W1：view-level「已移除」過濾，與 dedup 並列 */
     val removalFilter: RemovalFilter = RemovalFilter.None,
     val orderBy: OrderBy = OrderBy.PostTimeDesc,
-    val limit: Int? = null
+    val limit: Int? = null,
+    /** W23z：分頁 append 用 OFFSET（需與 limit 並用；預設 null = 不偏移） */
+    val offset: Int? = null
 ) {
 
     /** 是否為「全部」 */

@@ -14,7 +14,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.core.filter.Matcher
 import com.notificationmaster.core.filter.OrderBy
-import com.notificationmaster.data.db.dao.query
+import com.notificationmaster.data.db.dao.querySync
+import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.data.filter.EventFilterSpec
 import com.notificationmaster.databinding.FragmentArchiveDetailBinding
 import com.notificationmaster.ui.common.NotificationDisplay
@@ -26,9 +27,6 @@ import com.notificationmaster.ui.filter.SoundPickerLauncher
 import com.notificationmaster.ui.timeline.TimelineAdapter
 import com.notificationmaster.ui.timeline.TimelineItem
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
@@ -40,7 +38,6 @@ import java.util.Calendar
  * Plan 2 Phase 9：資料源切到 notification_events（每個 notification_key 取最新 event 一筆），
  * Adapter 共用 [TimelineAdapter] 吃 [NotificationDisplay]。
  */
-@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ArchiveDetailFragment : Fragment() {
 
     private var _binding: FragmentArchiveDetailBinding? = null
@@ -56,16 +53,35 @@ class ArchiveDetailFragment : Fragment() {
     /** view 剛建立時要還原一次 scroll 位置；submitList 完成後消費掉 */
     private var pendingScrollRestore: Parcelable? = null
 
-    // === W23b：漸進載入狀態（view-scope，emit 時重算）===
+    // === W23z：append 式漸進載入狀態（view-scope）===
 
-    /** 最近一次 emit 的 query size < limit → DB 已無更多，footer 換 EndOfTimeline */
+    /** 已累積的本體 items（含 DateHeader，不含 footer）— append 不重查前面 */
+    private val accumulatedItems = mutableListOf<TimelineItem>()
+
+    /** 已納入 accumulatedItems 的 event id，防 OFFSET 期間頂部新事件造成偏移重複 */
+    private val seenIds = HashSet<Long>()
+
+    /** DateHeader 連續性游標：append 新批時不重複插入同日標頭 */
+    private var lastDate: Long? = null
+
+    /** 最近一批 query size < limit → DB 已無更多，footer 換 EndOfTimeline */
     private var endReached = false
 
-    /** 擴張已觸發、新 query 尚未 emit（防 scroll 高頻重複 +PAGE_INCREMENT） */
-    private var isExpanding = false
+    /** 一批載入進行中（防 scroll 高頻重複觸發 / 重入） */
+    private var isLoading = false
 
-    /** 最近一次 submit 的本體 items（不含 footer），擴張時先換 LoadingMore footer 用 */
-    private var currentItems: List<TimelineItem> = emptyList()
+    private val baseSpec: EventFilterSpec by lazy {
+        // 對齊 timeline 預設視角：所有 event row（INITIAL/POSTED/UPDATED），不 dedup、
+        // event_time DESC；REMOVED event row 由 EventFilterSqlBuilder 統一排除（W1 慣例）
+        EventFilterSpec(
+            matchers = buildList {
+                add(Matcher.Package(args.packageName))
+                if (args.channelId.isNotEmpty()) add(Matcher.Channel(args.channelId))
+            },
+            deduplicate = false,
+            orderBy = OrderBy.EventTimeDesc
+        )
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -120,121 +136,137 @@ class ArchiveDetailFragment : Fragment() {
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
 
-        // W23b：接近底部觸發漸進擴張（footer PendingMore「繼續滾動載入更多」對齊此動作）
+        // W23z：接近底部觸發 append 載入（footer PendingMore「繼續滾動載入更多」對齊此動作）
         binding.recyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
-                if (dy <= 0 || endReached || isExpanding) return
+                if (dy <= 0 || endReached || isLoading) return
                 val lm = rv.layoutManager as? LinearLayoutManager ?: return
                 val distance = lm.itemCount - lm.findLastVisibleItemPosition()
                 if (distance > LOAD_MORE_THRESHOLD) return
-                isExpanding = true
-                val target = viewModel.pageSize.value + ArchiveDetailViewModel.PAGE_INCREMENT
-                ProfileLogger.append("Archive", "lazyload expand target=$target distance=$distance")
-                // 擴張期間 footer 先換 LoadingMore（新 query+enrich 可能需數秒）
-                adapter.submitList(currentItems + TimelineItem.LoadingMore)
-                viewModel.pageSize.value = target
+                loadMore()
             }
         })
     }
 
+    /**
+     * W23z：append 式載入。
+     * - 首次：載第一批（PAGE_SIZE）
+     * - 返回（view 重建，viewModel.loadedCount>0）：一次載回先前展開量，重建累積狀態
+     * 之後滑近底部由 [loadMore] 逐批 append，不重查已載入部分。
+     */
     private fun loadNotifications() {
-        val database = NotificationMasterApp.getInstance().database
-        val eventDao = database.notificationEventDao()
-
         val mode = if (args.channelId.isNotEmpty()) "channel" else "package"
         val target = if (args.channelId.isNotEmpty()) "${args.packageName}/${args.channelId}" else args.packageName
-        val tStart = System.currentTimeMillis()
-        ProfileLogger.append("Archive", "load start mode=$mode target=$target")
+        ProfileLogger.append("Archive", "load start mode=$mode target=$target restore=${viewModel.loadedCount}")
 
-        // 對齊 timeline 預設視角：所有 event row（包含 INITIAL / POSTED / UPDATED），
-        // 不 dedup、不過濾 REMOVED isRemoved 屬性、event_time DESC。REMOVED event row
-        // 本身由 EventFilterSqlBuilder 統一排除（W1 慣例）。
-        //
-        // W23b：spec 套 limit 漸進載入 — 單一 package 上萬 events 時不再一次撈全部。
-        // pageSize 擴張 → flatMapLatest 重新訂閱（同 TimelineViewModel.allNotifications 模型）。
-        val baseSpec = EventFilterSpec(
-            matchers = buildList {
-                add(Matcher.Package(args.packageName))
-                if (args.channelId.isNotEmpty()) add(Matcher.Channel(args.channelId))
-            },
-            deduplicate = false,
-            orderBy = OrderBy.EventTimeDesc
-        )
+        // view-scope 累積狀態重置（view 重建後 accumulatedItems 為空）。
+        // isLoading 必須一併重置：fetch coroutine 跑在 viewLifecycleOwner scope，
+        // 進 Detail 時 view 銷毀會取消 in-flight fetch，isLoading 停在 true —
+        // 不重置的話返回後 fetchBatch 重入 guard 直接 return，永遠卡載入中。
+        accumulatedItems.clear()
+        seenIds.clear()
+        lastDate = null
+        endReached = false
+        isLoading = false
 
+        val restoreCount = viewModel.loadedCount
+        viewModel.loadedCount = 0
         binding.progressLoading.show()
+        // restoreCount>0 → 一次載回展開量（返回場景）；否則首批
+        fetchBatch(
+            limit = if (restoreCount > 0) restoreCount else ArchiveDetailViewModel.PAGE_SIZE,
+            isInitial = true
+        )
+    }
+
+    /** 滑近底部觸發：append 下一批（offset = 已載量） */
+    private fun loadMore() {
+        if (isLoading || endReached) return
+        adapter.submitList(accumulatedItems + TimelineItem.LoadingMore)
+        fetchBatch(limit = ArchiveDetailViewModel.PAGE_SIZE, isInitial = false)
+    }
+
+    /**
+     * 查一批（offset = viewModel.loadedCount）→ 去重 → enrich → append → submit。
+     * query/enrich/build 都在 IO，main 只做 submitList。
+     */
+    private fun fetchBatch(limit: Int, isInitial: Boolean) {
+        if (isLoading) return
+        isLoading = true
+        val offset = viewModel.loadedCount
+        val tStart = System.currentTimeMillis()
+
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.pageSize
-                .flatMapLatest { size ->
-                    ProfileLogger.append("Archive", "subscribe limit=$size")
-                    eventDao.query(baseSpec.copy(limit = size)).map { size to it }
+            val eventDao = NotificationMasterApp.getInstance().database.notificationEventDao()
+            val result = withContext(Dispatchers.IO) {
+                val events = eventDao.querySync(baseSpec.copy(limit = limit, offset = offset))
+                // OFFSET 期間頂部若有新事件寫入會偏移 → 過濾已納入的 id
+                val fresh = events.filter { it.id !in seenIds }
+                val displays = enrichEvents(fresh)
+                Triple(events.size, fresh, displays)
+            }
+            val binding = _binding ?: return@launch
+            val (rawSize, fresh, displays) = result
+
+            endReached = rawSize < limit
+            viewModel.loadedCount = offset + rawSize
+
+            if (isInitial && accumulatedItems.isEmpty() && fresh.isEmpty()) {
+                binding.progressLoading.hide()
+                binding.emptyState.visibility = View.VISIBLE
+                binding.recyclerView.visibility = View.GONE
+                isLoading = false
+                return@launch
+            }
+
+            // append：fresh.id 入集合、按 lastDate 連續性建 items
+            fresh.forEach { seenIds.add(it.id) }
+            accumulatedItems += buildItemsAppending(displays)
+
+            binding.emptyState.visibility = View.GONE
+            binding.recyclerView.visibility = View.VISIBLE
+            val footer = if (endReached) TimelineItem.EndOfTimeline else TimelineItem.PendingMore
+            adapter.submitList(accumulatedItems + footer) {
+                ProfileLogger.append(
+                    "Archive",
+                    "batch offset=$offset raw=$rawSize fresh=${fresh.size} " +
+                        "accumulated=${accumulatedItems.size} endReached=$endReached " +
+                        "took=${System.currentTimeMillis() - tStart}ms"
+                )
+                val b = _binding ?: return@submitList
+                b.progressLoading.hide()
+                if (isInitial) pendingScrollRestore?.let {
+                    b.recyclerView.layoutManager?.onRestoreInstanceState(it)
+                    pendingScrollRestore = null
                 }
-                .collectLatest { (limit, events) ->
-                    ProfileLogger.append(
-                        "Archive",
-                        "query emit limit=$limit size=${events.size} " +
-                            "since-start=${System.currentTimeMillis() - tStart}ms"
-                    )
-                    val binding = _binding ?: return@collectLatest
-                    endReached = events.size < limit
-                    if (events.isEmpty()) {
-                        isExpanding = false
-                        currentItems = emptyList()
-                        binding.progressLoading.hide()
-                        binding.emptyState.visibility = View.VISIBLE
-                        binding.recyclerView.visibility = View.GONE
-                    } else {
-                        binding.emptyState.visibility = View.GONE
-                        binding.recyclerView.visibility = View.VISIBLE
-                        val tEnrich = System.currentTimeMillis()
-                        // W23b：enrich + buildTimelineItems 都在 IO（萬筆 item 組裝不佔 main）
-                        val items = withContext(Dispatchers.IO) {
-                            val database = NotificationMasterApp.getInstance().database
-                            val displays = NotificationEnricher.enrich(
-                                events,
-                                database.channelDao(),
-                                database.rankingObservationDao(),
-                                database.rankingSnapshotDao(),
-                                database.notificationEventDao()
-                            )
-                            buildTimelineItems(displays)
-                        }
-                        val tSubmit = System.currentTimeMillis()
-                        currentItems = items
-                        isExpanding = false
-                        val footer = if (endReached) TimelineItem.EndOfTimeline else TimelineItem.PendingMore
-                        adapter.submitList(items + footer) {
-                            ProfileLogger.append(
-                                "Archive",
-                                "submitList done items=${items.size} endReached=$endReached " +
-                                    "enrich+build=${tSubmit - tEnrich}ms commit=${System.currentTimeMillis() - tSubmit}ms"
-                            )
-                            val b = _binding ?: return@submitList
-                            b.progressLoading.hide()
-                            pendingScrollRestore?.let {
-                                b.recyclerView.layoutManager?.onRestoreInstanceState(it)
-                                pendingScrollRestore = null
-                            }
-                        }
-                    }
-                }
+            }
+            isLoading = false
         }
     }
 
-    private fun buildTimelineItems(notifications: List<NotificationDisplay>): List<TimelineItem> {
-        val items = mutableListOf<TimelineItem>()
-        var lastDate: Long? = null
+    private suspend fun enrichEvents(events: List<NotificationEventEntity>): List<NotificationDisplay> {
+        if (events.isEmpty()) return emptyList()
+        val database = NotificationMasterApp.getInstance().database
+        return NotificationEnricher.enrich(
+            events,
+            database.channelDao(),
+            database.rankingObservationDao(),
+            database.rankingSnapshotDao(),
+            database.notificationEventDao()
+        )
+    }
 
+    /** 用成員 [lastDate] 維持跨批 DateHeader 連續性（append 不重複插同日標頭） */
+    private fun buildItemsAppending(notifications: List<NotificationDisplay>): List<TimelineItem> {
+        val items = mutableListOf<TimelineItem>()
         for (notification in notifications) {
             val notificationDate = getStartOfDay(notification.postTime)
-
             if (lastDate != notificationDate) {
                 items.add(TimelineItem.DateHeader(notificationDate))
                 lastDate = notificationDate
             }
-
             items.add(TimelineItem.NotificationItem(notification))
         }
-
         return items
     }
 
@@ -249,7 +281,7 @@ class ArchiveDetailFragment : Fragment() {
     }
 
     companion object {
-        /** W23b：距底多少 item 內觸發漸進擴張 */
+        /** W23z：距底多少 item 內觸發 append 載入 */
         private const val LOAD_MORE_THRESHOLD = 30
     }
 }
