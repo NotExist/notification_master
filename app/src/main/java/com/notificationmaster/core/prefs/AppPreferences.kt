@@ -265,7 +265,9 @@ object AppPreferences {
         // W22-instrument：counter/scrollbar/list timing 釐清
         "Counter", "Scroll", "Adapter",
         // W23-instrument：archive 入口 / detail 兩段式 / 封存匯出 timing
-        "ArchiveHome", "Detail", "Export"
+        "ArchiveHome", "Detail", "Export",
+        // W24a：搜尋切片掃描 timing
+        "Search"
     )
 
     /**

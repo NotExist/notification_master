@@ -12,6 +12,8 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.notificationmaster.R
 import com.notificationmaster.databinding.FragmentSearchBinding
 import com.notificationmaster.ui.common.ListFooterAdapter
 import com.notificationmaster.ui.filter.CalendarPickerLauncher
@@ -38,6 +40,12 @@ class SearchFragment : Fragment() {
     /** view 剛建立時要還原一次 scroll 位置；submitList 完成後消費掉 */
     private var pendingScrollRestore: Parcelable? = null
 
+    /**
+     * W24a：正在導向 Detail（onItemClick 設起）。onDestroyView 據此區分
+     * 「進 Detail（不中斷掃描）」vs「離開 search fragment（中斷掃描）」。
+     */
+    private var navigatingToDetail = false
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -50,8 +58,10 @@ class SearchFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        navigatingToDetail = false
         setupRecyclerView()
         setupSearchInput()
+        setupRawSearchToggle()
         // view 剛建立時準備 scroll 還原（observeResults 內 submitList callback 消費）
         pendingScrollRestore = viewModel.scrollState
         observeResults()
@@ -79,12 +89,17 @@ class SearchFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        // W24a：離開 search（切 tab 等）中斷進行中的掃描；進 Detail 不中斷
+        //（掃描跑在 viewModelScope，view 銷毀不自動取消 — 主動區分）
+        if (!navigatingToDetail) viewModel.cancelOngoingSearch()
+        navigatingToDetail = false
         _binding = null
     }
 
     private fun setupRecyclerView() {
         notificationAdapter = NotificationAdapter(
             onItemClick = { display ->
+                navigatingToDetail = true
                 val action = SearchFragmentDirections.actionSearchHomeToSearchDetail(
                     notificationKey = display.notificationKey,
                     anchorEventId = display.eventId
@@ -131,12 +146,31 @@ class SearchFragment : Fragment() {
         }
     }
 
+    /**
+     * W24a：raw_json 搜尋開關（預設關）。狀態以 ViewModel 為單一來源
+     * （switch saveEnabled=false，w23h 慣例）；info icon 彈用途說明 Dialog。
+     */
+    private fun setupRawSearchToggle() {
+        binding.switchRawSearch.isChecked = viewModel.rawSearchEnabled.value == true
+        binding.switchRawSearch.setOnCheckedChangeListener { _, isChecked ->
+            viewModel.setRawSearchEnabled(isChecked)
+        }
+        binding.btnRawSearchInfo.setOnClickListener {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.search_raw_info_title)
+                .setMessage(R.string.search_raw_info_message)
+                .setPositiveButton(R.string.ok, null)
+                .show()
+        }
+    }
+
     private fun observeResults() {
         // W23l：搜尋進行中光條（與 timeline / archive「等待資料」語彙統一）
         viewModel.isSearching.observe(viewLifecycleOwner) { searching ->
             val binding = _binding ?: return@observe
             if (searching) binding.progressLoading.show() else binding.progressLoading.hide()
             updateFooter()
+            updateEmptyState()
         }
         viewModel.endReached.observe(viewLifecycleOwner) { updateFooter() }
         viewModel.results.observe(viewLifecycleOwner) { results ->
@@ -148,10 +182,17 @@ class SearchFragment : Fragment() {
                 }
                 updateFooter()
             }
-            binding.textEmpty.visibility =
-                if (results.isEmpty() && !viewModel.query.value.isNullOrBlank()) View.VISIBLE
-                else View.GONE
+            updateEmptyState()
         }
+    }
+
+    /** W24a：掃描中不顯示「無結果」（漸進模式下結果起始必為空，避免誤導閃現） */
+    private fun updateEmptyState() {
+        val binding = _binding ?: return
+        val empty = viewModel.results.value.isNullOrEmpty() &&
+            viewModel.isSearching.value != true &&
+            !viewModel.query.value.isNullOrBlank()
+        binding.textEmpty.visibility = if (empty) View.VISIBLE else View.GONE
     }
 
     /**

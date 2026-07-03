@@ -177,36 +177,70 @@ interface NotificationEventDao {
     /**
      * UI 搜尋（標題 / 內文 / raw 全文 / 媒體檔名 LIKE）。
      *
-     * Plan 2 Phase 16：除 title / text 兩個投影 column，也直接對 event_raw_json 做 LIKE。
-     * 這樣 bigText / subText / summaryText / extras 內任何字串值都能被搜尋命中
-     * （e.g. MessagingStyle 訊息內容、ticker 等）。
+     * W24a：搜尋改「時間切片分批」，取代舊單發全表掃 + GROUP BY dedup 版本。
      *
-     * Plan 2 W22z：回補 LEFT JOIN media_attachments + file_path LIKE，讓使用者以
-     * 另存出來的媒體檔名（`{pkg}_{mediaType}_{hash}.ext`）回查對應 event。Phase 16
-     * 暫時拿掉時的「待 FK 對齊」條件已滿足（MediaAttachmentEntity.event_id 指向
-     * NotificationEventEntity.id 並有 index）。
+     * 動機：raw_json LIKE 無法走 index = 全表掃（4000+ 列 × 3-4KB ≈ 十幾 MB 文字），
+     * 舊版單發 query 一次掃完才回，大資料時 UI 只能乾等。切片模型讓每批只掃
+     * 固定列數的時間視窗，結果由新到舊逐批浮現、批間可取消（Room suspend query
+     * 的取消粒度不可靠，批間是保證取消點）。
      *
-     * 副作用：raw LIKE 可能命中 JSON 結構字（如 "_type"），但實務上使用者搜尋字串
-     * 很少剛好等於 JSON key name，可接受。SQLite LIKE 對中等大小字串（每筆 ≤ 100KB）
-     * 配合 LIMIT 100 在實機上仍可秒級回應。
+     * 設計（呼叫端 = SearchViewModel）：
+     * - [getEventTimeAtOffsetSync] 先以 event_time index 取「cursor 往下第 N 列」的
+     *   時間界標（index-only，快）→ 本批掃描範圍 (界標, cursor]
+     * - Light / Raw 兩變體：Light 只比對 title / text / 媒體檔名（小欄位，快）；
+     *   Raw 加 event_raw_json LIKE（進階/除錯用，UI 開關預設關）
+     * - 舊版的 GROUP BY notification_key（每 key 取最新命中）語意移到呼叫端：
+     *   掃描方向新→舊，首見 key 即該 key 最新命中，seenKeys 濾掉其餘 — 等價
+     * - cursor 用 `<=`（邊界列重覆由呼叫端 seenEventIds 去重），避免同 ms 邊界漏列
+     *
+     * 媒體檔名（W22z 語意保留）：LEFT JOIN media_attachments + file_path LIKE，
+     * 以另存檔名（`{pkg}_{mediaType}_{hash}.ext`）回查 event；JOIN 造成的重覆列
+     * 由 DISTINCT 收斂。
      */
     @Query("""
-        SELECT * FROM notification_events
-        WHERE id IN (
-            SELECT id FROM (
-                SELECT e.id AS id, MAX(e.event_time) FROM notification_events e
-                LEFT JOIN media_attachments m ON m.event_id = e.id
-                WHERE e.title LIKE '%' || :query || '%'
-                   OR e.text LIKE '%' || :query || '%'
-                   OR e.event_raw_json LIKE '%' || :query || '%'
-                   OR m.file_path LIKE '%' || :query || '%'
-                GROUP BY e.notification_key
-            )
-        )
+        SELECT event_time FROM notification_events
+        WHERE event_time <= :beforeTime
         ORDER BY event_time DESC
+        LIMIT 1 OFFSET :rows
+    """)
+    suspend fun getEventTimeAtOffsetSync(beforeTime: Long, rows: Int): Long?
+
+    /** W24a：搜尋切片 — Light（title / text / 媒體檔名） */
+    @Query("""
+        SELECT DISTINCT e.* FROM notification_events e
+        LEFT JOIN media_attachments m ON m.event_id = e.id
+        WHERE e.event_time <= :beforeTime AND e.event_time > :afterTime
+          AND (e.title LIKE '%' || :query || '%'
+           OR e.text LIKE '%' || :query || '%'
+           OR m.file_path LIKE '%' || :query || '%')
+        ORDER BY e.event_time DESC
         LIMIT :limit
     """)
-    suspend fun searchEvents(query: String, limit: Int = 100): List<NotificationEventEntity>
+    suspend fun searchEventsLightBatch(
+        query: String,
+        beforeTime: Long,
+        afterTime: Long,
+        limit: Int
+    ): List<NotificationEventEntity>
+
+    /** W24a：搜尋切片 — Raw（Light + event_raw_json 全文，慢，開關控制） */
+    @Query("""
+        SELECT DISTINCT e.* FROM notification_events e
+        LEFT JOIN media_attachments m ON m.event_id = e.id
+        WHERE e.event_time <= :beforeTime AND e.event_time > :afterTime
+          AND (e.title LIKE '%' || :query || '%'
+           OR e.text LIKE '%' || :query || '%'
+           OR e.event_raw_json LIKE '%' || :query || '%'
+           OR m.file_path LIKE '%' || :query || '%')
+        ORDER BY e.event_time DESC
+        LIMIT :limit
+    """)
+    suspend fun searchEventsRawBatch(
+        query: String,
+        beforeTime: Long,
+        afterTime: Long,
+        limit: Int
+    ): List<NotificationEventEntity>
 
     /**
      * 預覽用：最近 N 筆 events（含同 key 多筆）。Filter dialog 預覽匹配把同 key 多 event

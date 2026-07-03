@@ -25,7 +25,47 @@
 
     </com.google.android.material.textfield.TextInputLayout>
 
-    <!-- W23l：搜尋進行中指示（searchEvents LIKE 全表掃 + enrich 在大資料時達秒級）。
+    <!-- W24a：raw_json 搜尋開關（預設關）。label + info icon 靠左、switch 靠右；
+         狀態以 SearchViewModel 為單一來源（saveEnabled=false，w23h 慣例） -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:layout_marginTop="-8dp"
+        android:layout_marginBottom="4dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/search_raw_toggle_label"
+            android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+        <ImageButton
+            android:id="@+id/btn_raw_search_info"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="6dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_info_outline"
+            app:tint="?android:attr/textColorSecondary"
+            android:contentDescription="@string/search_raw_info_title" />
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switch_raw_search"
+            android:saveEnabled="false"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+    </LinearLayout>
+
+    <!-- W23l：搜尋進行中指示（raw 搜尋 LIKE 掃描 + enrich 在大資料時達秒級）。
          M3 LinearProgressIndicator 頂部光條 — 與 timeline / archive「等待資料」語彙統一 -->
     <com.google.android.material.progressindicator.LinearProgressIndicator
         android:id="@+id/progress_loading"

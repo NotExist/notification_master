@@ -141,6 +141,10 @@
     <!-- 搜尋 -->
     <string name="search_hint">搜尋通知內容…</string>
     <string name="search_no_results">無搜尋結果</string>
+    <!-- W24a：raw_json 搜尋開關 -->
+    <string name="search_raw_toggle_label">搜尋原始內容</string>
+    <string name="search_raw_info_title">搜尋原始內容</string>
+    <string name="search_raw_info_message">開啟後，搜尋會一併比對每則通知的完整原始資料——展開內容、副標、訊息細節等標題／內文以外的欄位。\n\n能找到更深層的內容，但需掃描大量資料、速度較慢（結果會由新到舊逐漸出現）。\n\n一般查找關閉即可；多用於進階檢查與除錯。</string>
 
     <!-- 歸檔 -->
     <string name="archive_by_app">依 App</string>
