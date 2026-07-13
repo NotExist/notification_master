@@ -57,11 +57,25 @@ jobs:
     - name: Build debug APK
       run: ./gradlew assembleDebug
 
+    # W24c：debug artifact 檔名帶版號(versionName+versionCode)+時間(台北)+short sha，
+    # 多版並存可辨識。版號從 build.gradle.kts 抽（單一來源，bump 不用動 workflow）
+    - name: Compute build stamp
+      id: stamp
+      run: |
+        V_NAME=$(sed -n 's/.*versionName = "\(.*\)"/\1/p' app/build.gradle.kts)
+        V_CODE=$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)
+        echo "STAMP=v${V_NAME}-c${V_CODE}-$(TZ=Asia/Taipei date +%Y%m%d_%H%M)-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+    - name: Rename debug APK with stamp
+      run: |
+        mv app/build/outputs/apk/debug/app-debug.apk \
+           app/build/outputs/apk/debug/NotificationMaster-debug-${{ steps.stamp.outputs.STAMP }}.apk
+
     - name: Upload debug APK
       uses: actions/upload-artifact@v4
       with:
-        name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
+        name: NotificationMaster-debug-${{ steps.stamp.outputs.STAMP }}
+        path: app/build/outputs/apk/debug/NotificationMaster-debug-*.apk
         retention-days: 14
         overwrite: true
 
