@@ -1449,10 +1449,14 @@ class SettingsFragment : Fragment() {
                         bar.isIndeterminate = false
                         bar.progress = ((p.bytesRead * 100) / totalBytes).toInt().coerceIn(0, 100)
                     }
-                    text.text = getString(
+                    val base = getString(
                         R.string.import_progress_phase, phaseLabel,
                         p.events, p.observations, p.snapshots, p.records
                     )
+                    // W24f：寫入階段附「讀取/已匯入/略過重複」（validate 階段 read=0 不顯示）
+                    text.text = if (p.read > 0) {
+                        base + "\n" + getString(R.string.import_progress_rw_counts, p.read, p.written, p.deduped)
+                    } else base
                 }
             }
         }

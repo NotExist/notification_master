@@ -38,7 +38,8 @@ class ArchiveImporter(private val context: Context) {
         private const val TAG = "ArchiveImporter"
         private const val SUPPORTED_VERSION_PREFIX = "2."
         private const val EVENT_BATCH = 500
-        private const val OBS_BATCH = 1000
+        /** W24f：probe 用 IN(:times)，SQLite 變數上限 999 → 批量壓在其下 */
+        private const val OBS_BATCH = 500
         /** 進度回呼節流：每處理這麼多筆元素回報一次 */
         private const val PROGRESS_EVERY = 500
     }
@@ -51,7 +52,11 @@ class ArchiveImporter(private val context: Context) {
         val events: Int,
         val observations: Int,
         val snapshots: Int,
-        val media: Int
+        val media: Int,
+        /** W24f：寫入階段的「讀取 / 已匯入 / 略過重複」累計（validate 階段維持預設 0 不顯示） */
+        val read: Int = 0,
+        val written: Int = 0,
+        val deduped: Int = 0
     )
 
     /** 匯入結果摘要（不再回傳整批資料） */
@@ -226,28 +231,24 @@ class ArchiveImporter(private val context: Context) {
         val pendingObs = ArrayList<RankingObservationEntity>()
         val createdPlaceholders = HashSet<String>()
 
-        // W23x：去重 — 既有內容身分集合（DB 既有 + 本次已插入，後者防檔內重複）。
-        // clear-first 路徑已在同 transaction 內清空，故此處查得空集合 → 去重自然 no-op。
-        val seenEventIds = HashSet<String>().apply {
-            database.notificationEventDao().getAllEventIdentitiesSync().forEach { add(it.key()) }
-        }
-        val seenObsIds = HashSet<String>().apply {
-            database.rankingObservationDao().getAllObservationIdentitiesSync().forEach { add(it.key()) }
-        }
-
         var recordCount = 0
         var eventCount = 0
         var snapshotCount = 0
         var mediaRestored = 0
         var dedupedEvents = 0
         var dedupedObs = 0
+        var obsWritten = 0
+        var elementsRead = 0
         var sinceProgress = 0
 
         fun emitProgress() {
             onProgress(
                 ImportProgress(
                     counting.bytesRead, totalBytes,
-                    recordCount, eventCount, pendingObs.size, snapshotCount, mediaRestored
+                    recordCount, eventCount, pendingObs.size, snapshotCount, mediaRestored,
+                    read = elementsRead,
+                    written = recordCount + eventCount + snapshotCount + obsWritten + mediaRestored,
+                    deduped = dedupedEvents + dedupedObs
                 )
             )
         }
@@ -255,7 +256,31 @@ class ArchiveImporter(private val context: Context) {
         val eventBuf = ArrayList<NotificationEventEntity>(EVENT_BATCH)
         suspend fun flushEvents() {
             if (eventBuf.isEmpty()) return
-            database.notificationEventDao().insertAll(eventBuf.map { it.copy(id = 0) })
+            // W24f：逐批 probe 去重（取代 W23x 整表身分 preload — 記憶體 O(批)、與 DB
+            // 大小脫鉤，空 DB 匯入時 probe 趨近零開銷）。event_time IN 只是縮候選集的
+            // 漏斗，判定始終是四欄身分全比對（唯一性只影響效能不影響正確性）。
+            // transaction 內 SELECT 看得到本次已插入列 → 同時涵蓋「DB 既有」與
+            // 「檔內較早批次」的重複；批內重複由 batchSeen 處理。
+            val existing = database.notificationEventDao()
+                .getIdentitiesByTimesSync(eventBuf.map { it.eventTime }.distinct())
+                .mapTo(HashSet()) { it.key() }
+            val batchSeen = HashSet<String>()
+            val fresh = eventBuf.filter { ev ->
+                val idKey = "${ev.notificationKey}|${ev.eventType.name}|${ev.eventTime}|${ev.contentHash}"
+                idKey !in existing && batchSeen.add(idKey)
+            }
+            dedupedEvents += eventBuf.size - fresh.size
+            for (ev in fresh) {
+                // W23u：孤兒 event key（無對應 record）首次出現時補 placeholder record，
+                // 用該 event 的 packageName/channel/時間填充（defer_foreign_keys 容順序）
+                if (ev.notificationKey in placeholderKeys && createdPlaceholders.add(ev.notificationKey)) {
+                    database.notificationRecordDao().insertIfAbsent(placeholderRecord(ev))
+                }
+            }
+            if (fresh.isNotEmpty()) {
+                database.notificationEventDao().insertAll(fresh.map { it.copy(id = 0) })
+                eventCount += fresh.size
+            }
             eventBuf.clear()
         }
 
@@ -273,9 +298,10 @@ class ArchiveImporter(private val context: Context) {
                     reader.beginArray()
                     while (reader.hasNext()) {
                         runCatching { parseRecord(readObject(reader)) }.getOrNull()?.let {
-                            database.notificationRecordDao().insertIfAbsent(it)
-                            recordCount++
+                            // W24f：IGNORE 被略過時回 -1 — recordCount 只計實際新增
+                            if (database.notificationRecordDao().insertIfAbsent(it) != -1L) recordCount++
                         }
+                        elementsRead++
                         if (++sinceProgress >= PROGRESS_EVERY) { sinceProgress = 0; emitProgress() }
                     }
                     reader.endArray()
@@ -283,22 +309,12 @@ class ArchiveImporter(private val context: Context) {
                 "events" -> {
                     reader.beginArray()
                     while (reader.hasNext()) {
+                        // W24f：去重移到 flushEvents（逐批 probe），此處只收批
                         runCatching { parseEvent(readObject(reader)) }.getOrNull()?.let { ev ->
-                            // W23x：內容身分已存在（DB 既有或檔內重複）→ 略過，確保重複匯入 idempotent
-                            val idKey = "${ev.notificationKey}|${ev.eventType.name}|${ev.eventTime}|${ev.contentHash}"
-                            if (!seenEventIds.add(idKey)) {
-                                dedupedEvents++
-                                return@let
-                            }
-                            // W23u：孤兒 event key（無對應 record）首次出現時補 placeholder record，
-                            // 用該 event 的 packageName/channel/時間填充（defer_foreign_keys 容順序）
-                            if (ev.notificationKey in placeholderKeys && createdPlaceholders.add(ev.notificationKey)) {
-                                database.notificationRecordDao().insertIfAbsent(placeholderRecord(ev))
-                            }
                             eventBuf.add(ev)
-                            eventCount++
                             if (eventBuf.size >= EVENT_BATCH) flushEvents()
                         }
+                        elementsRead++
                         if (++sinceProgress >= PROGRESS_EVERY) { sinceProgress = 0; emitProgress() }
                     }
                     flushEvents()
@@ -314,6 +330,7 @@ class ArchiveImporter(private val context: Context) {
                             oldToNewSnapshotId[snap.id] = newId
                             snapshotCount++
                         }
+                        elementsRead++
                         if (++sinceProgress >= PROGRESS_EVERY) { sinceProgress = 0; emitProgress() }
                     }
                     reader.endArray()
@@ -324,6 +341,7 @@ class ArchiveImporter(private val context: Context) {
                         // 先緩存（輕量 entity），endObject 後才能 remap snapshotId
                         runCatching { parseObservation(readObject(reader)) }.getOrNull()
                             ?.let { pendingObs.add(it) }
+                        elementsRead++
                         if (++sinceProgress >= PROGRESS_EVERY) { sinceProgress = 0; emitProgress() }
                     }
                     reader.endArray()
@@ -342,6 +360,7 @@ class ArchiveImporter(private val context: Context) {
                                 mediaRestored++
                             }.onFailure { Log.w(TAG, "Failed to restore media", it) }
                         }
+                        elementsRead++
                         if (++sinceProgress >= PROGRESS_EVERY) { sinceProgress = 0; emitProgress() }
                     }
                     reader.endArray()
@@ -351,28 +370,33 @@ class ArchiveImporter(private val context: Context) {
         }
         reader.endObject()
 
-        // observations：snapshotId remap 後批次 flush
-        var obsCount = 0
+        // observations：snapshotId remap 後逐批 probe 去重 + 批次寫入（W24f，
+        // 身分含 remap 後的 snapshotId — probe 撈回的既有列本來就是實際 id，比對一致）
         val obsBatch = ArrayList<RankingObservationEntity>(OBS_BATCH)
+        suspend fun flushObs() {
+            if (obsBatch.isEmpty()) return
+            val existing = database.rankingObservationDao()
+                .getIdentitiesByTimesSync(obsBatch.map { it.observedAt }.distinct())
+                .mapTo(HashSet()) { it.key() }
+            val batchSeen = HashSet<String>()
+            val fresh = obsBatch.filter { o ->
+                val idKey = "${o.notificationKey}|${o.observedAt}|${o.rankingSnapshotId}|${o.source.name}"
+                idKey !in existing && batchSeen.add(idKey)
+            }
+            dedupedObs += obsBatch.size - fresh.size
+            if (fresh.isNotEmpty()) {
+                database.rankingObservationDao().insertAll(fresh)
+                obsWritten += fresh.size
+            }
+            obsBatch.clear()
+            emitProgress()
+        }
         for (obs in pendingObs) {
             val mapped = oldToNewSnapshotId[obs.rankingSnapshotId] ?: continue
-            // W23x：去重（身分含 remap 後的 snapshotId）
-            val idKey = "${obs.notificationKey}|${obs.observedAt}|$mapped|${obs.source.name}"
-            if (!seenObsIds.add(idKey)) {
-                dedupedObs++
-                continue
-            }
             obsBatch.add(obs.copy(id = 0, rankingSnapshotId = mapped))
-            if (obsBatch.size >= OBS_BATCH) {
-                database.rankingObservationDao().insertAll(obsBatch)
-                obsCount += obsBatch.size
-                obsBatch.clear()
-            }
+            if (obsBatch.size >= OBS_BATCH) flushObs()
         }
-        if (obsBatch.isNotEmpty()) {
-            database.rankingObservationDao().insertAll(obsBatch)
-            obsCount += obsBatch.size
-        }
+        flushObs()
         emitProgress()
 
         val info = exportInfo ?: throw IllegalStateException("缺少 exportInfo，非合法封存檔")
@@ -381,7 +405,7 @@ class ArchiveImporter(private val context: Context) {
             environment = environment,
             records = recordCount,
             events = eventCount,
-            observations = obsCount,
+            observations = obsWritten,
             snapshots = snapshotCount,
             mediaRestored = mediaRestored,
             placeholderRecords = createdPlaceholders.size,

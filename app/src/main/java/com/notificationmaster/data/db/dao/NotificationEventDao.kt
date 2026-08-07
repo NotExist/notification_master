@@ -102,11 +102,14 @@ interface NotificationEventDao {
     suspend fun getCountByTimeRangeSync(startTime: Long, endTime: Long): Int
 
     /**
-     * W23x：匯入去重用 — 既有 events 的內容身分投影（不含 raw_json，輕量）。
+     * W24f：匯入去重逐批 probe（取代 W23x 整表身分 preload — 後者記憶體 O(DB 既有數)，
+     * 70K 尚可、更大必撞牆）。event_time IN 走 index、毫秒級高選擇性 — 但唯一性只
+     * 影響效能（候選集大小），正確性由呼叫端四欄身分全比對決定。transaction 內
+     * SELECT 看得到本次已插入列 → 同批 probe 亦涵蓋檔內較早批次的重複。
      * 身分 = notification_key + event_type + event_time + content_hash。
      */
-    @Query("SELECT notification_key AS notificationKey, event_type AS eventType, event_time AS eventTime, content_hash AS contentHash FROM notification_events")
-    suspend fun getAllEventIdentitiesSync(): List<EventIdentity>
+    @Query("SELECT notification_key AS notificationKey, event_type AS eventType, event_time AS eventTime, content_hash AS contentHash FROM notification_events WHERE event_time IN (:times)")
+    suspend fun getIdentitiesByTimesSync(times: List<Long>): List<EventIdentity>
 
     @Query("""
         SELECT * FROM notification_events
