@@ -1466,18 +1466,24 @@ class SettingsFragment : Fragment() {
      */
     private fun importArchiveFromUri(uri: android.net.Uri) {
         val ctx = context ?: return
-        val totalBytes = queryUriSize(uri)
-        val (dialog, post) = buildStreamProgress(R.string.import_progress_title, totalBytes)
-        val validateLabel = getString(R.string.import_progress_validating)
-
         viewLifecycleOwner.lifecycleScope.launch {
+            // W24e：queryUriSize（ContentResolver IPC）與 validate 全文掃描都必須離開
+            // main — validate 是 dispatcher 中立（w23s 配合 withTransaction 的設計）
+            // 且內部無 suspension point，呼叫端不包 IO 就是「同步跑在 main」：700MB
+            // 備份從選檔起凍結 UI（進度框第一幀都畫不出）→ input dispatch ANR → FC
+            val totalBytes = withContext(Dispatchers.IO) { queryUriSize(uri) }
+            if (_binding == null) return@launch
+            val (dialog, post) = buildStreamProgress(R.string.import_progress_title, totalBytes)
+            val validateLabel = getString(R.string.import_progress_validating)
             val database = NotificationMasterApp.getInstance().database
             try {
                 val importer = ArchiveImporter(ctx)
                 // PASS 1：純驗證（不寫 DB），順便取得 preview metadata；不通過直接拋
-                val report = ctx.contentResolver.openInputStream(uri)?.use { ins ->
-                    importer.validate(ins, totalBytes) { p -> post(validateLabel, p) }
-                } ?: throw IllegalStateException("無法開啟輸入串流")
+                val report = withContext(Dispatchers.IO) {
+                    ctx.contentResolver.openInputStream(uri)?.use { ins ->
+                        importer.validate(ins, totalBytes) { p -> post(validateLabel, p) }
+                    } ?: throw IllegalStateException("無法開啟輸入串流")
+                }
                 val existing = withContext(Dispatchers.IO) {
                     database.notificationEventDao().getTotalCountSync()
                 }
@@ -1541,11 +1547,12 @@ class SettingsFragment : Fragment() {
         clearFirst: Boolean
     ) {
         val ctx = context ?: return
-        val totalBytes = queryUriSize(uri)
-        val (progressDialog, postProgress) = buildStreamProgress(R.string.import_progress_title, totalBytes)
-        val writeLabel = getString(R.string.import_progress_writing)
-
         viewLifecycleOwner.lifecycleScope.launch {
+            // W24e：queryUriSize 是 ContentResolver IPC，同 importArchiveFromUri 離開 main
+            val totalBytes = withContext(Dispatchers.IO) { queryUriSize(uri) }
+            if (_binding == null) return@launch
+            val (progressDialog, postProgress) = buildStreamProgress(R.string.import_progress_title, totalBytes)
+            val writeLabel = getString(R.string.import_progress_writing)
             val database = NotificationMasterApp.getInstance().database
             try {
                 val importer = ArchiveImporter(ctx)
