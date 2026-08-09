@@ -512,6 +512,31 @@ class SettingsFragment : Fragment() {
             }, 10_000L)
         }
 
+        binding.btnForceResetAlert.setOnClickListener {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.settings_debug_force_reset_alert)
+                .setMessage(R.string.settings_debug_force_reset_alert_msg)
+                .setPositiveButton(R.string.settings_debug_force_reset_alert_only) { _, _ ->
+                    com.notificationmaster.core.alert.PersistentAlertService
+                        .forceReset(requireContext())
+                    Toast.makeText(
+                        requireContext(),
+                        R.string.settings_debug_force_reset_alert_done, Toast.LENGTH_SHORT
+                    ).show()
+                }
+                .setNeutralButton(R.string.settings_debug_force_reset_alert_kill) { _, _ ->
+                    com.notificationmaster.core.alert.PersistentAlertService
+                        .forceReset(requireContext())
+                    // 給 stopService / prefs apply 一點落地時間再終止；
+                    // process 死亡即保證任何孤兒 Ringtone/Vibrator 停止，NLS 由系統自動重綁
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        android.os.Process.killProcess(android.os.Process.myPid())
+                    }, 300L)
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+
         // 手動匯出到指定日曆（除錯用，每次手選目標）
         binding.btnExportIcal.setOnClickListener {
             requestCalendarExport()

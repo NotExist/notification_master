@@ -861,6 +861,14 @@
                     style="@style/Widget.Material3.Button.OutlinedButton" />
 
                 <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_force_reset_alert"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/settings_debug_force_reset_alert"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_update_ranking_map"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

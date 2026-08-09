@@ -385,5 +385,40 @@ class PersistentAlertService : Service() {
                 )
             }
         }
+
+        /**
+         * 強制重置（Debug 緊急脫困）：不走 ACTION_STOP 訊息路徑，直接清空一切相關狀態。
+         * 清除交接/當前資料 → stopService（onDestroy 兜底停播放）→ 取消通知殘留 →
+         * 廣播關閉全螢幕 Activity。孤兒播放實例（失去參照的 Ringtone）process 內無法
+         * 保證清除，需要 100% 歸零時由呼叫端搭配終止 process。
+         */
+        fun forceReset(context: Context) {
+            AlertDiagnostics.log(
+                context, "stop", AlertDiagnostics.OUTCOME_OK,
+                "force_reset：清空交接資料 + stopService + 取消通知 + 關閉 Activity" +
+                    "（pending=${pendingAlertData?.notificationKey} " +
+                    "current=${currentAlertData?.notificationKey}）"
+            )
+            synchronized(this) { pendingAlertData = null }
+            currentAlertData = null
+            try {
+                context.stopService(Intent(context, PersistentAlertService::class.java))
+            } catch (e: Exception) {
+                AlertDiagnostics.log(
+                    context, "stop", AlertDiagnostics.OUTCOME_FAIL,
+                    "force_reset：stopService 失敗", e
+                )
+            }
+            try {
+                (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                    .cancel(NOTIFICATION_ID)
+            } catch (e: Exception) {
+                AlertDiagnostics.log(
+                    context, "stop", AlertDiagnostics.OUTCOME_FAIL,
+                    "force_reset：取消通知失敗", e
+                )
+            }
+            context.sendBroadcast(Intent(ACTION_STOP).setPackage(context.packageName))
+        }
     }
 }

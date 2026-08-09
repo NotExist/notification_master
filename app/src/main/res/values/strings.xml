@@ -620,6 +620,11 @@
     <string name="settings_alert_diag_last">上次提醒異常：%1$s（點擊查看完整歷程）</string>
     <string name="settings_alert_diag_title">持續提醒診斷歷程</string>
     <string name="settings_alert_diag_clear">清除記錄</string>
+    <string name="settings_debug_force_reset_alert">強制重置持續提醒</string>
+    <string name="settings_debug_force_reset_alert_msg">清空持續提醒的所有狀態：待交接資料、前景服務與鈴聲/振動、通知、全螢幕頁面。\n\n若鈴聲仍在響（孤兒播放實例），唯一 100% 保證的手段是「重置並終止 App」：process 終止後鈴聲必停，系統會自動重新綁定通知監聽服務。</string>
+    <string name="settings_debug_force_reset_alert_only">僅重置</string>
+    <string name="settings_debug_force_reset_alert_kill">重置並終止 App</string>
+    <string name="settings_debug_force_reset_alert_done">持續提醒狀態已重置</string>
 
     <!-- 服務保活 -->
     <string name="settings_keepalive_title">服務保活</string>
