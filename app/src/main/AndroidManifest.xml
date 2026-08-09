@@ -218,15 +218,6 @@
                 android:value="alarm-like persistent alert with ringtone and vibration" />
         </service>
 
-        <!-- 持續提醒停止 Receiver（向下相容） -->
-        <receiver
-            android:name=".core.alert.AlertStopReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.notificationmaster.action.STOP_ALERT_SERVICE" />
-            </intent-filter>
-        </receiver>
-
         <!-- FileProvider 用於分享匯出檔案 -->
         <provider
             android:name="androidx.core.content.FileProvider"

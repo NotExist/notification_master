@@ -166,7 +166,7 @@ class PersistentAlertActivity : AppCompatActivity() {
     }
 
     private fun stopAlertAndFinish() {
-        PersistentAlertService.stop(this)
+        PersistentAlertService.stop(this, PersistentAlertService.STOP_REASON_ACTIVITY)
         finish()
     }
 

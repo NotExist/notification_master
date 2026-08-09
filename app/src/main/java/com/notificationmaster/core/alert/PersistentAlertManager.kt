@@ -4,7 +4,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
-import android.util.Log
 import androidx.core.content.ContextCompat
 import com.notificationmaster.R
 
@@ -15,8 +14,6 @@ import com.notificationmaster.R
  * NLS 透過此類啟動/停止提醒，不需要直接接觸 Service。
  */
 class PersistentAlertManager(private val context: Context) {
-
-    private val TAG = "PersistentAlertManager"
 
     companion object {
         const val CHANNEL_ID = "persistent_alert"
@@ -44,7 +41,11 @@ class PersistentAlertManager(private val context: Context) {
             if (ContextCompat.checkSelfPermission(
                     context, "android.permission.POST_NOTIFICATIONS"
                 ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                Log.w(TAG, "POST_NOTIFICATIONS not granted, skipping persistent alert")
+                AlertDiagnostics.log(
+                    context, "guard", AlertDiagnostics.OUTCOME_SKIP,
+                    "POST_NOTIFICATIONS 未授權，跳過本次提醒（無通知＝無停止按鈕）" +
+                        " key=${data.notificationKey} pkg=${data.packageName}"
+                )
                 return
             }
         }
@@ -52,7 +53,7 @@ class PersistentAlertManager(private val context: Context) {
         PersistentAlertService.start(context, data)
     }
 
-    fun stopAlert() {
-        PersistentAlertService.stop(context)
+    fun stopAlert(reason: String) {
+        PersistentAlertService.stop(context, reason)
     }
 }

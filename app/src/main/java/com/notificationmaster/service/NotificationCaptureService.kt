@@ -188,7 +188,9 @@ class NotificationCaptureService : NotificationListenerService() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
 
-        alertManager.stopAlert()
+        alertManager.stopAlert(
+            com.notificationmaster.core.alert.PersistentAlertService.STOP_REASON_NLS_DESTROY
+        )
         pendingDismissJobs.values.forEach { it.cancel() }
         pendingDismissJobs.clear()
         calendarExportMap.clear()
@@ -1185,6 +1187,13 @@ class NotificationCaptureService : NotificationListenerService() {
     ) {
         val rule = RuleEngine.findMatchingRule(ActionType.PERSISTENT_ALERT, matchCtx) ?: return
         val action = rule.action as RuleAction.PersistentAlert
+        // 此刻 lastTriggered 已由 findMatchingRule 更新；此後任一階段失敗都會呈現
+        // 「規則有觸發但提醒沒出現」，診斷記錄以此筆 trigger 為起點對照後續階段
+        com.notificationmaster.core.alert.AlertDiagnostics.log(
+            this, "trigger", com.notificationmaster.core.alert.AlertDiagnostics.OUTCOME_OK,
+            "rule=${rule.id} event=${eventType.name} key=${display.notificationKey} " +
+                "pkg=${display.packageName}"
+        )
         val appName = NotificationContentHelper.appName(this, display.packageName)
         val actions = sbn.notification.actions
             ?.filter { it.remoteInputs.isNullOrEmpty() }
@@ -1224,13 +1233,6 @@ class NotificationCaptureService : NotificationListenerService() {
             )
         }
         if (count > 0) Log.d(TAG, "Clipboard copy: $count entries from $packageName")
-    }
-
-    /**
-     * 停止持續提醒（供 AlertStopReceiver 呼叫）
-     */
-    fun stopPersistentAlert() {
-        alertManager.stopAlert()
     }
 
     /**
