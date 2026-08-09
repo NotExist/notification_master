@@ -256,6 +256,17 @@
                     android:textColor="?android:attr/textColorSecondary" />
 
                 <TextView
+                    android:id="@+id/text_alert_diagnostics"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:padding="4dp"
+                    android:text="@string/settings_alert_diag_none"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?android:attr/textColorSecondary" />
+
+                <TextView
                     android:id="@+id/text_fullscreen_intent_hint"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

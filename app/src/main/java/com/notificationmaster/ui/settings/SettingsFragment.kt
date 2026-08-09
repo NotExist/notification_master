@@ -31,6 +31,8 @@ import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.notificationmaster.BuildConfig
 import com.notificationmaster.NotificationMasterApp
 import com.notificationmaster.R
+import com.google.android.material.color.MaterialColors
+import com.notificationmaster.core.alert.AlertDiagnostics
 import com.notificationmaster.export.calendar.CalendarExportLog
 import com.notificationmaster.core.filter.ActionType
 import com.notificationmaster.core.filter.RuleEngine
@@ -198,8 +200,48 @@ class SettingsFragment : Fragment() {
             }
         }
         setupFilterButton(binding.btnClipboardCopy, ActionType.CLIPBOARD_COPY)
+        binding.textAlertDiagnostics.setOnClickListener { showAlertDiagnosticsDialog() }
         updateAllRuleSummaries()
         setupFilterRuleManagement()
+    }
+
+    /** 持續提醒診斷摘要：顯示最近一筆 skip/fail，無異常顯示中性文案 */
+    private fun updateAlertDiagnosticsSummary() {
+        val b = _binding ?: return
+        val last = AlertDiagnostics.lastProblem(requireContext())
+        if (last == null) {
+            b.textAlertDiagnostics.setText(R.string.settings_alert_diag_none)
+            b.textAlertDiagnostics.setTextColor(
+                MaterialColors.getColor(
+                    b.textAlertDiagnostics, android.R.attr.textColorSecondary,
+                    android.graphics.Color.GRAY
+                )
+            )
+        } else {
+            b.textAlertDiagnostics.text = getString(
+                R.string.settings_alert_diag_last,
+                "${AlertDiagnostics.formatTime(last.timestamp)} [${last.stage}] " +
+                    (last.detail ?: last.outcome)
+            )
+            b.textAlertDiagnostics.setTextColor(
+                MaterialColors.getColor(
+                    b.textAlertDiagnostics, com.google.android.material.R.attr.colorError,
+                    android.graphics.Color.RED
+                )
+            )
+        }
+    }
+
+    private fun showAlertDiagnosticsDialog() {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.settings_alert_diag_title)
+            .setMessage(AlertDiagnostics.exportAsText(requireContext()))
+            .setPositiveButton(android.R.string.ok, null)
+            .setNeutralButton(R.string.settings_alert_diag_clear) { _, _ ->
+                AlertDiagnostics.clear(requireContext())
+                updateAlertDiagnosticsSummary()
+            }
+            .show()
     }
 
     private fun setupFilterRuleManagement() {
@@ -289,6 +331,7 @@ class SettingsFragment : Fragment() {
         updateMediaDirDisplay()
         validateCustomMediaDir()
         updateAllRuleSummaries()
+        updateAlertDiagnosticsSummary()
         updateRealtimeCalendarDisplay()
         updateBackupDirDisplay()
         updateFullScreenIntentHint()

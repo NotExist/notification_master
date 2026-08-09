@@ -616,6 +616,10 @@
     <string name="alert_open_failed">來源通知已不存在</string>
     <string name="alert_action_failed">無法執行此動作</string>
     <string name="alert_event_type">觸發事件: %1$s · %2$s</string>
+    <string name="settings_alert_diag_none">提醒診斷：無異常記錄（點擊查看完整歷程）</string>
+    <string name="settings_alert_diag_last">上次提醒異常：%1$s（點擊查看完整歷程）</string>
+    <string name="settings_alert_diag_title">持續提醒診斷歷程</string>
+    <string name="settings_alert_diag_clear">清除記錄</string>
 
     <!-- 服務保活 -->
     <string name="settings_keepalive_title">服務保活</string>
