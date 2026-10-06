@@ -14,6 +14,7 @@ import com.notificationmaster.core.filter.RuleEngine
 import com.notificationmaster.core.filter.RuleRepository
 import com.notificationmaster.core.prefs.AppPreferences
 import com.notificationmaster.data.db.dao.count
+import com.notificationmaster.data.db.dao.countSync
 import com.notificationmaster.data.db.dao.query
 import com.notificationmaster.data.db.entity.NotificationEventEntity
 import com.notificationmaster.data.filter.EventFilterSpec
@@ -21,9 +22,11 @@ import com.notificationmaster.data.filter.RemovalFilter
 import com.notificationmaster.data.filter.toFilterSpec
 import com.notificationmaster.ui.common.NotificationDisplay
 import com.notificationmaster.ui.common.NotificationEnricher
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,9 +39,16 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -212,6 +222,13 @@ class TimelineViewModel(
      * （limit 取最小、timeFrom 取最大、timeTo 取最小、orderBy / deduplicate 取第一個 rule）。
      * 0 rule → 純 dedup spec；1 rule → 等價 [Rule.toFilterSpec]。
      */
+    /**
+     * W25c：是否為「純去重視圖」— 其總數與 [totalUniqueCount] 同語意（同一條全表
+     * COUNT(GROUP BY)），可直接複用。removalFilter / orderBy / limit 不影響 count SQL。
+     */
+    private fun isPlainDedupView(spec: EventFilterSpec): Boolean =
+        spec.deduplicate && spec.matchers.isEmpty() && spec.timeFrom == null && spec.timeTo == null
+
     private fun combineRulesToSpec(ruleIds: Set<String>, dedupChecked: Boolean): EventFilterSpec {
         val rules = ruleIds.mapNotNull { RuleEngine.getRule(it) }
         if (rules.isEmpty()) return EventFilterSpec(deduplicate = dedupChecked)
@@ -253,8 +270,11 @@ class TimelineViewModel(
      *
      * 修後 guard 比對本欄位：query 尚未對「當前 pageSize」emit 過 → 走 rewait（不疊加
      * pageSize、重標 loading 等 in-flight query）；emit 過且 size < limit → 才是真 exhausted。
+     *
+     * W25a：改由 [listSnapshot] 與 list 一起原子發布 — [loadState] / [awaitQueryGrowth]
+     * 以「本次 query 是否已回、是否到底」判定續載（總數改背景節流計算，不再當硬停條件）。
      */
-    @Volatile private var lastEmittedLimit = 0
+    private val lastEmittedLimit: Int get() = listSnapshot.value.emittedLimit
 
     // === 錯誤通道（Phase 26）===
 
@@ -265,6 +285,9 @@ class TimelineViewModel(
     private val _errorCh = MutableStateFlow<Throwable?>(null)
 
     // === DB 訂閱（base）===
+
+    /** W25c：首次列表查詢完成（含空結果 / 錯誤）旗標，[totalUniqueCount] 的啟動閘門 */
+    private val _firstListSettled = MutableStateFlow(false)
 
     /**
      * Phase 25 + 26：base list — `EventFilterSpec.All.copy(limit = _pageSize)`。
@@ -288,7 +311,7 @@ class TimelineViewModel(
      * pageSize 變動 + coreSpec 變動都會觸發 flatMapLatest 切換（chip 切換時整個 list
      * 重新 SQL query — 跟 totalCount 訂閱 coreSpec 行為一致）。
      */
-    val allNotifications: StateFlow<List<NotificationDisplay>> = combine(_pageSize, coreSpec) { size, spec ->
+    private val listSnapshot: StateFlow<ListSnapshot> = combine(_pageSize, coreSpec) { size, spec ->
         spec.copy(limit = size)
     }
         .flatMapLatest { spec ->
@@ -304,17 +327,25 @@ class TimelineViewModel(
                         "query emit limit=${spec.limit} size=${items.size} since-start=${System.currentTimeMillis() - tStart}ms"
                     )
                 }
-                .map { items -> enrichAndMap(items) }
-                // W23a：enrich 完成才算「此 limit 的 query 已 emit」（onEach 在 map 之前
-                // 記會在 enrich 進行中就標 emitted，loadNextDay guard 提前誤判 exhausted）
-                .onEach { lastEmittedLimit = spec.limit ?: Int.MAX_VALUE }
+                // W23a：enrich 完成才算「此 limit 的 query 已 emit」— W25a 起 limit 與 list
+                // 打包成同一個 snapshot 發布，觀察端不會看到「limit 已更新、list 仍舊」中間態
+                .map { items -> ListSnapshot(spec.limit ?: Int.MAX_VALUE, enrichAndMap(items)) }
+                // W25c：首次列表查詢完成（含空結果）才放行去重總數計算，避免冷啟兩條
+                // 全表 GROUP BY 搶同一時段
+                .onEach { _firstListSettled.value = true }
                 .flowOn(Dispatchers.IO)
                 .conflate()
         }
         .catch { e ->
             _errorCh.value = e
-            emit(emptyList())
+            _firstListSettled.value = true
+            emit(ListSnapshot.EMPTY)
         }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), ListSnapshot.EMPTY)
+
+    /** base list（[listSnapshot] 的 list 投影；對外 API 不變） */
+    val allNotifications: StateFlow<List<NotificationDisplay>> = listSnapshot
+        .map { it.items }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), emptyList())
 
     /**
@@ -335,28 +366,79 @@ class TimelineViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SHARING_STOP_TIMEOUT_MS), emptyList())
 
     /**
+     * W25c：events 表失效訊號（兼 raw count）。
+     *
+     * Room Flow 每次表失效都會重查 `COUNT(*)` 並 emit（不去重），故以 SharedFlow
+     * （非 StateFlow — 後者會吞掉「數量不變的變動」如刪一筆插一筆）供下游當觸發源。
+     * `COUNT(*)` 本身便宜，可承受每次寫入重查。
+     *
+     * 失敗時延遲後重訂閱（retryWhen）而非結束 — raw / unique 總數共用此來源，結束會讓
+     * 兩者永久停在舊值（舊 raw=0 更會讓 [loadState] 永久判 Empty）。總數屬顯示用途，
+     * 失敗只記 log、不寫 [_errorCh]（避免把已 Loaded 的列表打回 Initial）。
+     */
+    private val eventsInvalidation: SharedFlow<Int> = eventDao.count(EventFilterSpec.All)
+        .retryWhen { e, attempt ->
+            ProfileLogger.append("Counter", "rawCount failed attempt=$attempt: ${e.message}")
+            delay(COUNT_RETRY_DELAY_MS)
+            true
+        }
+        .shareIn(viewModelScope, SharingStarted.Eagerly, replay = 1)
+
+    /**
      * Phase 31h：DB raw events 數（無 dedup），Eagerly 訂閱作為 [totalCount] 的 base。
      *
      * 之前是 dialog-only flow 用 WhileSubscribed → 沒人 collect 時 stateIn 維持 null →
      * dialog 開啟讀 .value 永遠 null。現在改成 chip 切換的 base，Eagerly 全程訂閱。
      */
-    val totalRawCount: StateFlow<Int?> = eventDao.count(EventFilterSpec.All)
+    val totalRawCount: StateFlow<Int?> = eventsInvalidation
         .map<Int, Int?> { it }
-        .catch { e ->
-            _errorCh.value = e
-            emit(null)
-        }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /**
-     * Phase 31h：DB unique notification_key 數，Eagerly 訂閱作為 [totalCount] 的 base。
+     * Phase 31h：DB unique notification_key 數（去重總數）。
+     *
+     * W25c：改為「背景、節流」計算 — 修前是 Room Flow，冷啟與列表 dedup query 同時跑
+     * 全表 COUNT(GROUP BY)，且每次寫入都重跑。現在：
+     * - 等首次列表查詢完成才啟動（[_firstListSettled]），不與首屏搶資源
+     * - 觸發源＝[eventsInvalidation]（每次表失效）；`conflate` + 計算後
+     *   [UNIQUE_COUNT_MIN_INTERVAL_MS] 冷卻 → 寫入 burst 期間最多每個週期算一次，
+     *   且 conflate 保證最後一次變動一定會被算到（不會因持續寫入而永不更新）
+     * - 一次性 `countSync`（節流的是「啟動昂貴查詢」本身，而非對 Flow 結果 debounce）
+     * - 計算失敗保留上次值、不中斷 Flow，[COUNT_RETRY_DELAY_MS] 後重試直到成功
      */
-    val totalUniqueCount: StateFlow<Int?> = eventDao.count(EventFilterSpec.All.copy(deduplicate = true))
-        .map<Int, Int?> { it }
-        .catch { e ->
-            _errorCh.value = e
-            emit(null)
+    val totalUniqueCount: StateFlow<Int?> = _firstListSettled
+        .filter { it }
+        .take(1)
+        .flatMapLatest { eventsInvalidation }
+        .conflate()
+        .transform {
+            // 失敗時延遲重試直到成功 — 否則之後若無新寫入，分母會一直停在 … / 舊值
+            while (true) {
+                val t0 = System.currentTimeMillis()
+                val count = try {
+                    withContext(Dispatchers.IO) {
+                        eventDao.countSync(EventFilterSpec.All.copy(deduplicate = true))
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // 顯示用途：失敗保留上次值、不寫 _errorCh（同 eventsInvalidation）
+                    ProfileLogger.append("Counter", "uniqueCount failed: ${e.message}")
+                    null
+                }
+                ProfileLogger.append(
+                    "Counter",
+                    "uniqueCount computed=$count took=${System.currentTimeMillis() - t0}ms"
+                )
+                if (count != null) {
+                    emit(count)
+                    break
+                }
+                delay(COUNT_RETRY_DELAY_MS)
+            }
+            delay(UNIQUE_COUNT_MIN_INTERVAL_MS)
         }
+        .map<Int, Int?> { it }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /**
@@ -369,9 +451,22 @@ class TimelineViewModel(
      * 永不 EndReached → footer 永遠不顯示「沒有更多」）。
      *
      * Dialog 仍可讀 [totalRawCount] / [totalUniqueCount] 取得「不套 chip 的整體數量」。
+     *
+     * W25a：已不參與 canLoadMore / EndReached 判定（改由 query 到底判定），僅供 counter 顯示。
      */
     val totalCount: StateFlow<Int?> = coreSpec
-        .flatMapLatest { spec -> eventDao.count(spec).map<Int, Int?> { it } }
+        .flatMapLatest { spec ->
+            when {
+                // W25c：預設視圖（dedup、無 matcher/時間範圍）與 totalUniqueCount 是同一條
+                // 全表 COUNT(GROUP BY) — 複用，不重算第二次
+                isPlainDedupView(spec) -> totalUniqueCount
+                // 無任何篩選的非去重視圖 = COUNT(*)，複用 raw
+                spec.isAll() -> totalRawCount
+                // 其他（rule chip 等）：維持 Room Flow；切換時先 emit null 讓 counter 顯示 …，
+                // 避免沿用上一視圖的總數
+                else -> eventDao.count(spec).map<Int, Int?> { it }.onStart { emit(null) }
+            }
+        }
         .catch { e ->
             _errorCh.value = e
             emit(null)
@@ -398,32 +493,43 @@ class TimelineViewModel(
      * 兩個獨立 emit 必然產生『都 false 中間態』」造成的 footer flicker。
      */
     val loadState: StateFlow<TimelineLoadState> = combine(
+        listSnapshot,
         displayedNotifications,
-        totalCount,
         _isLoadingMore,
-        combine(allNotifications, totalRawCount) { items, totalRaw ->
-            items to totalRaw
-        },
+        combine(totalRawCount, _chipState) { totalRaw, chip -> totalRaw to chip },
         _errorCh
-    ) { displays, total, loading, bundle, err ->
-        val items = bundle.first
-        val totalRaw = bundle.second
+    ) { snapshot, displays, loading, bundle, err ->
+        val items = snapshot.items
+        val emittedLimit = snapshot.emittedLimit
+        val (totalRaw, chip) = bundle
+        // overlay 不會濾掉任何 base item 的 chip 狀態（無 rule predicate / 已移除篩選）
+        val overlayNeverFilters = chip.activeRuleIds.isEmpty() && chip.removalFilter == RemovalFilter.None
 
+        // W25a：phase 不再等 total — 列表有資料即 Loaded（光條熄、可續載）；總數由
+        // W25c 背景計算，未就緒時 counter 顯示「N / … 筆」
         val phase: LoadPhase = when {
             err != null -> LoadPhase.Initial  // Error 仍標 Initial，UI 主要看 error field
             totalRaw == 0 -> LoadPhase.Empty
-            total == null -> LoadPhase.Initial
             items.isEmpty() -> LoadPhase.Initial
+            // W25a：base 已有資料但 overlay 結果尚未跟上（displayedNotifications 晚一個
+            // stateIn hop）— overlay 不濾 item 時 displays 空只可能是此中間態；修前由
+            // `total == null -> Initial` 順帶遮住，拿掉後需顯式 hold，否則 Fragment 走
+            // Loaded+empty → submitEmpty 冷啟閃白
+            displays.isEmpty() && overlayNeverFilters -> LoadPhase.Initial
             else -> LoadPhase.Loaded
         }
 
-        // canLoadMore 各維度合算：raw 未載完 + chip-aware total 未顯示完 + 未達 MAX_PAGE_SIZE
+        // canLoadMore 各維度合算：raw 未載完 + query 未到底 + 未達 MAX_PAGE_SIZE
+        //
+        // W25a：移除 W2.a 的 `displays.size >= total` 硬停 — total 改為背景節流計算，可能
+        // 未就緒或過時（冷卻期間新增 key 會讓舊 total 偏小而誤報 EndReached）。改以 query
+        // 自身判定：當前 limit 已 emit 且回傳不足 limit = 符合篩選者已全數載入（SQL 已套
+        // chip/rule/dedup，與 W2.a 想表達的「chip-aware 全顯示」同義）。total 只負責顯示。
         val canLoadMore = when {
             err != null -> false
             phase != LoadPhase.Loaded -> false
-            total == 0 -> false  // chip 篩 0
             totalRaw != null && items.size >= totalRaw -> false  // W16: raw 全載完
-            total != null && displays.size >= total -> false     // W2.a: chip-aware 全顯示
+            items.size < emittedLimit -> false                   // W25a: query 已到底
             _pageSize.value >= MAX_PAGE_SIZE -> false
             else -> true
         }
@@ -647,7 +753,7 @@ class TimelineViewModel(
      * Guard 順序（任何一條成立即 skip 不重複觸發無意義 +50）：
      * 1. state 非 Ready / canLoadMore=false
      * 2. _isLoadingMore=true（重入防護）
-     * 3. displays.size >= totalCount（chip-filtered 已全顯示）
+     * 3. query 已到底（W25a：取代 W2.a 的 displays.size >= totalCount）
      * 4. **W2.b 新**：allNotifications.size < _pageSize（上次 query.size < limit
      *    表示 DB 內已沒更多 events 可載；ranking 未就緒時 chip 篩 0 的無限迴圈在
      *    此截斷）
@@ -670,13 +776,14 @@ class TimelineViewModel(
                     "(in-flight query not yet emitted)"
             )
             _isLoadingMore.value = true
-            awaitQueryGrowth(displayedNotifications.value.size, allNotifications.value.size)
+            awaitQueryGrowth(displayedNotifications.value.size, listSnapshot.value.items.size)
             return
         }
 
-        // canLoadMore 公式已涵蓋 displays>=total / raw exhausted / MAX cap guard
+        // canLoadMore 公式已涵蓋 query 到底 / raw exhausted / MAX cap guard
         // 此處再讀「已 emit 的 query」snapshot 防 race：當前 limit 已回但 size 不足 = 真 exhausted
-        val lastQuerySize = allNotifications.value.size
+        // W25a：size 與 limit 同取自 listSnapshot（allNotifications 晚一個 stateIn hop）
+        val lastQuerySize = listSnapshot.value.items.size
         if (lastQuerySize < lastEmittedLimit) {
             ProfileLogger.append(
                 "Timeline",
@@ -687,7 +794,7 @@ class TimelineViewModel(
 
         val target = (_pageSize.value + PAGE_INCREMENT).coerceAtMost(MAX_PAGE_SIZE)
         val beforeDisplayedSize = displayedNotifications.value.size
-        val beforeItemsSize = allNotifications.value.size
+        val beforeItemsSize = listSnapshot.value.items.size
         ProfileLogger.append(
             "Timeline",
             "loadNextDay trigger target=$target beforeDisplayed=$beforeDisplayedSize " +
@@ -709,8 +816,12 @@ class TimelineViewModel(
     private fun awaitQueryGrowth(beforeDisplayedSize: Int, beforeItemsSize: Int, attempt: Int = 1) {
         viewModelScope.launch {
             val result = withTimeoutOrNull(GROWTH_TIMEOUT_MS) {
-                combine(displayedNotifications, allNotifications) { displays, items ->
-                    displays.size > beforeDisplayedSize || items.size > beforeItemsSize
+                // W25a：除了筆數成長，「當前 pageSize 的 query 已 emit」也算完成 — 恰好全部
+                // 已載入時（如 unique key 數 == limit）擴張後筆數不會增加，修前只認成長會
+                // 空等 ~30s 後誤報逾時；emit 後由 loadState 的 query-到底判定轉 EndReached
+                combine(displayedNotifications, listSnapshot) { displays, snap ->
+                    displays.size > beforeDisplayedSize || snap.items.size > beforeItemsSize ||
+                        snap.emittedLimit >= _pageSize.value
                 }.first { it }
             }
             if (result == null && attempt < MAX_GROWTH_ATTEMPTS) {
@@ -781,6 +892,15 @@ class TimelineViewModel(
         const val SHARING_STOP_TIMEOUT_MS = 5_000L
 
         /**
+         * W25c：去重總數重算的最小間隔。總數是全表 COUNT(GROUP BY)（大 DB 秒級），
+         * 寫入 burst 時每個週期最多算一次；週期內的變動由 conflate 合併到下一輪。
+         */
+        const val UNIQUE_COUNT_MIN_INTERVAL_MS = 5_000L
+
+        /** W25c：raw count（總數觸發來源）失敗後重訂閱的延遲 */
+        const val COUNT_RETRY_DELAY_MS = 3_000L
+
+        /**
          * Phase 25：base list 初始載入量。
          * Phase 29：100 → 30，cold start 先快速顯示 30 項，避免 user 等 30+ 秒空白。
          */
@@ -801,5 +921,18 @@ class TimelineViewModel(
          * 保留 const 僅為向下相容 / 預設值參考。實際 delay 用 AppPreferences 值。
          */
         const val FOOTER_MIN_VISIBLE_MS_DEFAULT = 2000L
+    }
+}
+
+/**
+ * W25a：base query 一次 emit 的快照 — 對應的 limit 與 enrich 後 list 一起發布，
+ * 續載判定（query 是否已回 / 是否到底）才能與 list 內容一致。
+ */
+private data class ListSnapshot(
+    val emittedLimit: Int,
+    val items: List<NotificationDisplay>
+) {
+    companion object {
+        val EMPTY = ListSnapshot(0, emptyList())
     }
 }

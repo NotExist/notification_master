@@ -931,12 +931,10 @@ class TimelineFragment : Fragment() {
         } else {
             filtered.size.toString()
         }
-        // totalCount 可能還是 null（InitialLoading 期間 count Flow 未 emit），顯示 0 避免 format 失敗
-        val text = getString(
-            R.string.timeline_count_format_loaded_total,
-            loadedDisplay,
-            input.totalCount ?: 0
-        )
+        // W25a：totalCount 背景計算未就緒（null）時分母顯示 …（修前塞 0 → 誤導的「… / 0 筆」）
+        val text = input.totalCount?.let {
+            getString(R.string.timeline_count_format_loaded_total, loadedDisplay, it)
+        } ?: getString(R.string.timeline_count_format_loaded_pending, loadedDisplay)
         // W22-instrument：log 進入 renderCounter 跟 setText 完成 — 證實 counter 是 displays
         // emit 後立即 update（vs 經過載入點才 update 是 user perception bias）
         ProfileLogger.append(
